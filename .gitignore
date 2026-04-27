@@ -12,3 +12,19 @@
 # Temporary files
 *~
 *.log
+
+# Python virtual environments (Story 1.1: 로컬 셋업 산출물)
+.venv/
+__pycache__/
+
+# Node / Vite
+node_modules/
+dist/
+
+# Gradle / Spring Boot
+.gradle/
+build/
+
+# Environment files
+.env
+*.env.local

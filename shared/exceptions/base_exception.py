@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 class TrackerBaseException(Exception):
-    def __init__(self, message: str, correlation_id: str = "") -> None:
+    def __init__(self, message: str, correlation_id: str | None = None) -> None:
         super().__init__(message)
         self.message = message
         self.correlation_id = correlation_id

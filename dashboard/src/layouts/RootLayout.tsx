@@ -1,6 +1,7 @@
-import { useIsFetching } from '@tanstack/react-query';
 import { NavLink, Outlet } from 'react-router-dom';
-import { RefreshIndicator } from '../components/common/RefreshIndicator';
+import { useStatsQuery } from '@/api/stats';
+import { FreshnessIndicator } from '@/components/common/FreshnessIndicator';
+import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { to: '/', label: '대시보드', end: true },
@@ -9,43 +10,43 @@ const NAV_ITEMS = [
 ] as const;
 
 export function RootLayout() {
-  const fetchingCount = useIsFetching();
-  const isFetching = fetchingCount > 0;
+  // RootLayout이 useStatsQuery를 호출해 모든 페이지 헤더에서 freshness 표시.
+  // TanStack Query 캐싱으로 Dashboard에서 또 호출해도 추가 fetch 발생하지 않음.
+  const { dataUpdatedAt, isFetching } = useStatsQuery();
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 24px',
-          background: '#fff',
-          borderBottom: '1px solid #e5e7eb',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <strong style={{ fontSize: 18 }}>Tracker</strong>
-          <nav style={{ display: 'flex', gap: 16 }}>
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                style={({ isActive }) => ({
-                  color: isActive ? '#111827' : '#6b7280',
-                  fontWeight: isActive ? 600 : 400,
-                  textDecoration: 'none',
-                })}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
+    <div className="bg-muted min-h-screen">
+      <header className="bg-background sticky top-0 z-10 border-b">
+        <div className="mx-auto flex h-15 max-w-7xl items-center justify-between px-8">
+          <div className="flex items-center gap-8">
+            <strong className="text-lg font-bold tracking-tight">Tracker</strong>
+            <nav className="flex gap-1">
+              {NAV_ITEMS.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    cn(
+                      'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-muted text-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+          <FreshnessIndicator
+            lastUpdatedAt={dataUpdatedAt}
+            isFetching={isFetching}
+          />
         </div>
-        <RefreshIndicator isFetching={isFetching} />
       </header>
-      <main style={{ maxWidth: 1280, margin: '0 auto' }}>
+      <main className="mx-auto max-w-7xl">
         <Outlet />
       </main>
     </div>

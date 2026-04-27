@@ -117,13 +117,13 @@ playwright install chromium
 pip install redis boto3 httpx python-dotenv
 ```
 
-**② Java Spring Boot 4.0.5 (api/)**
+**② Java Spring Boot 3.4.x (api/)**
 
 ```bash
 curl https://start.spring.io/starter.zip \
   -d type=gradle-project \
   -d language=java \
-  -d bootVersion=4.0.5 \
+  -d bootVersion=3.4.5 \
   -d baseDir=api \
   -d groupId=com.tracker \
   -d artifactId=tracker-api \
@@ -138,7 +138,7 @@ curl https://start.spring.io/starter.zip \
 npm create vite@latest dashboard -- --template react-ts
 cd dashboard && npm install
 npm install @tanstack/react-query axios recharts \
-    @radix-ui/react-select date-fns
+    @radix-ui/react-select date-fns react-router-dom
 ```
 
 ### 스타터가 확정하는 아키텍처 결정
@@ -147,7 +147,7 @@ npm install @tanstack/react-query axios recharts \
 |------|------|
 | Python 런타임 | 3.11+ |
 | Java 런타임 | Java 21 LTS (Virtual Threads 지원) |
-| Spring Boot | 4.0.5 (Spring Framework 7.0.6, Hibernate 7.1.8, Tomcat 11.0.2) |
+| Spring Boot | 3.4.x (Spring Framework 6.2.x, Hibernate 6.6.x, Tomcat 10.1.x) |
 | Frontend 빌드 | Vite 8.0.10 (Node.js 20.19+, @vitejs/plugin-react v6) |
 | API 문서화 | springdoc-openapi (Swagger UI 자동 생성) |
 | React 서버 상태 | TanStack Query |

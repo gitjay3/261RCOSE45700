@@ -81,11 +81,11 @@ class TestCrawl4AICrawlerFetch:
         finally:
             patcher.stop()
 
-    async def test_fetch_filters_images_by_score_threshold(self, tmp_path):
+    async def test_fetch_collects_all_http_images_regardless_of_score(self, tmp_path):
         images = [
             {"src": "https://example.com/high.jpg", "score": 5, "alt": ""},
             {"src": "https://example.com/low.jpg", "score": 1, "alt": ""},
-            {"src": "https://example.com/exact.jpg", "score": 3, "alt": ""},
+            {"src": "https://example.com/no_score.jpg", "alt": ""},
         ]
         mock_result = _make_mock_result(images=images)
         patcher, _ = _patch_crawler(mock_result)
@@ -94,8 +94,19 @@ class TestCrawl4AICrawlerFetch:
             result = await crawler.fetch(self._URL, correlation_id=self._CID, download_images=False)
             srcs = [img["src"] for img in result.images]
             assert "https://example.com/high.jpg" in srcs
-            assert "https://example.com/exact.jpg" in srcs
-            assert "https://example.com/low.jpg" not in srcs
+            assert "https://example.com/low.jpg" in srcs
+            assert "https://example.com/no_score.jpg" in srcs
+        finally:
+            patcher.stop()
+
+    async def test_fetch_media_none_returns_empty_images(self, tmp_path):
+        mock_result = _make_mock_result()
+        mock_result.media = None
+        patcher, _ = _patch_crawler(mock_result)
+        try:
+            crawler = Crawl4AICrawler(output_dir=str(tmp_path))
+            result = await crawler.fetch(self._URL, correlation_id=self._CID, download_images=False)
+            assert result.images == []
         finally:
             patcher.stop()
 

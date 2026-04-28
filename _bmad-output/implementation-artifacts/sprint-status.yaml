@@ -19,6 +19,7 @@
 # Story 2-3 created: 2026-04-28 (status: backlog → ready-for-dev) — crawl4ai 이식 + language_detector/dedup_checker/keyword_filter 전처리 파이프라인
 # Story 2-3 dev completed: 2026-04-28 (status: in-progress → review, 27 신규 테스트 PASS, 외부 네트워크 0건)
 # Story 2-4 created: 2026-04-28 (status: backlog → ready-for-dev) — S3Uploader 신규 + PostStorage ENABLE_S3_UPLOAD 연동 + CrawlEvent s3 필드 추가
+# Story 2-5 created: 2026-04-28 (status: backlog → ready-for-dev) — APScheduler AsyncIOScheduler + TriggerListener(crawl:trigger) + RedisPublisher(posts:queue) + CrawlPipeline
 # project: 20261R0136COSE45700
 # project_key: NOKEY
 # tracking_system: file-system
@@ -54,7 +55,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-27
-last_updated: 2026-04-28 # 2-4 review
+last_updated: 2026-04-28 # 2-5 ready-for-dev
 project: 20261R0136COSE45700
 project_key: NOKEY
 
@@ -75,9 +76,9 @@ development_status:
   epic-2: in-progress
   2-1-cloudflare-우회-가능성-검증: done
   2-2-proxyprovider-추상화-및-기본-크롤러-구현: done
-  2-3-콘텐츠-전처리-파이프라인-구현: review
+  2-3-콘텐츠-전처리-파이프라인-구현: done
   2-4-s3-원본-아카이브-및-이미지-수집: review
-  2-5-apscheduler-기반-자동-크롤링-및-수동-트리거: backlog
+  2-5-apscheduler-기반-자동-크롤링-및-수동-트리거: review
   2-6-ptt-dcard-크롤러-어댑터-구현: backlog
   2-7-tieba-52pojie-nga-크롤러-어댑터-구현: backlog
   epic-2-retrospective: optional

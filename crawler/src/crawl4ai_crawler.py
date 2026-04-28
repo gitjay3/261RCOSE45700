@@ -35,8 +35,6 @@ class CrawlResult:
 class Crawl4AICrawler:
     """crawl4ai 기반 크롤러 — 봇 탐지 우회 + 텍스트/이미지 추출."""
 
-    _IMAGE_SCORE_THRESHOLD = 3
-
     def __init__(self, headless: bool = True, output_dir: str = "output/images") -> None:
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
@@ -102,7 +100,7 @@ class Crawl4AICrawler:
                 extra={"correlation_id": correlation_id, "service": _SERVICE_NAME},
             )
             raise CrawlerException(
-                f"크롤링 실패: {result.error_message}",
+                f"크롤링 실패: {result.error_message or 'unknown error'}",
                 correlation_id=correlation_id,
             )
 
@@ -114,15 +112,9 @@ class Crawl4AICrawler:
             raw_md = str(md) if md else ""
             fit_md = ""
 
-        all_images = result.media.get("images") or []
+        all_images = (result.media or {}).get("images") or []
 
-        candidates = [
-            img for img in all_images
-            if img.get("src", "").startswith("http")
-            and img.get("score", 0) >= self._IMAGE_SCORE_THRESHOLD
-        ]
-        if not candidates:
-            candidates = [img for img in all_images if img.get("src", "").startswith("http")]
+        candidates = [img for img in all_images if img.get("src", "").startswith("http")]
 
         if image_filter is not None:
             candidates = [img for img in candidates if image_filter(img)]

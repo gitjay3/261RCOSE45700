@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-27
+# last_updated: 2026-04-28
 # Story 1-1 created: 2026-04-27 (status: backlog → ready-for-dev, epic-1: backlog → in-progress)
 # Story 1-1 dev started: 2026-04-27 (status: ready-for-dev → in-progress)
 # Story 1-1 dev completed: 2026-04-27 (status: in-progress → review)
@@ -11,6 +11,10 @@
 # Story 2-1 dev completed: 2026-04-27 (status: in-progress → review)
 # Story 2-1 code review completed: 2026-04-27 (status: review → in-progress, 11 patches applied, 2 manual reruns pending)
 # Story 2-1 review follow-up completed: 2026-04-27 (status: in-progress → done, headless=False 재측정 완료, AC1 재검증 Story 2.6/2.7 이관)
+# Story 2-2 created: 2026-04-28 (status: backlog → ready-for-dev) — ProxyProvider 추상화 + BaseSite + tailstar.py, Story 2.1 stealth 채택 기반
+# Story 2-2 dev started: 2026-04-28 (status: ready-for-dev → in-progress)
+# Story 2-2 dev completed: 2026-04-28 (status: in-progress → review, 19 신규 + 6 회귀 = 25 tests passed, AC #6 stealth_browser 비변경 가드 통과)
+# Story 2-2 code review completed: 2026-04-28 (status: review → done, 7 patches applied — hashlib post_id, correlation_id enrichment, proxy log deferred, whitespace host guard, abs image URL, html.lower() opt, 429 test)
 # project: 20261R0136COSE45700
 # project_key: NOKEY
 # tracking_system: file-system
@@ -46,7 +50,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-27
-last_updated: 2026-04-27
+last_updated: 2026-04-28
 project: 20261R0136COSE45700
 project_key: NOKEY
 tracking_system: file-system
@@ -65,7 +69,7 @@ development_status:
   # Epic 2: 자동 크롤링 및 전처리 파이프라인
   epic-2: in-progress
   2-1-cloudflare-우회-가능성-검증: done
-  2-2-proxyprovider-추상화-및-기본-크롤러-구현: backlog
+  2-2-proxyprovider-추상화-및-기본-크롤러-구현: done
   2-3-콘텐츠-전처리-파이프라인-구현: backlog
   2-4-s3-원본-아카이브-및-이미지-수집: backlog
   2-5-apscheduler-기반-자동-크롤링-및-수동-트리거: backlog

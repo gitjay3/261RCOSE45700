@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-27
+# last_updated: 2026-04-28
 # Story 1-1 created: 2026-04-27 (status: backlog → ready-for-dev, epic-1: backlog → in-progress)
 # Story 1-1 dev started: 2026-04-27 (status: ready-for-dev → in-progress)
 # Story 1-1 dev completed: 2026-04-27 (status: in-progress → review)
@@ -54,7 +54,7 @@ development_status:
   1-2-공유-인터페이스-계약-및-구조화-로깅-수립: done
   1-3-로컬-개발-환경-구성: backlog
   1-4-flyway-db-초기-스키마-및-varco-mock-서버-구축: backlog
-  1-5-github-actions-기본-ci-파이프라인-구성: backlog
+  1-5-github-actions-기본-ci-파이프라인-구성: review
   epic-1-retrospective: optional
 
   # Epic 2: 자동 크롤링 및 전처리 파이프라인

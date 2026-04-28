@@ -40,9 +40,3 @@ export const CHART_PALETTE_VARS = [
   'var(--chart-4)',
   'var(--chart-5)',
 ] as const;
-
-export const CONFIDENCE_VARS = {
-  high: 'var(--confidence-high)',
-  medium: 'var(--confidence-medium)',
-  low: 'var(--confidence-low)',
-} as const;

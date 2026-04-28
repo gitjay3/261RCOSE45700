@@ -1,17 +1,3 @@
-from crawler.src.sites.base_site import (
-    BaseSite,
-    ParseError,
-    ParseResult,
-    PostListItem,
-    RateLimitError,
-)
-from crawler.src.sites.tailstar import TailstarSite
+from crawler.src.sites.registry import SITES, SiteConfig, get_enabled_sites
 
-__all__ = [
-    "BaseSite",
-    "ParseError",
-    "ParseResult",
-    "PostListItem",
-    "RateLimitError",
-    "TailstarSite",
-]
+__all__ = ["SiteConfig", "SITES", "get_enabled_sites"]

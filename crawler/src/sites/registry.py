@@ -99,6 +99,18 @@ SITES: dict[str, SiteConfig] = {
         enabled=True,
     ),
 
+    "inven_lineage_classic": SiteConfig(
+        name="인벤 (리니지 클래식)",
+        description="인벤 리니지 클래식 자유게시판",
+        board_urls=[
+            "https://www.inven.co.kr/board/lineageclassic/6482",
+        ],
+        post_url_pattern=r"https://www\.inven\.co\.kr/board/lineageclassic/6482/\d+$",
+        css_selector=".articleMain",
+        image_filter=_inven_image_filter,
+        enabled=True,
+    ),
+
     # ── 대만 ──────────────────────────────────
     "ptt": SiteConfig(
         name="PTT",
@@ -108,7 +120,7 @@ SITES: dict[str, SiteConfig] = {
         ],
         post_url_pattern=r"https://www\.ptt\.cc/bbs/C_Chat/M\.\d+",
         image_filter=None,
-        enabled=False,          # 18세 인증 쿠키 필요 → Story 2.6 구현 시 활성화
+        enabled=True,          # 18세 인증 쿠키 필요 → Story 2.6 구현 시 활성화
         note="over18 쿠키 주입 필요. js_code로 처리 예정.",
     ),
 
@@ -120,7 +132,7 @@ SITES: dict[str, SiteConfig] = {
         ],
         post_url_pattern=r"https://www\.dcard\.tw/f/game/p/\d+",
         image_filter=_dcard_image_filter,
-        enabled=False,          # JS 렌더링 복잡도 확인 후 활성화
+        enabled=True,          # JS 렌더링 복잡도 확인 후 활성화
         note="React SPA, 무한스크롤 게시판. wait_for 튜닝 필요.",
     ),
 
@@ -134,7 +146,7 @@ SITES: dict[str, SiteConfig] = {
         ],
         post_url_pattern=r"https://tieba\.baidu\.com/p/\d+",
         image_filter=_tieba_image_filter,
-        enabled=False,          # 중국 IP 차단 가능성 — 프록시 설정 후 활성화
+        enabled=True,          # 중국 IP 차단 가능성 — 프록시 설정 후 활성화
         note="중국 IP 우선 권장. NodeMaven 프록시 연동 후 활성화.",
     ),
 
@@ -146,7 +158,7 @@ SITES: dict[str, SiteConfig] = {
         ],
         post_url_pattern=r"https://www\.52pojie\.cn/thread-\d+-\d+-\d+\.html",
         image_filter=_pojie_image_filter,
-        enabled=False,
+        enabled=True,
         note="Cloudflare 보호. stealth + 프록시 조합 필요.",
     ),
 
@@ -158,7 +170,7 @@ SITES: dict[str, SiteConfig] = {
         ],
         post_url_pattern=r"https://bbs\.nga\.cn/read\.php\?tid=\d+",
         image_filter=_nga_image_filter,
-        enabled=False,
+        enabled=True,
         note="로그인 없이 공개 게시글만 접근 가능.",
     ),
 }

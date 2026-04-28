@@ -12,7 +12,7 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from crawl4ai.async_configs import CacheMode
 
 from crawler.src.crawl4ai_crawler import Crawl4AICrawler
-from crawler.src.preprocessor import keyword_filter, language_detector
+from crawler.src.preprocessor import language_detector
 from crawler.src.preprocessor.dedup_checker import DedupChecker
 from crawler.src.preprocessor.serializer import to_crawl_event
 from crawler.src.queue.redis_publisher import RedisPublisher
@@ -49,9 +49,14 @@ async def _fetch_post_urls(board_url: str, pattern: str, limit: int) -> list[str
         if compiled.match(href) and href not in seen:
             seen.add(href)
             post_urls.append(href)
-            if len(post_urls) >= limit:
-                break
-    return post_urls
+
+    # 고정(공지) 게시글이 상단에 오는 게시판 대응: URL 내 첫 숫자 시퀀스를 ID로 삼아 내림차순 정렬
+    def _url_sort_key(u: str) -> int:
+        m = re.search(r"/(\d+)", u)
+        return int(m.group(1)) if m else 0
+
+    post_urls.sort(key=_url_sort_key, reverse=True)
+    return post_urls[:limit]
 
 
 @dataclass
@@ -59,7 +64,6 @@ class PipelineStats:
     attempted: int = 0
     enqueued: int = 0
     skipped_dedup: int = 0
-    skipped_keyword: int = 0
     failed: int = 0
 
     @property
@@ -110,9 +114,6 @@ class CrawlPipeline:
                         if self._dedup.is_duplicate(result.fit_markdown, correlation_id=cid):
                             stats.skipped_dedup += 1
                             continue
-                        if not keyword_filter.passes(result.fit_markdown, correlation_id=cid):
-                            stats.skipped_keyword += 1
-                            continue
                         language = language_detector.detect(result.fit_markdown, correlation_id=cid)
                         post_id = site.post_id_extractor(post_url)
                         storage_result = self._storage.save(
@@ -143,11 +144,10 @@ class CrawlPipeline:
                         )
 
         _logger.info(
-            "파이프라인 완료: 시도=%d 큐=%d 중복제외=%d 키워드제외=%d 실패=%d",
+            "파이프라인 완료: 시도=%d 큐=%d 중복제외=%d 실패=%d",
             stats.attempted,
             stats.enqueued,
             stats.skipped_dedup,
-            stats.skipped_keyword,
             stats.failed,
             extra={"correlation_id": "", "service": _SERVICE_NAME},
         )

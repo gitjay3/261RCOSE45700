@@ -28,7 +28,7 @@ from crawl4ai.async_configs import CacheMode
 from src.crawler import Crawl4AICrawler
 from src.sites.registry import SiteConfig, get_enabled_sites
 
-MAX_POSTS_PER_BOARD = 6     # 게시판당 최대 게시글 수 (2개 게시판 × 2개 사이트 → 총 24개 시도)
+MAX_POSTS_PER_BOARD = 20    # 게시판당 최대 게시글 수
 OUTPUT_BASE = Path("output/posts")
 
 
@@ -54,10 +54,14 @@ async def get_post_urls(board_url: str, pattern: str, limit: int) -> list[str]:
         if compiled.match(href) and href not in seen:
             seen.add(href)
             post_urls.append(href)
-        if len(post_urls) >= limit:
-            break
 
-    return post_urls
+    # 고정(공지) 게시글이 상단에 오는 게시판 대응: URL 내 첫 숫자 시퀀스를 ID로 삼아 내림차순 정렬
+    def _url_sort_key(u: str) -> int:
+        m = re.search(r"/(\d+)", u)
+        return int(m.group(1)) if m else 0
+
+    post_urls.sort(key=_url_sort_key, reverse=True)
+    return post_urls[:limit]
 
 
 def save_post(

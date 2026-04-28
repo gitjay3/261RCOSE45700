@@ -40,9 +40,15 @@ export function StatsPage() {
   const trendEmpty = trendData.length === 0;
 
   return (
-    <div className="flex flex-col gap-4 px-8 py-6">
+    <div
+      className="mx-auto flex w-full max-w-[1300px] flex-col gap-4"
+      style={{ padding: 'var(--pad-page)' }}
+    >
       <header className="flex items-baseline justify-between">
-        <h1 className="text-foreground text-2xl font-semibold tracking-tight">
+        <h1
+          className="text-foreground font-semibold tracking-tight"
+          style={{ fontSize: 'var(--size-h1)', lineHeight: 'var(--lh-snug)' }}
+        >
           통계
         </h1>
         <Tabs

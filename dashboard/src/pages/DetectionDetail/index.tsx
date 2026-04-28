@@ -42,7 +42,10 @@ export function DetectionDetailPage() {
 
   if (isLoading || !data) {
     return (
-      <div className="flex flex-col gap-4 px-8 py-6">
+      <div
+      className="mx-auto flex w-full max-w-[1300px] flex-col gap-4"
+      style={{ padding: 'var(--pad-page)' }}
+    >
         <Skeleton className="h-8 w-1/3" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-64 w-full" />
@@ -56,7 +59,10 @@ export function DetectionDetailPage() {
   });
 
   return (
-    <div className="flex flex-col gap-4 px-8 py-6">
+    <div
+      className="mx-auto flex w-full max-w-[1300px] flex-col gap-4"
+      style={{ padding: 'var(--pad-page)' }}
+    >
       <div className="flex items-center justify-between">
         <Link
           to="/detections"

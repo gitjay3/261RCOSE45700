@@ -333,7 +333,6 @@ class TestCrawlEventS3Fields:
 
 class TestUploadTextEdgeCases:
     def test_empty_text_skips_upload_returns_empty_string(self):
-        from crawler.src.s3_uploader import S3Uploader
         uploader, mock_client = _make_uploader()
         with patch.object(uploader, "_client", mock_client):
             uri = uploader.upload_text(
@@ -343,7 +342,6 @@ class TestUploadTextEdgeCases:
         mock_client.put_object.assert_not_called()
 
     def test_botocore_error_is_logged_and_raised(self):
-        from crawler.src.s3_uploader import S3Uploader
         uploader, mock_client = _make_uploader()
         mock_client.put_object.side_effect = botocore.exceptions.EndpointConnectionError(
             endpoint_url="https://s3.example.com"
@@ -357,7 +355,6 @@ class TestUploadTextEdgeCases:
 
 class TestUploadImagesEdgeCases:
     def test_read_bytes_failure_continues_to_next_image(self, tmp_path):
-        from crawler.src.s3_uploader import S3Uploader
         uploader, mock_client = _make_uploader()
         missing = tmp_path / "img_000.jpg"  # 파일 미생성 → FileNotFoundError
         present = tmp_path / "img_001.jpg"
@@ -370,7 +367,6 @@ class TestUploadImagesEdgeCases:
         assert "img_001" in uris[0]
 
     def test_botocore_error_per_image_continues(self, tmp_path):
-        from crawler.src.s3_uploader import S3Uploader
         uploader, mock_client = _make_uploader()
         img1 = tmp_path / "img_000.jpg"
         img1.write_bytes(b"a")
@@ -392,7 +388,6 @@ class TestUploadImagesEdgeCases:
         assert "img_001" in uris[0]
 
     def test_content_type_inferred_from_extension(self, tmp_path):
-        from crawler.src.s3_uploader import S3Uploader
         uploader, mock_client = _make_uploader()
         img = tmp_path / "img_000.png"
         img.write_bytes(b"\x89PNG")

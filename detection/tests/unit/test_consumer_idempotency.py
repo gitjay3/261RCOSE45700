@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from detection.src.consumer.queue_consumer import QueueConsumer
 from detection.src.consumer.watchdog import Watchdog
 from shared.config.redis_config import (

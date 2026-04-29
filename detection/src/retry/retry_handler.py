@@ -9,7 +9,6 @@ import httpx
 import redis
 
 from detection.src.consumer.watchdog import processing_time_key, retry_key
-from detection.src.mocks.varco_mock import RateLimitError
 from shared.config.redis_config import (
     REDIS_KEY_POSTS_DLQ,
     REDIS_KEY_POSTS_PROCESSING,

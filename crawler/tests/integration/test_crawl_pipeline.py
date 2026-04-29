@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,11 +12,11 @@ from crawler.src.crawl4ai_crawler import CrawlResult
 from crawler.src.preprocessor.dedup_checker import DedupChecker
 from crawler.src.queue.redis_publisher import RedisPublisher
 from crawler.src.scheduler.crawl_scheduler import CrawlPipeline
+from crawler.src.sites.registry import SITES
 from crawler.src.storage import StorageResult
 from shared.models.crawl_event import CrawlEvent
 
 _KEYWORD_TEXT = "매크로 판매합니다 텔레그램 문의"
-_CLEAN_TEXT = "오늘 날씨 정말 좋네요 게시글입니다"
 _TEST_URL = "https://www.inven.co.kr/board/maple/2298/123"
 _TEST_URL2 = "https://www.inven.co.kr/board/maple/2298/456"
 
@@ -28,6 +29,17 @@ def _make_crawl_result(text: str = _KEYWORD_TEXT) -> CrawlResult:
         images=[],
         downloaded_images=[],
     )
+
+
+@contextlib.contextmanager
+def _isolated_sites():
+    """단일 사이트(inven_maple)만 활성화한 상태로 패치 — site fanout 으로 인한 lpush 다중 호출 방지."""
+    inven = SITES["inven_maple"]
+    with patch(
+        "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
+        return_value={"inven_maple": inven},
+    ):
+        yield
 
 
 def _make_pipeline(
@@ -65,11 +77,11 @@ def _make_pipeline(
     return pipeline, mock_redis_mq, mock_redis_dedup
 
 
-async def test_pipeline_enqueues_keyword_matched_post():
-    """키워드 포함 게시글은 posts:queue에 LPUSH된다."""
+async def test_pipeline_enqueues_post():
+    """비중복·비빈 게시글은 posts:queue에 LPUSH된다."""
     pipeline, mock_mq, _ = _make_pipeline(crawl_result=_make_crawl_result(_KEYWORD_TEXT))
 
-    with patch(
+    with _isolated_sites(), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=[_TEST_URL],
     ):
@@ -78,9 +90,8 @@ async def test_pipeline_enqueues_keyword_matched_post():
     assert stats.enqueued == 1
     assert stats.attempted == 1
     assert stats.skipped_dedup == 0
-    assert stats.skipped_keyword == 0
+    assert stats.skipped_empty == 0
     mock_mq.lpush.assert_called_once()
-    # 첫 번째 positional arg가 "posts:queue" 인지 확인
     assert mock_mq.lpush.call_args[0][0] == "posts:queue"
 
 
@@ -91,7 +102,7 @@ async def test_pipeline_skips_duplicate_post():
         is_duplicate=True,
     )
 
-    with patch(
+    with _isolated_sites(), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=[_TEST_URL],
     ):
@@ -102,18 +113,22 @@ async def test_pipeline_skips_duplicate_post():
     mock_mq.lpush.assert_not_called()
 
 
-async def test_pipeline_skips_no_keyword_post():
-    """키워드 없는 게시글은 LPUSH 없이 건너뛴다."""
-    pipeline, mock_mq, _ = _make_pipeline(crawl_result=_make_crawl_result(_CLEAN_TEXT))
+async def test_pipeline_skips_empty_post():
+    """fit_markdown 이 비어있는 게시글은 LPUSH 없이 건너뛴다 (큐 오염 방지)."""
+    empty_result = CrawlResult(
+        url=_TEST_URL, raw_markdown="", fit_markdown="   ",
+        images=[], downloaded_images=[],
+    )
+    pipeline, mock_mq, _ = _make_pipeline(crawl_result=empty_result)
 
-    with patch(
+    with _isolated_sites(), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=[_TEST_URL],
     ):
         stats = await pipeline.run()
 
     assert stats.enqueued == 0
-    assert stats.skipped_keyword == 1
+    assert stats.skipped_empty == 1
     mock_mq.lpush.assert_not_called()
 
 
@@ -134,7 +149,7 @@ async def test_pipeline_individual_failure_continues():
         publisher=RedisPublisher(mock_redis_mq),
     )
 
-    with patch(
+    with _isolated_sites(), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=[_TEST_URL, _TEST_URL2],
     ):
@@ -153,7 +168,7 @@ async def test_pipeline_s3_paths_propagated_to_event():
         s3_text_path=s3_path,
     )
 
-    with patch(
+    with _isolated_sites(), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=[_TEST_URL],
     ):
@@ -169,7 +184,7 @@ async def test_pipeline_event_json_roundtrip():
     """LPUSH된 CrawlEvent JSON이 from_json()으로 역직렬화된다 (스키마 정합성)."""
     pipeline, mock_mq, _ = _make_pipeline(crawl_result=_make_crawl_result(_KEYWORD_TEXT))
 
-    with patch(
+    with _isolated_sites(), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=[_TEST_URL],
     ):
@@ -178,27 +193,32 @@ async def test_pipeline_event_json_roundtrip():
     assert stats.enqueued == 1
     event_json = mock_mq.lpush.call_args[0][1]
 
-    # from_json()이 예외 없이 성공해야 함
     event = CrawlEvent.from_json(event_json)
     assert event.site_name == "인벤 (메이플스토리)"
     assert event.source_id == "inven_maple"
     assert event.language in {"ko", "zh-CN", "zh-TW"}
     assert isinstance(event.image_urls, list)
-    assert event.s3_text_path == ""  # ENABLE_S3_UPLOAD=false 기본값
+    assert event.s3_text_path == ""
 
 
 async def test_pipeline_dedup_mark_seen_called_after_enqueue():
-    """LPUSH 성공 후 dedup mark_seen이 호출된다."""
+    """LPUSH 성공 후 dedup mark_seen(sadd)이 호출되며, 호출 순서를 보장한다 (Anti-Pattern #6)."""
+    call_log: list[str] = []
+
     pipeline, mock_mq, mock_redis_dedup = _make_pipeline(
         crawl_result=_make_crawl_result(_KEYWORD_TEXT)
     )
+    mock_mq.lpush.side_effect = lambda *a, **kw: call_log.append("lpush")
+    mock_redis_dedup.sadd.side_effect = lambda *a, **kw: call_log.append("sadd")
 
-    with patch(
+    with _isolated_sites(), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=[_TEST_URL],
     ):
         await pipeline.run()
 
-    # lpush 호출 후 sadd(mark_seen) 호출 확인
     mock_mq.lpush.assert_called_once()
     mock_redis_dedup.sadd.assert_called_once()
+    assert call_log == ["lpush", "sadd"], (
+        f"Anti-Pattern #6: mark_seen 은 LPUSH 이후에 호출되어야 함. 실제 순서: {call_log}"
+    )

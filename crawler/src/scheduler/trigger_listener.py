@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Callable, Coroutine
 from typing import Any
 
 import redis.asyncio as aioredis
+from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 
+from shared.config.redis_config import REDIS_CHANNEL_CRAWL_TRIGGER, REDIS_MQ_DB
 from shared.correlation_id import generate
 from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "crawler")
 _logger = get_logger(__name__)
-_CHANNEL = "crawl:trigger"
+_RECONNECT_BACKOFF_SECONDS = 5.0
 
 
 class TriggerListener:
@@ -21,23 +24,47 @@ class TriggerListener:
         self,
         redis_url: str,
         pipeline_fn: Callable[[], Coroutine[Any, Any, Any]],
+        run_lock: asyncio.Lock | None = None,
     ) -> None:
         self._redis_url = redis_url
         self._run_pipeline = pipeline_fn
+        self._run_lock = run_lock
 
     async def listen(self) -> None:
-        client = aioredis.from_url(self._redis_url, db=0, decode_responses=True)
-        async with client.pubsub() as pubsub:
-            await pubsub.subscribe(_CHANNEL)
-            _logger.info(
-                "crawl:trigger 채널 구독 시작",
-                extra={"correlation_id": "", "service": _SERVICE_NAME},
-            )
-            async for message in pubsub.listen():
-                if message["type"] == "message":
-                    cid = generate()
-                    _logger.info(
-                        "수동 트리거 수신 — 즉시 크롤링 시작",
-                        extra={"correlation_id": cid, "service": _SERVICE_NAME},
-                    )
-                    await self._run_pipeline()
+        while True:
+            try:
+                async with aioredis.from_url(
+                    self._redis_url, db=REDIS_MQ_DB, decode_responses=True
+                ) as client:
+                    async with client.pubsub() as pubsub:
+                        await pubsub.subscribe(REDIS_CHANNEL_CRAWL_TRIGGER)
+                        _logger.info(
+                            "%s 채널 구독 시작", REDIS_CHANNEL_CRAWL_TRIGGER,
+                            extra={"correlation_id": "", "service": _SERVICE_NAME},
+                        )
+                        async for message in pubsub.listen():
+                            if message.get("type") != "message":
+                                continue
+                            cid = generate()
+                            _logger.info(
+                                "수동 트리거 수신 — 즉시 크롤링 시작",
+                                extra={"correlation_id": cid, "service": _SERVICE_NAME},
+                            )
+                            try:
+                                if self._run_lock is not None:
+                                    async with self._run_lock:
+                                        await self._run_pipeline()
+                                else:
+                                    await self._run_pipeline()
+                            except Exception as exc:
+                                _logger.error(
+                                    "수동 트리거 파이프라인 실행 실패: %s", exc,
+                                    extra={"correlation_id": cid, "service": _SERVICE_NAME},
+                                    exc_info=True,
+                                )
+            except (RedisConnectionError, RedisTimeoutError, OSError) as exc:
+                _logger.warning(
+                    "pubsub 연결 끊김 — %.1fs 후 재연결: %s", _RECONNECT_BACKOFF_SECONDS, exc,
+                    extra={"correlation_id": "", "service": _SERVICE_NAME},
+                )
+                await asyncio.sleep(_RECONNECT_BACKOFF_SECONDS)

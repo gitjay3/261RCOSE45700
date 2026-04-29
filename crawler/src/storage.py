@@ -10,12 +10,43 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.crawler import CrawlResult
-from src.s3_uploader import S3Uploader
+from crawler.src.crawl4ai_crawler import CrawlResult
+from crawler.src.s3_uploader import S3Uploader
+
+_TRUTHY_ENV_VALUES = frozenset({"true", "1", "yes"})
+_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
+# crawl4ai_crawler._download_images writes files as `img_{i:03d}{ext}` where i is
+# the index into the original `result.images` list. We parse i back from the name
+# to keep metadata aligned even when some downloads fail.
+_IMG_INDEX_RE = re.compile(r"^img_(\d+)")
+
+
+def _is_truthy(env_value: str | None) -> bool:
+    if env_value is None:
+        return False
+    return env_value.strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def _validate_id(name: str, value: str) -> None:
+    if not _SAFE_ID_RE.fullmatch(value):
+        raise ValueError(
+            f"{name} must match {_SAFE_ID_RE.pattern}; got {value!r}"
+        )
+
+
+def _meta_for_downloaded(src_path: Path, images: list[dict]) -> dict:
+    match = _IMG_INDEX_RE.match(src_path.stem)
+    if not match:
+        return {}
+    idx = int(match.group(1))
+    if 0 <= idx < len(images):
+        return images[idx]
+    return {}
 
 
 @dataclass
@@ -28,9 +59,8 @@ class StorageResult:
 class PostStorage:
     def __init__(self, base_dir: str = "output/posts") -> None:
         self._base = Path(base_dir)
-        enable_s3 = os.environ.get("ENABLE_S3_UPLOAD", "false").lower() == "true"
-        if enable_s3:
-            bucket = os.environ.get("S3_BUCKET_NAME")
+        if _is_truthy(os.environ.get("ENABLE_S3_UPLOAD")):
+            bucket = (os.environ.get("S3_BUCKET_NAME") or "").strip()
             if not bucket:
                 raise ValueError("S3_BUCKET_NAME is required when ENABLE_S3_UPLOAD=true")
             self._s3_uploader: S3Uploader | None = S3Uploader(bucket)
@@ -47,28 +77,32 @@ class PostStorage:
         correlation_id: str = "",
     ) -> StorageResult:
         """포스트 데이터를 디스크에 저장하고 StorageResult를 반환."""
+        _validate_id("site_id", site_id)
+        _validate_id("post_id", post_id)
+
+        now = datetime.now(timezone.utc)
         post_dir = self._base / site_id / post_id
         post_dir.mkdir(parents=True, exist_ok=True)
 
-        # 이미지 파일을 포스트 디렉터리로 이동
+        # downloaded_images를 source-of-truth로 사용. 파일명 인덱스로 result.images 매핑.
         image_records: list[dict] = []
-        for img_meta, src_path in zip(result.images, result.downloaded_images):
+        for src_path in result.downloaded_images:
             dest = post_dir / src_path.name
             dest.write_bytes(src_path.read_bytes())
-            src_path.unlink(missing_ok=True)    # 임시 파일 삭제
+            src_path.unlink(missing_ok=True)
+            meta = _meta_for_downloaded(src_path, result.images)
             image_records.append({
                 "filename": dest.name,
-                "src": img_meta.get("src", ""),
-                "alt": img_meta.get("alt", ""),
-                "score": img_meta.get("score", 0),
+                "src": meta.get("src", ""),
+                "alt": meta.get("alt", ""),
+                "score": meta.get("score", 0),
             })
 
-        # post.json 저장
         post_data = {
             "post_id": post_id,
             "site": site_id,
             "url": url,
-            "crawled_at": datetime.now(timezone.utc).isoformat(),
+            "crawled_at": now.isoformat(),
             "text": result.markdown,
             "images": image_records,
         }
@@ -80,7 +114,7 @@ class PostStorage:
         s3_text_path = ""
         s3_image_paths: list[str] = []
         if self._s3_uploader is not None:
-            date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date_str = now.strftime("%Y-%m-%d")
             s3_text_path = self._s3_uploader.upload_text(
                 result.markdown,
                 site=site_id,

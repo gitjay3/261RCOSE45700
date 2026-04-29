@@ -1,5 +1,29 @@
 # Deferred Work
 
+## Deferred from: code review of 2-4-s3-원본-아카이브-및-이미지-수집 (2026-04-29)
+
+- **S3 key length >1024 byte 미체크** [crawler/src/s3_uploader.py:25,56] — 현재 사이트 post_id로는 비현실적. 외부 site 추가 시 재검토.
+- **Surrogate `UnicodeEncodeError`** [crawler/src/s3_uploader.py:30, crawler/src/storage.py:76] — preprocessor에서 사전 정제 가정. Story 2.3 산출물 책임.
+- **이미지 `read_bytes()` 전체 적재 → OOM** [crawler/src/s3_uploader.py:61] — image_filter score threshold로 작은 이미지만 통과. 운영 측정 후 `upload_file` (multipart) 도입 재검토.
+- **동시 `save()` race (`src_path.read_bytes()` + `unlink`)** [crawler/src/storage.py:57-58] — 현재 sequential 파이프라인. Story 5+ 멀티 워커 구성 시 재검토.
+- **`post.json` atomic-rename 부재** [crawler/src/storage.py:75-78] — Story 2.3 산출물 (사전 존재). tmp + rename(2) 패턴은 Epic 5 운영 강화 시.
+- **이미지 filename 재시도 충돌 (`img_000` 덮어쓰기)** [crawler/src/crawl4ai_crawler.py:172] — `_download_images` 재호출 시 인덱스 재시작. Story 2.3 산출물.
+- **`demo.py.get_post_urls`가 board마다 fresh browser 생성** [crawler/demo.py:41-46] — demo는 throwaway, 우선순위 낮음.
+- **`site`/`date`/`post_id` 비ASCII/특수문자 → 잘못된 S3 키** [crawler/src/s3_uploader.py:25,56] — 현재 site_id 모두 ASCII alphanum. 신규 사이트 도입 시 정규식 검증.
+- **테스트 `clear=True` 환경 전체 비움 → 회귀 검출력 약화** [crawler/tests/unit/test_s3_uploader.py:228-242] — 패치하지 않아도 현재 pass. 테스트 위생 개선 시 함께.
+- **`AWS_REGION` whitespace 미정규화** [crawler/src/s3_uploader.py:18-20] — 운영 가이드로 흡수 가능.
+- **BOM (`﻿`) 미stripping** [crawler/src/s3_uploader.py:30] — downstream S3 consumer 추가 시 재검토.
+
+## Deferred from: code review of 2-5-apscheduler-기반-자동-크롤링-및-수동-트리거 (2026-04-29)
+
+- **Sync `redis` client을 async event loop에서 사용** [crawler/src/scheduler/crawl_scheduler.py:162-163, crawler/src/queue/redis_publisher.py:11] — 매 LPUSH/sismember/sadd가 event loop을 block. 부하 측정 후 `redis.asyncio` 전면 전환 필요. architecture-level 변경.
+- **`PostStorage.save` sync (boto3 포함)** [crawler/src/scheduler/crawl_scheduler.py:119-125] — S3 업로드가 async loop을 block. Story 2.4 작업. aioboto3 또는 `asyncio.to_thread` offload 검토.
+- **APScheduler graceful shutdown 부재** [crawler/src/scheduler/crawl_scheduler.py:194-196] — `shutdown(wait=False)`이 in-flight 잡 orphan, SIGTERM 핸들링 없음. NFR10 24h 무중단 트랙(Epic 5).
+- **APScheduler misfire 이벤트 미로깅** [crawler/src/scheduler/crawl_scheduler.py:174-184] — misfire 발생 시 가시성 zero. Story 5.1 Prometheus/Grafana와 함께 EVENT_JOB_MISSED listener 추가.
+- **`AsyncWebCrawler` 매 board마다 instantiation — Chromium cold start** [crawler/src/scheduler/crawl_scheduler.py:33-36] — 성능 개선. board 단위 → site/run 단위 lifecycle로 전환 검토.
+- **`CrawlEvent.detected_at` 시맨틱 모호 (실제는 "now")** [crawler/src/preprocessor/serializer.py] — downstream Detection Worker 영향 큼. Story 3.1+에서 fetched_at vs serialized_at 분리 결정.
+- **`language_detector.detect` sync — 긴 텍스트 시 event loop block** [crawler/src/scheduler/crawl_scheduler.py:117] — sync redis defer와 동일 트랙. `asyncio.to_thread` 또는 별도 워커.
+
 ## Deferred from: code review of 1-2-공유-인터페이스-계약-및-구조화-로깅-수립 (2026-04-27)
 
 - **requirements.txt -e ../shared 상대경로** — CI 환경/컨테이너에서 경로가 깨질 수 있음. Story 1.5 CI 구성 시 절대경로 또는 workspace 기반 방식으로 교체.
@@ -57,6 +81,25 @@
 - **redis/postgres `healthcheck:` 블록 미정의** [infra/docker-compose.yml] — `up -d` 직후 컨테이너가 Listening 되기 전 의존 서비스 부팅 시 race. Story 1.4 Flyway 마이그레이션이 `service_healthy` condition을 요구하므로 그때 일괄 추가.
 - **VARCO_API_KEY required-var 가드 부재** [infra/.env.example, infra/docker-compose.yml] — placeholder `your-varco-api-key-here`가 그대로 사용되면 런타임 401로 fail. crawler/detection 컨테이너 추가 시 해당 서비스 environment에 `${VARCO_API_KEY:?}` 부착.
 - **postgres `/docker-entrypoint-initdb.d` 마운트 슬롯 미예약** [infra/docker-compose.yml] — Story 1.4에서 `pg_trgm`/`uuid-ossp` 등 extension 필요 시 Flyway baseline에 포함하거나 initdb 마운트 추가 결정 필요.
+
+## Deferred from: code review of 3-1-redis-큐-소비자-및-watchdog-구현 (2026-04-29)
+
+- **Watchdog LREM/RPUSH 비원자성 (D1, decision-needed→defer)** [detection/src/consumer/watchdog.py:64-77] — race window는 ms 단위 + 단일 Watchdog MVP. Story 3.5 측정 후 발생률 기반 재결정.
+- **같은 `post_id` 중복 메시지 LREM 오제거 가능성 (D3, decision-needed→defer)** [detection/src/consumer/queue_consumer.py:45, watchdog.py:65,76] — DedupChecker(SHA-256) + Story 3.4 DB UniqueConstraint 이중 안전망 존재. 단일 post_id 충돌 빈도 사실상 0.
+- **`mark_processing` 침묵 실패** [detection/src/consumer/watchdog.py:35-45] — spec 명시 의도이나 정상 처리 중 메시지가 즉시 stale 판정되는 race window. spec 설계 유지.
+- **`processing_time` TTL = stale 임계치 동일(300s)** [detection/src/consumer/watchdog.py:17] — VARCO 5분 초과 처리 시 stale 오판. Story 3.2 VARCO SLA 측정 후 TTL 분리 검토.
+- **`run_forever` 예외 처리 부재** [detection/src/consumer/queue_consumer.py:64-65, watchdog.py:97-99] — Connection Error 시 프로세스 종료. Story 5.3 supervisor/restart 정책 확정 시 보완.
+- **`brpoplpush` Redis 6.2+ deprecated** [detection/src/consumer/queue_consumer.py:32-36] — spec 명시 사용. 후속 라이브러리 업그레이드 시 `BLMOVE` 마이그레이션.
+- **Watchdog 첫 스캔 60초 지연** [detection/src/consumer/watchdog.py:97-99] — 부팅 직후 잔존 stale 메시지 60초 방치. MVP 영향 미미.
+- **다중 Watchdog 인스턴스 race 보호 부재** [detection/src/consumer/watchdog.py:62-77] — `get → incr` 비원자. spec 단일 Watchdog 가정. Epic 5 분산 락 검토.
+- **환경변수 모듈 임포트 시점 캡처** [detection/src/consumer/queue_consumer.py:14-15, watchdog.py:16-19] — 통합 테스트 도입 시 함수형 전환.
+- **`LRANGE 0 -1` 풀스캔** [detection/src/consumer/watchdog.py:49] — 운영 부하 발생 시 페이징/SCAN 도입.
+- **단일 `redis.Redis` 메인/데몬 스레드 공유** [detection/src/main.py:22-29] — connection pool 명시 크기 미설정.
+- **SIGTERM/SIGINT graceful shutdown 부재** [detection/src/main.py] — Story 5.3 시그널 핸들러 + drain 로직.
+- **`_MAX_RETRIES` env 외부화 / off-by-one naming** [detection/src/consumer/watchdog.py:19] — 후속 개선.
+- **`int(os.environ.get(...))` 검증 부재** [detection/src/consumer/queue_consumer.py:15, watchdog.py:17-18] — 운영 misconfig 가드 추가.
+- **Watchdog `RPUSH` 재투입 우선순위 (poison priority inversion)** [detection/src/consumer/watchdog.py:75] — backoff 정책 도입 시 LPUSH 또는 별도 retry queue 검토.
+- **`pytest.ini` 옵션 부재 / `process_fn` 시그니처 단순** — `addopts` 미정의, Story 3.2에서 비동기/컨텍스트 전달 필요 시 변경.
 
 ## Deferred from: code review of 1-5-github-actions-기본-ci-파이프라인-구성 (2026-04-29)
 

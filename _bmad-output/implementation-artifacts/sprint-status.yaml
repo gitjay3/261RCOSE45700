@@ -80,7 +80,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-27
-last_updated: 2026-04-29  # Story 1-4 created: backlog → ready-for-dev (branch: feat/1-4, stacked PR target: feat/1-3)
+last_updated: 2026-04-29 # Story 1-4 created: backlog → ready-for-dev (branch: feat/1-4, stacked PR target: feat/1-3)
 project: 20261R0136COSE45700
 project_key: NOKEY
 tracking_system: file-system
@@ -93,7 +93,7 @@ development_status:
   1-2-공유-인터페이스-계약-및-구조화-로깅-수립: done
   1-3-로컬-개발-환경-구성: done
   1-4-flyway-db-초기-스키마-및-varco-mock-서버-구축: ready-for-dev
-  1-5-github-actions-기본-ci-파이프라인-구성: backlog
+  1-5-github-actions-기본-ci-파이프라인-구성: review
   epic-1-retrospective: optional
 
   # Epic 2: 자동 크롤링 및 전처리 파이프라인
@@ -121,15 +121,16 @@ development_status:
   4-1-spring-rest-api-기반-구조-및-탐지-목록-엔드포인트: backlog
   4-2-탐지-상세-조회-및-수동-크롤링-트리거-엔드포인트: backlog
   4-3-통계-엔드포인트-구현: backlog
-  4-4-react-대시보드-메인-화면-및-라우팅-구조: done  # 디자인 시스템 v10 overhaul + Blind Hunter/Edge Case Hunter/Security 3-layer 리뷰 통과 + PR #9
-  4-4-1-tailwind-shadcn-디자인-시스템-도입: done  # UX Spec spec, lightweight
-  4-4-2-dashboard-c-light-재구성: done  # UX Spec spec, lightweight
-  4-5-탐지-목록-상세-화면-및-파이프라인-반영-검증: done  # UX Spec spec, lightweight; 5분 검증은 Story 5.1 후
-  4-6-통계-화면-구현: done  # UX Spec spec, lightweight
+  4-4-react-대시보드-메인-화면-및-라우팅-구조: done # 디자인 시스템 v10 overhaul + Blind Hunter/Edge Case Hunter/Security 3-layer 리뷰 통과 + PR #9
+  4-4-1-tailwind-shadcn-디자인-시스템-도입: done # UX Spec spec, lightweight
+  4-4-2-dashboard-c-light-재구성: done # UX Spec spec, lightweight
+  4-5-탐지-목록-상세-화면-및-파이프라인-반영-검증: done # UX Spec spec, lightweight; 5분 검증은 Story 5.1 후
+  4-6-통계-화면-구현: done # UX Spec spec, lightweight
   epic-4-retrospective: optional
 
   # Epic 5: 시스템 운영, 모니터링 및 품질 관리
   epic-5: backlog
+  5-0-배포-토폴로지-및-운영-인프라-상세-설계-spike: backlog # SPIKE 1일, Epic 5 착수 직전 선행
   5-1-prometheus-메트릭-수집-및-grafana-대시보드-구성: backlog
   5-2-github-actions-완전-통합-ci-cd-파이프라인: backlog
   5-3-aws-프로덕션-인프라-프로비저닝: backlog

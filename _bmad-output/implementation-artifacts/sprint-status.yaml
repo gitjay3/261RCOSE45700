@@ -93,7 +93,7 @@ development_status:
   1-2-공유-인터페이스-계약-및-구조화-로깅-수립: done
   1-3-로컬-개발-환경-구성: done
   1-4-flyway-db-초기-스키마-및-varco-mock-서버-구축: backlog
-  1-5-github-actions-기본-ci-파이프라인-구성: backlog
+  1-5-github-actions-기본-ci-파이프라인-구성: review
   epic-1-retrospective: optional
 
   # Epic 2: 자동 크롤링 및 전처리 파이프라인
@@ -130,6 +130,7 @@ development_status:
 
   # Epic 5: 시스템 운영, 모니터링 및 품질 관리
   epic-5: backlog
+  5-0-배포-토폴로지-및-운영-인프라-상세-설계-spike: backlog  # SPIKE 1일, Epic 5 착수 직전 선행
   5-1-prometheus-메트릭-수집-및-grafana-대시보드-구성: backlog
   5-2-github-actions-완전-통합-ci-cd-파이프라인: backlog
   5-3-aws-프로덕션-인프라-프로비저닝: backlog

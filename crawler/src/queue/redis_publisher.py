@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+import redis
+
 from shared.config.redis_config import REDIS_KEY_POSTS_QUEUE
 from shared.structured_logger import get_logger
 
@@ -12,7 +14,7 @@ _logger = get_logger(__name__)
 class RedisPublisher:
     """Redis DB0 posts:queue 에 CrawlEvent JSON을 LPUSH."""
 
-    def __init__(self, redis_client) -> None:
+    def __init__(self, redis_client: redis.Redis) -> None:
         self._redis = redis_client
 
     def enqueue(self, event_json: str, *, correlation_id: str) -> None:

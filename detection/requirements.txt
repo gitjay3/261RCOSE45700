@@ -1,5 +1,8 @@
-redis
+redis>=5.0.0
 boto3
 httpx
 python-dotenv
+pytest>=7.0.0
+pytest-mock>=3.0.0
+fakeredis[lua]>=2.0.0
 -e ../shared

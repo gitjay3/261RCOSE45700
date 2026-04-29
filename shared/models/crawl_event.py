@@ -37,4 +37,8 @@ class CrawlEvent:
             raise ValueError(f"CrawlEvent: missing required fields: {missing}")
         if not isinstance(payload.get("image_urls", []), list):
             raise ValueError("CrawlEvent: 'image_urls' must be a list")
+        if not isinstance(payload.get("s3_image_paths", []), list):
+            raise ValueError("CrawlEvent: 's3_image_paths' must be a list")
+        if not isinstance(payload.get("s3_text_path", ""), str):
+            raise ValueError("CrawlEvent: 's3_text_path' must be a string")
         return cls(**{k: v for k, v in payload.items() if k in _CRAWL_EVENT_FIELDS})

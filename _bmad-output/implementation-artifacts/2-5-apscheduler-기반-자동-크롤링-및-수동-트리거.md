@@ -1,6 +1,6 @@
 # Story 2.5: APScheduler 기반 자동 크롤링 및 수동 트리거
 
-Status: review
+Status: done
 
 > 🎯 **본 스토리 핵심:** Story 2.3~2.4에서 완성된 크롤러·전처리·S3 아카이브 파이프라인을 APScheduler로 자동화하고, Redis pub/sub `crawl:trigger` 채널로 수동 즉시 실행을 지원한다. 전처리를 통과한 `CrawlEvent`를 Redis DB0 `posts:queue`에 LPUSH하여 Detection Worker(Epic 3)의 소비 준비를 완료한다.
 >
@@ -20,21 +20,24 @@ Status: review
 
 3. **Given** `trigger_listener.py`가 실행 중일 때 **When** Redis `crawl:trigger` 채널에 메시지가 발행되면 **Then** `TriggerListener`가 메시지를 수신하고 `CrawlPipeline.run()`을 즉시 호출하며, 구조화 로그에 `"수동 트리거 수신"` 메시지와 `correlation_id`가 기록된다 (FR6).
 
-4. **Given** `CrawlPipeline.run()`이 실행될 때 **When** 크롤링 → 전처리가 완료되면 **Then** 전처리(`dedup_checker` 비중복 + `keyword_filter` 통과)를 모두 통과한 게시글이 `CrawlEvent` JSON으로 직렬화되어 Redis DB0 `posts:queue`에 `LPUSH`된다. `CrawlEvent`의 `s3_text_path`와 `s3_image_paths`는 `PostStorage.save()`가 반환한 `StorageResult` 필드로 채워진다.
+4. **Given** `CrawlPipeline.run()`이 실행될 때 **When** 크롤링 → 전처리가 완료되면 **Then** 전처리(`dedup_checker` 비중복 + 빈 본문 아님)를 모두 통과한 게시글이 `CrawlEvent` JSON으로 직렬화되어 Redis DB0 `posts:queue`에 `LPUSH`된다. `CrawlEvent`의 `s3_text_path`와 `s3_image_paths`는 `PostStorage.save()`가 반환한 `StorageResult` 필드로 채워진다. (키워드 필터링은 Epic 3 AI 기반 탐지로 대체 — 2026-04-29 결정.)
 
 5. **Given** `CrawlScheduler` 프로세스가 재시작될 때 **When** `main.py`가 다시 실행되면 **Then** `AsyncIOScheduler`가 `CRAWL_INTERVAL_MINUTES` 주기로 다음 스케줄을 자동 재등록하고 다음 주기에 크롤링을 재개한다 (NFR10). 재시작 중에 누락된 주기(`misfire_grace_time=60` 초과)는 건너뛴다.
 
 6. **Given** `crawler/tests/integration/test_crawl_pipeline.py`가 실행될 때 **When** `CrawlPipeline.run()`을 mock `Crawl4AICrawler`와 mock Redis 클라이언트로 실행하면 **Then** 다음을 검증한다:
-   - 키워드 포함 게시글 → `redis.lpush("posts:queue", ...)` 호출 1회
+   - 정상 게시글 → `redis.lpush("posts:queue", ...)` 호출 1회
    - 중복 게시글(`DedupChecker.is_duplicate()=True`) → `lpush` 미호출
-   - 키워드 미포함 게시글 → `lpush` 미호출
+   - 빈 본문 게시글 (`fit_markdown` 공백/빈 문자열) → `lpush` 미호출, `skipped_empty` +1
    - `CrawlEvent.to_json()` 역직렬화 시 `from_json()`이 성공 (스키마 정합성)
    - 개별 게시글 크롤 실패 → 예외 로그 후 다음 게시글 진행 (파이프라인 미중단)
    - `s3_text_path`가 `StorageResult`에서 `CrawlEvent`로 전파됨
+   - `mark_seen` 은 `LPUSH` 이후에 호출됨 (Anti-Pattern #6 호출 순서 검증)
 
 7. **Given** 통합 테스트가 완료될 때 **When** `cd crawler && ./.venv/bin/pytest tests/integration/ -v`를 실행하면 **Then** 신규 통합 테스트 ≥6건이 **모두 PASS**하며 실제 Redis, S3, 브라우저 호출이 0건이다. 기존 48건(Story 2.1~2.4) 회귀 없이 전체 ≥54건 PASS.
 
 > **AC 출처:** epics.md L371-L387 (Story 2.5). AC 4(S3 경로 전파), AC 5(재시작 자동 재개 = `AsyncIOScheduler` 재등록), AC 6(통합 테스트 항목)은 Story 2.3/2.4 패턴과 architecture.md ARCH-10 기반으로 구체화.
+>
+> **2026-04-29 변경:** keyword_filter 단계 제거(commit `17d88ed`) — Epic 3 AI 기반 탐지로 대체. AC #4/#6, Tasks 5.1/6.2, completion log, Anti-Pattern을 그에 맞춰 업데이트.
 
 ## Tasks / Subtasks
 
@@ -674,7 +677,7 @@ def to_crawl_event(
 3. ❌ **`aioredis` 별도 패키지 설치** — `redis>=5.0.0`에 `redis.asyncio`가 내장. `pip install aioredis` 불필요.
 4. ❌ **`_fetch_post_urls()` 없이 `Crawl4AICrawler.fetch()`로 게시판 목록 크롤** — `Crawl4AICrawler`는 전체 파이프라인(이미지 다운로드 포함), 게시판 목록에는 과도. `AsyncWebCrawler` 직접 사용으로 링크만 추출.
 5. ❌ **`to_crawl_event()` 호출 후 `event.s3_text_path = ...` 직접 필드 할당** — `to_crawl_event()`에 파라미터 추가하여 팩토리 함수 내에서 처리.
-6. ❌ **`dedup_checker.mark_seen()` 를 `LPUSH` 이전에 호출** — LPUSH 성공 확인 후 mark_seen 호출. LPUSH 실패 시 재크롤 가능해야 함.
+6. ❌ **`dedup_checker.mark_seen()` 를 `LPUSH` 이전에 호출** — LPUSH 성공 확인 후 mark_seen 호출. LPUSH 실패 시 재크롤 가능해야 함. mark_seen 자체는 별도 try/except로 감싸 — LPUSH 성공 후 mark_seen 실패해도 enqueued 카운트 유지(다음 run에서 재발행 허용).
 7. ❌ **`CrawlPipeline.run()`이 첫 게시글 실패 시 예외 raise** — 개별 게시글 실패는 `try/except`로 catch, 다음 게시글 진행. 전체 파이프라인 중단 금지.
 8. ❌ **`TriggerListener`에서 sync Redis pub/sub 사용** — `trigger_listener.py`는 async context. `redis.asyncio`의 `pubsub().listen()` 사용.
 9. ❌ **`REDIS_URL` 하드코딩** — 반드시 `os.environ.get("REDIS_URL", "redis://localhost:6379")` 패턴. 로컬 기본값 허용.
@@ -756,9 +759,53 @@ claude-sonnet-4-6
 - `crawler/src/preprocessor/keyword_filter.py`
 - `shared/models/crawl_event.py`
 
+### Review Findings
+
+**리뷰 일시:** 2026-04-29 (Blind Hunter + Edge Case Hunter + Acceptance Auditor 3-layer)
+**검증된 핵심 사실:** `pytest tests/integration/test_crawl_pipeline.py` → **7 failed, 49 passed** (spec의 "55건 PASS" 주장과 불일치). 근본 원인: ① `keyword_filter` 의도적 제거(commit `17d88ed`)로 `PipelineStats.skipped_keyword` 필드 부재, ② `get_enabled_sites()` 미패치로 site 7개 순회, ③ spec 미동기화.
+
+**[Decision needed]**
+
+- [x] [Review][Decision] **Spec AC #4 keyword_filter 의무 vs 코드의 의도적 제거 (commit `17d88ed`)** — **결정: (B) keyword_filter 제거 유지** (2026-04-29). AI 기반 탐지(Epic 3)가 키워드 필터를 대체. spec AC #4/#6, Tasks 5.1/6.2, completion log 형식, "Anti-Patterns to Avoid"를 업데이트하여 keyword_filter 단계를 삭제하는 patch가 아래에 추가됨.
+
+**[Patches]**
+
+- [x] [Review][Patch] **Spec 본문 업데이트 — AC #4/#6, Tasks 5.1/6.2, completion log, Anti-Pattern에서 keyword_filter 단계 삭제** [본 spec 파일] — Decision (B) 결과. AC #4 "전처리(`dedup_checker` 비중복) 통과", AC #6 "키워드 미포함 게시글" 항목 삭제, Tasks 5.1 코드 예시에서 keyword_filter import/호출 제거, completion log 형식 `"파이프라인 완료: 시도=%d 큐=%d 중복제외=%d 실패=%d"`로 갱신.
+- [x] [Review][Patch] **통합 테스트 7건 모두 FAIL — `get_enabled_sites()` 미패치** [tests/integration/test_crawl_pipeline.py 전체] — site enabled 7개로 lpush 8회 호출되어 `assert_called_once` 실패. `_make_pipeline`에서 `patch("crawler.src.scheduler.crawl_scheduler.get_enabled_sites")` 추가하여 단일 사이트로 제한 필요.
+- [x] [Review][Patch] **`stats.skipped_keyword` 참조 + `test_pipeline_skips_no_keyword_post` 재구성** [tests/integration/test_crawl_pipeline.py:81,116, 105-117] — Decision (B) 결과. `skipped_keyword` 단언 제거, `test_pipeline_skips_no_keyword_post` 테스트 삭제(또는 빈 게시글 가드 추가 후 `test_pipeline_skips_empty_post`로 의미 재정의 — 별도 patch에서 처리).
+- [x] [Review][Patch] **TriggerListener — `await self._run_pipeline()` 예외 시 listener 영구 사망** [crawler/src/scheduler/trigger_listener.py:20-30] — pipeline 호출을 try/except로 감싸서 예외 로깅 후 listen 루프 유지.
+- [x] [Review][Patch] **PubSub 연결 끊김 시 reconnect 없음 → 서비스 영구 무력화** [crawler/src/scheduler/trigger_listener.py:14-30] — outer retry 루프(backoff)로 `client = aioredis.from_url(...)` 재연결.
+- [x] [Review][Patch] **수동 trigger와 scheduled run 동시성 보호 부재** [crawler/src/scheduler/crawl_scheduler.py:171, 194] — `max_instances=1`은 scheduled에만 적용. 공유 `asyncio.Lock`으로 trigger 경로도 보호.
+- [x] [Review][Patch] **mark_seen 실패 시 enqueued/failed 동시 카운트 + 재실행 시 큐 중복** [crawler/src/scheduler/crawl_scheduler.py:136-140] — LPUSH 성공 후 `mark_seen`을 별도 try로 분리하거나 outer try의 카운트 순서 조정.
+- [x] [Review][Patch] **`-e ../shared` 가 requirements.txt에서 제거됨** [crawler/requirements.txt] — `from shared.*` 임포트 다수. 신규 환경 설치 시 `ModuleNotFoundError`. `-e ../shared` 복원.
+- [x] [Review][Patch] **`_url_sort_key`가 board_id를 post_id로 오인 추출** [crawler/src/scheduler/crawl_scheduler.py:54-56] — `re.search(r"/(\d+)", u)`가 첫 숫자(`/board/maple/2298/123`의 `2298`) 매칭. `site.post_id_extractor(u)` 또는 마지막 숫자 그룹으로 교체.
+- [x] [Review][Patch] **`_fetch_post_urls`에서 `crawler.arun` 예외 미캐치 → 한 게시판 실패가 전체 run abort** [crawler/src/scheduler/crawl_scheduler.py:35-36] — `try/except`로 wrapping하여 `[]` 반환.
+- [x] [Review][Patch] **`link.get("href", "")` 가 None일 때 `.split` crash** [crawler/src/scheduler/crawl_scheduler.py:48] — `link.get("href") or ""` 패턴으로 변경.
+- [x] [Review][Patch] **TriggerListener `db=0` 하드코딩 vs `REDIS_MQ_DB` 상수 (architecture.md P2)** [crawler/src/scheduler/trigger_listener.py:14] — `from shared.config.redis_config import REDIS_MQ_DB` 추가 후 사용.
+- [x] [Review][Patch] **`crawl:trigger` 채널이 magic literal — `redis_config`에 상수 없음 (P2)** [crawler/src/scheduler/trigger_listener.py:9] — `REDIS_CHANNEL_CRAWL_TRIGGER = "crawl:trigger"` 상수 추가.
+- [x] [Review][Patch] **`aioredis` client `async with` 외부 — 예외 시 connection pool 누수** [crawler/src/scheduler/trigger_listener.py:14-30] — `async with aioredis.from_url(...) as client:` 패턴으로 전환.
+- [x] [Review][Patch] **`exc_info=True` 누락 — 운영 디버깅 시 traceback 부재** [crawler/src/scheduler/crawl_scheduler.py:141-144] — error 로그에 `exc_info=True` 추가.
+- [x] [Review][Patch] **`_fetch_post_urls` 실패 로그가 `correlation_id=""` (Cross-Cutting #1 위반)** [crawler/src/scheduler/crawl_scheduler.py:38-41] — 호출부에서 site별 correlation_id 생성하여 전파.
+- [x] [Review][Patch] **빈 `result.markdown`도 enqueue됨 — 빈 게시글 큐 오염** [crawler/src/scheduler/crawl_scheduler.py:114-117] — `if not result.fit_markdown.strip(): continue` 가드 추가 (또는 stats.skipped_empty 필드).
+- [x] [Review][Patch] **`mark_seen after enqueue` 테스트가 실제 호출 순서를 검증하지 않음 (Anti-Pattern #6 enforcement weak)** [tests/integration/test_crawl_pipeline.py:204] — `mock_calls` 또는 `side_effect`로 순서 단언.
+- [x] [Review][Patch] **`RedisPublisher.__init__(redis_client)` 타입 주석 누락 — 비동기 클라이언트 잘못 전달 시 silent failure** [crawler/src/queue/redis_publisher.py:8] — `redis.Redis` 타입 힌트 추가.
+
+**[Deferred — 운영/리팩토링 트랙]**
+
+- [x] [Review][Defer] **Sync `redis` client을 async event loop에서 사용 — 매 LPUSH/sismember/sadd가 loop block** [crawl_scheduler.py:162-163, redis_publisher.py:11] — deferred, architecture-level 변경 필요. 부하 측정 후 redis.asyncio 전면 전환.
+- [x] [Review][Defer] **`PostStorage.save` sync (S3 boto3 포함) → async loop block during 업로드** [crawl_scheduler.py:119-125] — deferred, Story 2.4 작업. aioboto3 또는 thread offload 검토.
+- [x] [Review][Defer] **APScheduler `shutdown(wait=False)`이 in-flight job orphan + signal handling 부재** [crawl_scheduler.py:194-196] — deferred, NFR10 24h 무중단 운영 인프라 트랙(Epic 5).
+- [x] [Review][Defer] **APScheduler misfire 이벤트 미로깅 → 운영 가시성 부재** [crawl_scheduler.py:174-184] — deferred, Story 5.1 Prometheus/Grafana 작업과 함께.
+- [x] [Review][Defer] **`AsyncWebCrawler` 매 board마다 instantiation — Chromium cold start 비용** [crawl_scheduler.py:33-36] — deferred, 성능 개선. board 단위 → site 단위 또는 모듈 레벨 lifecycle.
+- [x] [Review][Defer] **`detected_at` 시맨틱 — "now"인데 이름은 이벤트 시각** [serializer.py] — deferred, downstream consumer (Detection Worker) 영향 큼. Story 3.1+에서 결정.
+- [x] [Review][Defer] **`language_detector.detect` sync — 매우 긴 텍스트에서 event loop block** [crawl_scheduler.py:117] — deferred, sync redis defer와 동일 트랙.
+
+**[Dismissed — 노이즈]** 10건: `aioredis` alias 명명, `SERVICE_NAME` import-time 캡처, `pubsub.listen()` `message["type"]` KeyError(redis-py 보장), non-numeric env var fail-fast(의도적), 테스트 7건 vs spec ≥6건(spec 허용), test mock 시그니처 검증(autospec 별건), `image_urls` 빌더 `img["src"]`(crawl4ai_crawler.py에서 보장), serializer.py "신규 vs 수정"(main에 미머지로 git 메타데이터 차이), detection/ 미커밋 파일(다른 스토리), completion log `skipped_keyword` 누락(Decision 결정으로 자동 해결).
+
 ## Change Log
 
 | 날짜 | 변경 | 사유 |
 |---|---|---|
 | 2026-04-28 | Story 2.5 컨텍스트 작성 (`Status: ready-for-dev`) | bmad-create-story |
 | 2026-04-28 | Story 2.5 구현 완료 (`Status: review`) — `crawl_scheduler.py` + `trigger_listener.py` + `redis_publisher.py` 신규, `serializer.py` s3 파라미터 추가, 55건 PASS | bmad-dev-story |
+| 2026-04-29 | 코드 리뷰 (3-layer adversarial) — 1 decision-needed, 18 patches, 7 deferred, 10 dismissed. 통합 테스트 7건 FAIL 검증, keyword_filter 의도적 제거 vs spec 불일치 발견 | bmad-code-review |

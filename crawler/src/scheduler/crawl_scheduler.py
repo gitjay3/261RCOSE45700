@@ -28,16 +28,26 @@ _logger = get_logger(__name__)
 _MAX_POSTS_PER_BOARD = int(os.environ.get("MAX_POSTS_PER_BOARD", "10"))
 
 
-async def _fetch_post_urls(board_url: str, pattern: str, limit: int) -> list[str]:
+async def _fetch_post_urls(
+    board_url: str, pattern: str, limit: int, *, correlation_id: str = ""
+) -> list[str]:
     """게시판 목록 페이지에서 게시글 URL 추출 (stealth 브라우저 + 링크 파싱)."""
     cfg = BrowserConfig(headless=True, enable_stealth=True, verbose=False)
     run = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, page_timeout=20_000)
-    async with AsyncWebCrawler(config=cfg) as crawler:
-        result = await crawler.arun(board_url, config=run)
+    try:
+        async with AsyncWebCrawler(config=cfg) as crawler:
+            result = await crawler.arun(board_url, config=run)
+    except Exception as exc:
+        _logger.warning(
+            "게시판 목록 크롤 예외: %s — %s", board_url, exc,
+            extra={"correlation_id": correlation_id, "service": _SERVICE_NAME},
+            exc_info=True,
+        )
+        return []
     if not result.success:
         _logger.warning(
             "게시판 목록 크롤 실패: %s", board_url,
-            extra={"correlation_id": "", "service": _SERVICE_NAME},
+            extra={"correlation_id": correlation_id, "service": _SERVICE_NAME},
         )
         return []
     all_links = (result.links.get("internal") or []) + (result.links.get("external") or [])
@@ -45,15 +55,15 @@ async def _fetch_post_urls(board_url: str, pattern: str, limit: int) -> list[str
     post_urls: list[str] = []
     compiled = re.compile(pattern)
     for link in all_links:
-        href = link.get("href", "").split("?")[0]
+        href = (link.get("href") or "").split("?")[0]
         if compiled.match(href) and href not in seen:
             seen.add(href)
             post_urls.append(href)
 
-    # 고정(공지) 게시글이 상단에 오는 게시판 대응: URL 내 첫 숫자 시퀀스를 ID로 삼아 내림차순 정렬
+    # 고정(공지) 게시글이 상단에 오는 게시판 대응: URL의 마지막 숫자 시퀀스를 post_id로 삼아 내림차순 정렬
     def _url_sort_key(u: str) -> int:
-        m = re.search(r"/(\d+)", u)
-        return int(m.group(1)) if m else 0
+        matches = re.findall(r"/(\d+)", u)
+        return int(matches[-1]) if matches else 0
 
     post_urls.sort(key=_url_sort_key, reverse=True)
     return post_urls[:limit]
@@ -64,6 +74,7 @@ class PipelineStats:
     attempted: int = 0
     enqueued: int = 0
     skipped_dedup: int = 0
+    skipped_empty: int = 0
     failed: int = 0
 
     @property
@@ -98,8 +109,10 @@ class CrawlPipeline:
 
         for site_id, site in sites.items():
             for board_url in site.board_urls:
+                board_cid = generate()
                 post_urls = await _fetch_post_urls(
-                    board_url, site.post_url_pattern, _MAX_POSTS_PER_BOARD
+                    board_url, site.post_url_pattern, _MAX_POSTS_PER_BOARD,
+                    correlation_id=board_cid,
                 )
                 for post_url in post_urls:
                     stats.attempted += 1
@@ -111,6 +124,13 @@ class CrawlPipeline:
                             image_filter=site.image_filter,
                             css_selector=site.css_selector,
                         )
+                        if not (result.fit_markdown or "").strip():
+                            stats.skipped_empty += 1
+                            _logger.warning(
+                                "빈 게시글 스킵: %s", post_url,
+                                extra={"correlation_id": cid, "service": _SERVICE_NAME},
+                            )
+                            continue
                         if self._dedup.is_duplicate(result.fit_markdown, correlation_id=cid):
                             stats.skipped_dedup += 1
                             continue
@@ -134,20 +154,31 @@ class CrawlPipeline:
                             s3_image_paths=storage_result.s3_image_paths,
                         )
                         self._publisher.enqueue(event.to_json(), correlation_id=cid)
-                        self._dedup.mark_seen(result.fit_markdown, correlation_id=cid)
                         stats.enqueued += 1
                     except Exception as exc:
                         stats.failed += 1
                         _logger.error(
                             "게시글 처리 실패: %s — %s", post_url, exc,
                             extra={"correlation_id": cid, "service": _SERVICE_NAME},
+                            exc_info=True,
+                        )
+                        continue
+                    # LPUSH 성공 후 mark_seen — 실패해도 enqueued는 유지(다음 run에서 재발행 허용)
+                    try:
+                        self._dedup.mark_seen(result.fit_markdown, correlation_id=cid)
+                    except Exception as exc:
+                        _logger.warning(
+                            "dedup mark_seen 실패 (큐에는 이미 발행됨): %s — %s", post_url, exc,
+                            extra={"correlation_id": cid, "service": _SERVICE_NAME},
+                            exc_info=True,
                         )
 
         _logger.info(
-            "파이프라인 완료: 시도=%d 큐=%d 중복제외=%d 실패=%d",
+            "파이프라인 완료: 시도=%d 큐=%d 중복제외=%d 빈게시글=%d 실패=%d",
             stats.attempted,
             stats.enqueued,
             stats.skipped_dedup,
+            stats.skipped_empty,
             stats.failed,
             extra={"correlation_id": "", "service": _SERVICE_NAME},
         )
@@ -168,13 +199,26 @@ class CrawlScheduler:
             dedup=DedupChecker(dedup_client),
             publisher=RedisPublisher(mq_client),
         )
-        self._trigger_listener = TriggerListener(redis_url, self._pipeline.run)
+        # scheduled run + 수동 trigger 동시 실행 방지
+        self._run_lock = asyncio.Lock()
+        self._trigger_listener = TriggerListener(redis_url, self._run_locked)
         self._scheduler = AsyncIOScheduler()
+
+    async def _run_locked(self) -> None:
+        # APScheduler 잡 + 수동 trigger 양쪽에서 호출되는 단일 진입점.
+        if self._run_lock.locked():
+            _logger.info(
+                "이미 실행 중 — 이번 호출 스킵",
+                extra={"correlation_id": "", "service": _SERVICE_NAME},
+            )
+            return
+        async with self._run_lock:
+            await self._pipeline.run()
 
     def setup_schedule(self) -> None:
         interval = int(os.environ.get("CRAWL_INTERVAL_MINUTES", "60"))
         self._scheduler.add_job(
-            self._pipeline.run,
+            self._run_locked,
             trigger="interval",
             minutes=interval,
             max_instances=1,

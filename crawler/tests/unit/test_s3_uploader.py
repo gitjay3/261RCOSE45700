@@ -315,3 +315,194 @@ class TestCrawlEventS3Fields:
     def test_crawl_event_s3_image_paths_default_empty_list(self):
         event = CrawlEvent(**self._BASE_PAYLOAD)
         assert event.s3_image_paths == []
+
+    def test_crawl_event_s3_image_paths_must_be_list(self):
+        payload = {**self._BASE_PAYLOAD, "s3_image_paths": "s3://x"}
+        with pytest.raises(ValueError, match="s3_image_paths"):
+            CrawlEvent.from_json(json.dumps(payload))
+
+    def test_crawl_event_s3_text_path_must_be_string(self):
+        payload = {**self._BASE_PAYLOAD, "s3_text_path": ["s3://x"]}
+        with pytest.raises(ValueError, match="s3_text_path"):
+            CrawlEvent.from_json(json.dumps(payload))
+
+
+# ---------------------------------------------------------------------------
+# Review (2026-04-29) — 추가 케이스
+# ---------------------------------------------------------------------------
+
+class TestUploadTextEdgeCases:
+    def test_empty_text_skips_upload_returns_empty_string(self):
+        from crawler.src.s3_uploader import S3Uploader
+        uploader, mock_client = _make_uploader()
+        with patch.object(uploader, "_client", mock_client):
+            uri = uploader.upload_text(
+                "", site="s", date="2026-04-29", post_id="p1", correlation_id="c"
+            )
+        assert uri == ""
+        mock_client.put_object.assert_not_called()
+
+    def test_botocore_error_is_logged_and_raised(self):
+        from crawler.src.s3_uploader import S3Uploader
+        uploader, mock_client = _make_uploader()
+        mock_client.put_object.side_effect = botocore.exceptions.EndpointConnectionError(
+            endpoint_url="https://s3.example.com"
+        )
+        with patch.object(uploader, "_client", mock_client):
+            with pytest.raises(botocore.exceptions.BotoCoreError):
+                uploader.upload_text(
+                    "x", site="s", date="2026-04-29", post_id="p1", correlation_id="c"
+                )
+
+
+class TestUploadImagesEdgeCases:
+    def test_read_bytes_failure_continues_to_next_image(self, tmp_path):
+        from crawler.src.s3_uploader import S3Uploader
+        uploader, mock_client = _make_uploader()
+        missing = tmp_path / "img_000.jpg"  # 파일 미생성 → FileNotFoundError
+        present = tmp_path / "img_001.jpg"
+        present.write_bytes(b"data")
+        with patch.object(uploader, "_client", mock_client):
+            uris = uploader.upload_images(
+                [missing, present], site="s", date="2026-04-29", post_id="p1", correlation_id="c"
+            )
+        assert len(uris) == 1
+        assert "img_001" in uris[0]
+
+    def test_botocore_error_per_image_continues(self, tmp_path):
+        from crawler.src.s3_uploader import S3Uploader
+        uploader, mock_client = _make_uploader()
+        img1 = tmp_path / "img_000.jpg"
+        img1.write_bytes(b"a")
+        img2 = tmp_path / "img_001.jpg"
+        img2.write_bytes(b"b")
+
+        def side_effect(**kwargs):
+            if "img_000" in kwargs["Key"]:
+                raise botocore.exceptions.EndpointConnectionError(
+                    endpoint_url="https://s3.example.com"
+                )
+
+        mock_client.put_object.side_effect = side_effect
+        with patch.object(uploader, "_client", mock_client):
+            uris = uploader.upload_images(
+                [img1, img2], site="s", date="2026-04-29", post_id="p1", correlation_id="c"
+            )
+        assert len(uris) == 1
+        assert "img_001" in uris[0]
+
+    def test_content_type_inferred_from_extension(self, tmp_path):
+        from crawler.src.s3_uploader import S3Uploader
+        uploader, mock_client = _make_uploader()
+        img = tmp_path / "img_000.png"
+        img.write_bytes(b"\x89PNG")
+        with patch.object(uploader, "_client", mock_client):
+            uploader.upload_images(
+                [img], site="s", date="2026-04-29", post_id="p1", correlation_id="c"
+            )
+        kwargs = mock_client.put_object.call_args.kwargs
+        assert kwargs.get("ContentType") == "image/png"
+
+
+class TestPostStorageValidation:
+    def test_post_id_with_slash_raises(self, tmp_path):
+        from crawler.src.storage import PostStorage
+        from crawler.src.crawl4ai_crawler import CrawlResult
+        with patch.dict(os.environ, {"ENABLE_S3_UPLOAD": "false"}):
+            storage = PostStorage(base_dir=str(tmp_path))
+            with pytest.raises(ValueError, match="post_id"):
+                storage.save(
+                    site_id="site",
+                    post_id="../etc/passwd",
+                    url="https://example.com",
+                    result=CrawlResult(
+                        url="https://example.com",
+                        raw_markdown="r", fit_markdown="f",
+                        images=[], downloaded_images=[],
+                    ),
+                )
+
+    def test_post_id_empty_raises(self, tmp_path):
+        from crawler.src.storage import PostStorage
+        from crawler.src.crawl4ai_crawler import CrawlResult
+        with patch.dict(os.environ, {"ENABLE_S3_UPLOAD": "false"}):
+            storage = PostStorage(base_dir=str(tmp_path))
+            with pytest.raises(ValueError, match="post_id"):
+                storage.save(
+                    site_id="site",
+                    post_id="",
+                    url="https://example.com",
+                    result=CrawlResult(
+                        url="https://example.com",
+                        raw_markdown="r", fit_markdown="f",
+                        images=[], downloaded_images=[],
+                    ),
+                )
+
+    def test_bucket_whitespace_only_treated_as_missing(self):
+        from crawler.src.storage import PostStorage
+        env = {"ENABLE_S3_UPLOAD": "true", "S3_BUCKET_NAME": "   "}
+        with patch.dict(os.environ, env, clear=False):
+            with pytest.raises(ValueError, match="S3_BUCKET_NAME"):
+                PostStorage()
+
+
+class TestEnableS3UploadTruthyVariants:
+    @pytest.mark.parametrize("val", ["true", "TRUE", "True", "1", "yes", "YES", " true ", "True\n"])
+    def test_truthy_values_enable_uploader(self, val, tmp_path):
+        from crawler.src.storage import PostStorage
+        env = {"ENABLE_S3_UPLOAD": val, "S3_BUCKET_NAME": "bucket"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("crawler.src.storage.S3Uploader") as mock_cls:
+                PostStorage(base_dir=str(tmp_path))
+        mock_cls.assert_called_once()
+
+    @pytest.mark.parametrize("val", ["false", "0", "no", "", "banana", "  "])
+    def test_falsy_or_unknown_values_disable_uploader(self, val, tmp_path):
+        from crawler.src.storage import PostStorage
+        env = {"ENABLE_S3_UPLOAD": val}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("crawler.src.storage.S3Uploader") as mock_cls:
+                PostStorage(base_dir=str(tmp_path))
+        mock_cls.assert_not_called()
+
+
+class TestImageMetadataAlignment:
+    def test_metadata_aligns_via_filename_index_after_partial_failure(self, tmp_path):
+        """일부 다운로드 실패 시 zip 정렬 대신 img_NNN 인덱스로 정확히 매핑."""
+        from crawler.src.storage import PostStorage
+        from crawler.src.crawl4ai_crawler import CrawlResult
+
+        # 3개 이미지 메타, 다운로드는 0번/2번만 성공 (1번 실패)
+        downloaded_dir = tmp_path / "dl"
+        downloaded_dir.mkdir()
+        img0 = downloaded_dir / "img_000.jpg"
+        img0.write_bytes(b"a")
+        img2 = downloaded_dir / "img_002.jpg"
+        img2.write_bytes(b"c")
+
+        result = CrawlResult(
+            url="https://example.com",
+            raw_markdown="r",
+            fit_markdown="f",
+            images=[
+                {"src": "https://x/0.jpg", "alt": "zero", "score": 1},
+                {"src": "https://x/1.jpg", "alt": "one", "score": 2},
+                {"src": "https://x/2.jpg", "alt": "two", "score": 3},
+            ],
+            downloaded_images=[img0, img2],
+        )
+        with patch.dict(os.environ, {"ENABLE_S3_UPLOAD": "false"}):
+            storage = PostStorage(base_dir=str(tmp_path / "out"))
+            storage_result = storage.save(
+                site_id="site",
+                post_id="p1",
+                url="https://example.com",
+                result=result,
+            )
+
+        post_json = json.loads((storage_result.local_path / "post.json").read_text())
+        assert len(post_json["images"]) == 2
+        # img_000 → metadata index 0 ("zero"), img_002 → metadata index 2 ("two")
+        assert post_json["images"][0]["alt"] == "zero"
+        assert post_json["images"][1]["alt"] == "two"

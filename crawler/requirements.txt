@@ -1,8 +1,8 @@
-playwright==1.58.0
-APScheduler
-beautifulsoup4
+crawl4ai>=0.8.6
+httpx>=0.27.0
+python-dotenv>=1.0.0
 langdetect
-redis
-boto3
-playwright-stealth
--e ../shared
+boto3>=1.34.0
+APScheduler>=3.10.0,<4.0.0
+redis>=5.0.0
+pytest-asyncio>=0.23.0

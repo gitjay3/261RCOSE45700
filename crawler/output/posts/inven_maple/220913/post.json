@@ -1,0 +1,21 @@
+{
+  "post_id": "220913",
+  "site": "inven_maple",
+  "url": "https://www.inven.co.kr/board/maple/2298/220913",
+  "crawled_at": "2026-04-28T15:58:52.647130+00:00",
+  "text": "# 신규 공코 출시에 따른 깡스탯 증가에관해 환산 주의사항\n최근 파이렛 플래그 6차 공코 출시로295렙 풀강 기준 깡스탯이 440 넘게 올랐는데혹시나 싶어 환산에 공코 0렙과 만렙을 적용해도렙당 효율이 변하지 않는걸 확인했습니다.아마 계산식에 누락이 있는것 같고현재 강화수준에 맞는 스탯을 직접입력 해야 렙당효율이옳게 적용됩니다.경매장에서 방어구 에디 보실때 이점 유의하세요\nEXP 2,255 (27%) / 2,401 \n인벤쪽지 이니힐링 더보기\n펼치기\n메뉴 접기\n\n\n\n레벨\n\n\n경험치\n     2,255 (27%) / 2,401  ( 다음 레벨까지 146 / 마격까지 135 남음 )  \n\n포인트\n    \n이니 5,305\n베니 6\n제니 7 \n\n명성\n    189 \n\n획득스킬\n\n[주소복사](javascript:void\\(0\\);) <https://www.inven.co.kr/board/maple/2298/220913>\n",
+  "images": [
+    {
+      "filename": "img_000.jpg",
+      "src": "https://upload3.inven.co.kr/upload/2026/04/28/bbs/i1286941401.jpg?MW=800",
+      "alt": "",
+      "score": 4
+    },
+    {
+      "filename": "img_001.jpg",
+      "src": "https://upload3.inven.co.kr/upload/2026/04/28/bbs/i1277070733.jpg?MW=800",
+      "alt": "",
+      "score": 4
+    }
+  ]
+}

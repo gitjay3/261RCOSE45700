@@ -5,9 +5,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, call
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from crawler.src.crawl4ai_crawler import CrawlResult
 from crawler.src.preprocessor.dedup_checker import DedupChecker

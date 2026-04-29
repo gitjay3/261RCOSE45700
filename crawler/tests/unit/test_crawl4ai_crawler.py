@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from crawler.src.crawl4ai_crawler import Crawl4AICrawler, CrawlResult

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from crawler.src.preprocessor.keyword_filter import passes
 
 _CID = "test-kf-001"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 
+import redis
 from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "crawler")
@@ -14,7 +15,7 @@ _DEDUP_SET_KEY = "posts:dedup"
 class DedupChecker:
     """Redis 기반 중복 게시글 체크."""
 
-    def __init__(self, redis_client: "redis.Redis") -> None:  # type: ignore[name-defined]
+    def __init__(self, redis_client: redis.Redis) -> None:
         self._redis = redis_client
 
     def _hash(self, text: str) -> str:

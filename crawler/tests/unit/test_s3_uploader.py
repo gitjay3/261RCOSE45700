@@ -1,8 +1,8 @@
 """Story 2.4 — S3Uploader 및 PostStorage S3 통합 단위 테스트 (실제 boto3 호출 0건)."""
 from __future__ import annotations
 
+import json
 import os
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
@@ -292,7 +292,6 @@ class TestCrawlEventS3Fields:
     }
 
     def test_crawl_event_s3_paths_roundtrip(self):
-        import json
         event = CrawlEvent(
             **self._BASE_PAYLOAD,
             s3_text_path="s3://bucket/raw/site/2026-04-28/123.md",
@@ -304,7 +303,6 @@ class TestCrawlEventS3Fields:
 
     def test_crawl_event_backward_compat_no_s3_fields(self):
         """s3 필드 없는 기존 JSON도 from_json() 성공."""
-        import json
         data = json.dumps(self._BASE_PAYLOAD)
         event = CrawlEvent.from_json(data)
         assert event.s3_text_path == ""

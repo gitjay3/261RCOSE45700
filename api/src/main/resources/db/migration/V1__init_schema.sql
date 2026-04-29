@@ -37,7 +37,7 @@ CREATE TABLE detections (
     post_id       BIGINT        NOT NULL REFERENCES posts(id),
     is_illegal    BOOLEAN       NOT NULL,
     type          VARCHAR(50),
-    confidence    DOUBLE PRECISION NOT NULL,
+    confidence    DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
     reason        TEXT,
     model_version VARCHAR(50)   NOT NULL,
     detected_at   TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()

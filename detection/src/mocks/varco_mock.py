@@ -8,6 +8,7 @@ from shared.interfaces.varco import ClassificationResult, VarcoInterface
 
 # detection/src/mocks/ → parents[3] == 프로젝트 루트
 _FIXTURES = Path(__file__).parents[3] / "tests" / "fixtures" / "varco"
+_VALID_MODES = {"clean", "illegal", "rate_limited", "timeout"}
 
 
 class RateLimitError(Exception):
@@ -20,7 +21,8 @@ class VarcoMock:
     """VarcoInterface Protocol 구현체 — 통합 테스트 전용"""
 
     def __init__(self, mode: str = "clean", latency_ms: int = 0) -> None:
-        # mode: "illegal" | "clean" | "rate_limited" | "timeout"
+        if mode not in _VALID_MODES:
+            raise ValueError(f"unsupported VARCO mock mode: {mode}")
         self._mode = mode
         self._latency_ms = latency_ms
         self._data: dict = self._load(mode)

@@ -1,6 +1,6 @@
 # Story 1.4: Flyway DB 초기 스키마 및 VARCO Mock 서버 구축
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -51,6 +51,13 @@ PostgreSQL 스키마와 VARCO API Mock 서버가 준비되기를 원한다,
   - [x] 5.3 Python에서 `from detection.src.mocks.varco_mock import VarcoMock` import 확인
   - [x] 5.4 변경 파일 목록 File List에 기록
   - [x] 5.5 sprint-status.yaml `1-4-flyway-db-초기-스키마-및-varco-mock-서버-구축` 상태 `review`로 업데이트
+
+### Review Findings
+
+- [x] [Review][Patch] Postgres healthcheck ignores overridden DB_USER/DB_NAME [`infra/docker-compose.yml:35`]
+- [x] [Review][Patch] Detection confidence accepts invalid values outside 0..1 [`api/src/main/resources/db/migration/V1__init_schema.sql:40`]
+- [x] [Review][Patch] VarcoMock reports unsupported mode as fixture FileNotFoundError [`detection/src/mocks/varco_mock.py:22`]
+- [x] [Review][Patch] Manual label CSV uses CRLF, causing `git diff --check` trailing-whitespace failures [`tests/fixtures/labels/manual_label_set_v1.csv:1`]
 
 ## Dev Notes
 

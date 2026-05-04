@@ -1,0 +1,29 @@
+# CODEOWNERS — 특정 경로 변경 PR에 자동으로 reviewer를 지정한다.
+#
+# Repository Ruleset에서 "Require review from Code Owners" 규칙을 켜면
+# 아래 매핑에 해당하는 PR은 owner의 review 없이는 머지 차단된다.
+#
+# 매칭 규칙: 파일 마지막 매칭이 우선. 즉 더 좁은 경로일수록 아래쪽에 둘 것.
+# 문법 참고: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ─────────────────────────────────────────────────────────────
+# 인프라 (Story 5.x) — @gitjay3
+# ─────────────────────────────────────────────────────────────
+/infra/                       @gitjay3
+/infra/terraform/             @gitjay3
+/infra/DATA_POLICY.md         @gitjay3
+
+# ─────────────────────────────────────────────────────────────
+# CI/CD 워크플로우 — @gitjay3
+# ─────────────────────────────────────────────────────────────
+/.github/                     @gitjay3
+/.github/workflows/           @gitjay3
+/.pre-commit-config.yaml      @gitjay3
+/.tflint.hcl                  @gitjay3
+/.checkov.yml                 @gitjay3
+/.terraform-docs.yml          @gitjay3
+
+# ─────────────────────────────────────────────────────────────
+# 프론트엔드 (Epic 4 frontend) — @gitjay3
+# ─────────────────────────────────────────────────────────────
+/dashboard/                   @gitjay3

@@ -62,12 +62,13 @@ module "ec2" {
     instance_metadata_tags      = "enabled"
   }
 
-  root_block_device = [{
-    encrypted   = true
-    volume_type = "gp3"
-    volume_size = var.root_volume_size_gb
-    tags        = merge(var.tags, { Name = "${var.service_name}-root" })
-  }]
+  # ec2-instance v6.4.0: root_block_device는 single object (list X), 필드명 type/size로 변경
+  root_block_device = {
+    encrypted = true
+    type      = "gp3"
+    size      = var.root_volume_size_gb
+    tags      = merge(var.tags, { Name = "${var.service_name}-root" })
+  }
 
   user_data                   = var.user_data
   user_data_replace_on_change = false

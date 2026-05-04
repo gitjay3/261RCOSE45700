@@ -25,6 +25,6 @@ output "username" {
 }
 
 output "subnet_group_name" {
-  description = "DB subnet group name."
-  value       = aws_db_subnet_group.this.name
+  description = "DB subnet group name (학생 계정 PIVOT — Default VPC subnet group 'default' 그대로 사용, custom subnet group 미생성)."
+  value       = var.db_subnet_group_name
 }

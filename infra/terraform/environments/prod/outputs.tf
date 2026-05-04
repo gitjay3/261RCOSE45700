@@ -27,10 +27,9 @@ output "ec2_api_public_ip" {
 }
 
 output "github_actions_role_arn" {
-  description = "prod GitHub Actions OIDC assume role ARN — terraform.yml apply prod 잡의 role-to-assume."
+  description = "prod GitHub Actions OIDC assume role ARN — apply-prod 잡(if:false 비활성)에서만 참조."
   value       = module.iam.github_actions_role_arn
 }
 
-output "cloudtrail_bucket" {
-  value = module.security_baseline.cloudtrail_bucket_id
-}
+# NOTE: cloudtrail_bucket output은 PIVOT으로 security-baseline 모듈 비활성되어 제거.
+# CloudTrail은 학교 organization trail에 의존.

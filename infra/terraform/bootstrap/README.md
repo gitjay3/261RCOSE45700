@@ -18,7 +18,7 @@
 ## 1회 apply 절차 — AWS CloudShell만 가능
 
 학생 계정(account `<AWS_ACCOUNT_ID>`, IAM user `<IAM_USER>`)은:
-- `DenyAllWithoutMFA` — MFA 인증 필수
+- `<mfa-required-scp>` — MFA 인증 필수
 - **IAM Access Key 발급 차단** (`iam:ListAccessKeys` 권한 거부 확인 2026-05-04)
 
 따라서 로컬 머신 + `aws configure` 옵션 사용 불가. **AWS CloudShell**만 가능.

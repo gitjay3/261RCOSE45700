@@ -65,13 +65,13 @@ infra/terraform/
 ## 학생 계정 정책 요약
 
 - **루트 계정**: 학교 관리자만 보유 — 학생은 IAM 사용자로만 로그인
-- **`DenyAllWithoutMFA`**: MFA 인증 없이는 모든 AWS API 호출 차단
-- **`ControlOnlyOwnResources`**: 자기가 만든 자원만 제어 가능
-- **`RestrictRegionVirginia`**: `us-east-1`(버지니아 북부) 1개만 차단. **나머지 16개 region 허용** (Terraform validation 화이트리스트):
+- **`<mfa-required-scp>`**: MFA 인증 없이는 모든 AWS API 호출 차단
+- **`<own-resource-only-policy>`**: 자기가 만든 자원만 제어 가능
+- **`<region-restrict-policy>`**: `us-east-1`(버지니아 북부) 1개만 차단. **나머지 16개 region 허용** (Terraform validation 화이트리스트):
   - 미국: `us-east-2` `us-west-1` `us-west-2`
   - 아시아 태평양: `ap-south-1` `ap-northeast-1` **`ap-northeast-2`(서울 — 기본)** `ap-northeast-3` `ap-southeast-1` `ap-southeast-2`
   - 캐나다/유럽/남미: `ca-central-1` `eu-central-1` `eu-west-1` `eu-west-2` `eu-west-3` `eu-north-1` `sa-east-1`
-- **권한 그룹**: `IAMAdvancedAccess` + `IAMBasicAccess` + `SafePowerUser` + `AllowNonOverkill` + `AllowT3Xlarge` (정책 본문 조회 불가)
+- **권한 그룹**: `<iam-advanced-policy>` + `<iam-basic-policy>` + `<power-user-policy>` + `<instance-type-allow-policy>` + `<t3-extra-allow-policy>` (정책 본문 조회 불가)
 - **EC2 인스턴스 타입**: **t3.{nano, micro, small, medium} 4종**만 launch 가능 (콘솔 확인 2026-05-04)
 - **IAM Access Key 발급**: ❌ **차단** — `iam:ListAccessKeys`도 권한 거부 확인 (2026-05-04)
 
@@ -116,7 +116,7 @@ terraform apply
    - `AWS_TF_ROLE_DEV` = dev `terraform output github_actions_role_arn`
    - `BUDGET_ALERT_EMAILS` = `["<your-budget-email@example.com>"]` (JSON 배열 문자열)
 3. PR 올려서 `plan-dev` 잡 동작 확인
-4. **만약 OIDC assume 시 `DenyAllWithoutMFA` SCP에 차단되면** → CI 영구 비활성(`if: false`) + CloudShell 수동 apply만 사용 (deferred-work 항목)
+4. **만약 OIDC assume 시 `<mfa-required-scp>` SCP에 차단되면** → CI 영구 비활성(`if: false`) + CloudShell 수동 apply만 사용 (deferred-work 항목)
 
 ## prod 환경 미사용
 

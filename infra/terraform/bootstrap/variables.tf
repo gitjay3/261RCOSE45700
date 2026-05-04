@@ -11,7 +11,7 @@ variable "env" {
 variable "region" {
   description = <<-EOT
     AWS region. Default: ap-northeast-2(Seoul).
-    학생 계정 SCP `RestrictRegionVirginia`로 us-east-1만 차단. 나머지 16개 region 허용.
+    학생 계정 SCP `<region-restrict-policy>`로 us-east-1만 차단. 나머지 16개 region 허용.
   EOT
   type        = string
   default     = "ap-northeast-2"

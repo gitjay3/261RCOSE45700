@@ -1,7 +1,7 @@
 # generated: 2026-04-27
 # last_updated: 2026-05-04
 # Story 5-3 dev started: 2026-05-04 (status: ready-for-dev → in-progress) — Option A: 코드/CI/문서까지만 작성, 실 apply는 별도 세션. region ap-northeast-2, Budgets <your-budget-email@example.com>, OIDC trust repo:byungju0/261RCOSE45700
-# Story 5-3 PIVOT: 2026-05-04 — 학생 계정 SCP 제약 발견(EC2 t3.{nano,micro,small,medium} 4종만 / RDS Default VPC + publicly_accessible 강제 / 루트 IAM 사용자 + DenyAllWithoutMFA). architecture 전면 재설계(A2 트랙). r6g/t4g→t3.medium x86_64, custom VPC→Default VPC data source, publicly_accessible=true(SG+rds.force_ssl 보강), CloudTrail/KMS CMK/Budgets/VPC Flow Logs 코드 비활성, prod 환경 미사용(CI workflow apply-prod if:false). architecture.md backport는 PM/팀 합의 후 별도 PR.
+# Story 5-3 PIVOT: 2026-05-04 — 학생 계정 SCP 제약 발견(EC2 t3.{nano,micro,small,medium} 4종만 / RDS Default VPC + publicly_accessible 강제 / 루트 IAM 사용자 + <mfa-required-scp>). architecture 전면 재설계(A2 트랙). r6g/t4g→t3.medium x86_64, custom VPC→Default VPC data source, publicly_accessible=true(SG+rds.force_ssl 보강), CloudTrail/KMS CMK/Budgets/VPC Flow Logs 코드 비활성, prod 환경 미사용(CI workflow apply-prod if:false). architecture.md backport는 PM/팀 합의 후 별도 PR.
 # Story 5-3 dev completed: 2026-05-04 (status: in-progress → review). 모듈 8개 + environments dev(prod portfolio) + bootstrap + .checkov.yml(skip 룰 9종) + terraform.yml(workflow permissions 잡별 분리 + fork PR 차단) + .pre-commit-config.yaml + .tflint.hcl + .terraform-docs.yml + CODEOWNERS + dependabot.yml + README + DATA_POLICY + 환경별 README. AC 24개 코드 측면 충족. 실 apply / SSM 접속 / RDS 차단 / 비용 검증은 deferred-work 28항목으로 분리.
 # Story 1-1 created: 2026-04-27 (status: backlog → ready-for-dev, epic-1: backlog → in-progress)
 # Story 1-1 dev started: 2026-04-27 (status: ready-for-dev → in-progress)

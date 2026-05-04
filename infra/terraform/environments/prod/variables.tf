@@ -15,7 +15,7 @@ variable "region" {
       ],
       var.region,
     )
-    error_message = "학생 계정 제약: us-east-1 차단 (RestrictRegionVirginia 정책)."
+    error_message = "학생 계정 제약: us-east-1 차단 (<region-restrict-policy> 정책)."
   }
 }
 

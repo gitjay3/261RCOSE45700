@@ -1,7 +1,7 @@
 variable "region" {
   description = <<-EOT
     AWS region. Default: ap-northeast-2(Seoul).
-    학생 계정 SCP `RestrictRegionVirginia`가 us-east-1만 차단. 나머지 16개 region 허용.
+    학생 계정 SCP `<region-restrict-policy>`가 us-east-1만 차단. 나머지 16개 region 허용.
     architecture decision은 ap-northeast-2 — 변경 시 비용/지연 영향 평가 필요.
   EOT
   type        = string
@@ -20,7 +20,7 @@ variable "region" {
       ],
       var.region,
     )
-    error_message = "학생 계정 제약: region이 학교 허용 화이트리스트에 없음. us-east-1(버지니아) 차단 + 나머지 16개 region만 허용 (RestrictRegionVirginia 정책)."
+    error_message = "학생 계정 제약: region이 학교 허용 화이트리스트에 없음. us-east-1(버지니아) 차단 + 나머지 16개 region만 허용 (<region-restrict-policy> 정책)."
   }
 }
 

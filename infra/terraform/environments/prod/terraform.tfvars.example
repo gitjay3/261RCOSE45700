@@ -1,13 +1,15 @@
 # prod 환경 변수 예시. terraform.tfvars는 .gitignore.
 # Public repo PII 보호를 위해 모든 값은 placeholder.
+#
+# 학생 계정 PIVOT으로 prod 환경 자체가 미사용이라 본 파일도 거의 의미 없음
+# (validate 통과용 변수 인터페이스만 보존). 졸업 후 production 계정에서
+# 활용 시 budget_alert_emails 등 변수 정의는 git history에서 PIVOT 이전
+# commit으로 복원.
 
 region              = "ap-northeast-2"
 name_prefix         = "tracker-prod"
 github_repository   = "byungju0/261RCOSE45700"
 tfstate_bucket_name = "tracker-tfstate-prod"
 
-# AWS Budgets 알림 수신 이메일 — placeholder
-budget_alert_emails = ["your-budget-email@example.com"]
-
 # dev `terraform output oidc_provider_arn` 값을 여기 주입
-existing_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+existing_oidc_provider_arn = "arn:aws:iam::000000000000:oidc-provider/token.actions.githubusercontent.com"

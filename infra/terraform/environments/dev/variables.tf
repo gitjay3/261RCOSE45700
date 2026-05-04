@@ -1,3 +1,9 @@
+# 학생 계정 PIVOT — networking 모듈이 Default VPC data source만 사용하고
+# security-baseline 모듈도 비활성이라 vpc_cidr / availability_zones /
+# public_subnet_cidrs / private_subnet_cidrs / budget_alert_emails 변수
+# 모두 미사용이 되어 제거. 본래 변수 정의는 git history에서 PIVOT 이전
+# commit(`bd172d9` 또는 `ceb602c`)으로 복원 가능.
+
 variable "region" {
   description = <<-EOT
     AWS region. Default: ap-northeast-2(Seoul).
@@ -28,40 +34,6 @@ variable "name_prefix" {
   description = "리소스 prefix."
   type        = string
   default     = "tracker-dev"
-}
-
-variable "vpc_cidr" {
-  description = "VPC CIDR."
-  type        = string
-  default     = "10.20.0.0/16"
-}
-
-variable "availability_zones" {
-  description = "AZs."
-  type        = list(string)
-  default     = ["ap-northeast-2a", "ap-northeast-2c"]
-}
-
-variable "public_subnet_cidrs" {
-  description = "Public subnet CIDRs (EC2 3종)."
-  type        = list(string)
-  default     = ["10.20.1.0/24", "10.20.2.0/24"]
-}
-
-variable "private_subnet_cidrs" {
-  description = "Private subnet CIDRs (RDS multi-AZ subnet group 요건)."
-  type        = list(string)
-  default     = ["10.20.11.0/24", "10.20.12.0/24"]
-}
-
-variable "budget_alert_emails" {
-  description = <<-EOT
-    AWS Budgets 알림 수신 이메일.
-    Public repo PII 보호를 위해 default 미정의 — 실제 값은:
-      - 로컬: terraform.tfvars (.gitignore)
-      - CI:   GitHub Actions Variables → TF_VAR_BUDGET_ALERT_EMAILS 환경변수
-  EOT
-  type        = list(string)
 }
 
 variable "github_repository" {

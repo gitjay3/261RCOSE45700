@@ -5,7 +5,7 @@ Story 1.5의 GitHub Actions 워크플로우 4종은 서브시스템별 lint/test
 path-filtered workflow의 pending check 문제 때문에 Story 5.2에서 aggregator 방식으로
 구성합니다.
 
-## 워크플로우 5종
+## 워크플로우 4종
 
 | 파일 | Job | 트리거 경로 |
 |---|---|---|
@@ -13,11 +13,8 @@ path-filtered workflow의 pending check 문제 때문에 Story 5.2에서 aggrega
 | `.github/workflows/detection.yml` | `lint-test` | `detection/**`, `shared/**` |
 | `.github/workflows/api.yml` | `lint-test` | `api/**` |
 | `.github/workflows/dashboard.yml` | `lint-test` | `dashboard/**` |
-| `.github/workflows/terraform.yml` | `static-checks` | `infra/terraform/**`, `.tflint.hcl`, `.checkov.yml` |
 
 각 워크플로우는 자기 파일(`.github/workflows/*.yml`) 변경 시에도 트리거됩니다.
-
-`terraform.yml`은 정적 가드(`fmt` / `validate` / TFLint / Checkov)만 실행합니다. 학생 계정 SCP 제약(IAM Access Key 발급 차단 등)으로 실 `plan`/`apply`는 CI가 아니라 사용자가 AWS CloudShell에서 수동 실행합니다 (Story 5.3 PIVOT — `infra/terraform/README.md` 참조).
 
 ## Branch Protection 절차 (Story 1.5 MVP)
 

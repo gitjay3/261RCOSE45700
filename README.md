@@ -14,9 +14,8 @@
 ├── dashboard/        # React + Vite + TypeScript — 운영자 대시보드
 ├── shared/           # Python 공유 모듈 (CorrelationId, CrawlEvent, VarcoInterface 등)
 ├── infra/            # 로컬: Docker Compose (Redis + PostgreSQL) + Prometheus + Grafana
-│   └── terraform/    # AWS IaC — bootstrap + 7 modules + dev 환경 (학생 계정 PIVOT 사양)
 ├── tests/            # 크로스 컴포넌트 테스트 (fixtures/e2e/performance/chaos)
-└── .github/workflows/  # CI/CD 워크플로우 5종 (crawler/detection/api/dashboard/terraform)
+└── .github/workflows/  # CI/CD 워크플로우 4종 (crawler/detection/api/dashboard)
 ```
 
 ## 사전 요구사항
@@ -137,7 +136,7 @@ cd dashboard && npm run build; cd ..
 
 ## CI/CD
 
-`.github/workflows/` 에 5개 워크플로우가 구성되어 있습니다:
+`.github/workflows/` 에 4개 워크플로우가 구성되어 있습니다:
 
 | 파일 | 트리거 | 내용 |
 |------|--------|------|
@@ -145,7 +144,6 @@ cd dashboard && npm run build; cd ..
 | `detection.yml` | push/PR (detection/**) | pytest 단위·통합 테스트, flake8 |
 | `api.yml` | push/PR (api/**) | Gradle build + JUnit 테스트 |
 | `dashboard.yml` | push/PR (dashboard/**) | npm build + lint |
-| `terraform.yml` | push/PR (infra/terraform/**) | 정적 가드: fmt / validate / TFLint / Checkov (학생 계정 PIVOT — 실 plan/apply는 CloudShell 단독 운영) |
 
 ## 스프린트 현황
 
@@ -155,9 +153,11 @@ cd dashboard && npm run build; cd ..
 | Epic 2 | 자동 크롤링 및 전처리 파이프라인 | **완료** |
 | Epic 3 | AI 기반 탐지 파이프라인 | 진행 중 (3-4, 3-5 예정) |
 | Epic 4 | 탐지 결과 조회 및 통계 대시보드 | 진행 중 (4-2, 4-3 예정) |
-| Epic 5 | 운영·모니터링·프로덕션 배포 | 진행 중 (5-3 review, 5-1·5-2·5-4 예정) |
+| Epic 5 | 운영·모니터링·프로덕션 배포 | 진행 중 (5-3 ClickOps PIVOT closed, 5-1·5-2·5-4 예정) |
 
 자세한 스토리별 상태: [`_bmad-output/implementation-artifacts/sprint-status.yaml`](_bmad-output/implementation-artifacts/sprint-status.yaml)
+
+> **Story 5.3 인프라 — 2026-05-06 ClickOps PIVOT.** 학생 IAM 자격증명 통로 0개(IAM Access Key + CloudShell + IAM Role 생성 모두 차단)로 Terraform 폐기, 콘솔 ClickOps로 전환. Terraform 코드는 git history(`b7e24d3`, `bd172d9`)에 보존 — 졸업 후 개인 계정에서 1회 apply로 동일 인프라 재현 가능.
 
 ## 기획·아키텍처 문서
 
@@ -169,5 +169,4 @@ cd dashboard && npm run build; cd ..
 
 ## 인프라 문서
 
-- [infra/terraform/README.md](infra/terraform/README.md) — Terraform IaC 구조·bootstrap·CloudShell 운영 절차 (학생 계정 PIVOT 사양)
 - [infra/DATA_POLICY.md](infra/DATA_POLICY.md) — 수집 데이터 사용·공개 정책 (NFR9)

@@ -45,14 +45,14 @@
 ## 5. 암호화 (PIVOT 적용)
 
 저장 시 (at rest):
-- **S3 (archive + tfstate + access logs)**: **SSE-S3 (AES256)** — 학생 계정 KMS CMK 생성 권한 부족 가정으로 KMS 폴백
+- **S3 (archive + access logs)**: **SSE-S3 (AES256)** — 학생 계정 KMS CMK 생성 권한 부족 가정으로 KMS 폴백
 - **RDS**: `storage_encrypted = true` (region default `alias/aws/rds` key, 자동)
 - **EBS**: region default 정책 의존 (`aws_ebs_encryption_by_default` 자체 자원은 학생 계정 권한 부족으로 미생성. 학교 default 정책에 의존 — 콘솔 EC2 → "EBS encryption" 1회 확인 필요)
 - **Secrets Manager**: AWS-managed key (`alias/aws/secretsmanager`) 자동
 - **CloudTrail**: 학교 organization trail에 의존 (학생 계정 자체 trail 미생성 — KMS CMK 권한 부족)
 
 전송 시 (in transit):
-- **S3 버킷 정책**: `aws:SecureTransport = false` deny (모든 archive/tfstate 버킷)
+- **S3 버킷 정책**: `aws:SecureTransport = false` deny (archive 버킷)
 - **RDS**: **Parameter group `rds.force_ssl = 1`로 TLS만 허용**, 평문 접속 거절 (publicly_accessible=true 보안 보강)
 - **EC2 운영 접근**: SSM Session Manager (TLS 강제, 외부 22 포트 SG 차단)
 
@@ -70,18 +70,16 @@
 |---|---|---|
 | AWS API 호출 이력 | 학교 organization CloudTrail | 학생 계정 자체 trail 미생성. 학교 organization trail이 활성인지 학교 관리자에게 1회 확인 필요 (deferred-work) |
 | 네트워크 트래픽 | (미수집) | VPC Flow Logs 학생 계정 권한 부족으로 미생성. 콘솔 1회 enable 또는 학교 default 정책 의존 (deferred-work) |
-| 인프라 변경 | Terraform PR + GitHub Actions plan 코멘트 | 동일 (코드/CI 그대로) |
+| 인프라 변경 | (ClickOps PIVOT) 콘솔 변경 시점 스크린샷으로 추적 | 2026-05-06 PIVOT 이후 — Terraform/CI 자동 추적 통로 0 |
 | RDS 접근 시도 | RDS PostgreSQL logs (`postgresql`/`upgrade` → CloudWatch) | 동일 |
 
 ## 8. 시크릿 관리
 
 - 평문 시크릿이 다음 위치에 존재해선 안 된다:
-  - Git 저장소 (`detect-aws-credentials` / `detect-private-key` pre-commit 훅 + GitHub Push Protection)
-  - Terraform `.tfvars` 파일 (`.gitignore` 처리)
-  - Terraform state 파일 (`*.tfstate`, `.gitignore` 처리)
-  - GitHub Secrets (장기 Access Key 금지 — OIDC만 사용)
+  - Git 저장소 (GitHub Push Protection 활성)
+  - GitHub Secrets (장기 Access Key 금지)
 - 모든 시크릿은 AWS Secrets Manager에 저장하고 EC2 IAM Role의 GetSecretValue 권한으로만 조회한다.
-- RDS 비밀번호는 `random_password` → Secrets Manager 자동 주입 (Terraform state에 random 결과 저장되나, tfstate S3 버킷이 SSE-S3 + 4종 차단으로 외부 노출 X).
+- RDS 비밀번호는 RDS-managed master password(Secrets Manager 자동 생성)로 처리한다.
 
 ## 9. 정책 위반 발견 시
 

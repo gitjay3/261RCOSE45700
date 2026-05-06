@@ -2,6 +2,8 @@ package com.tracker.api.controller;
 
 import com.tracker.api.dto.DetectionListResponse;
 import com.tracker.api.dto.DetectionResponse;
+import com.tracker.api.exception.DetectionNotFoundException;
+import com.tracker.api.service.CrawlTriggerService;
 import com.tracker.api.service.DetectionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,16 +15,19 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(DetectionController.class)
+@WebMvcTest({DetectionController.class, CrawlController.class})
 class DetectionControllerTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean DetectionService detectionService;
+    @MockitoBean CrawlTriggerService crawlTriggerService;
 
     @Test
     void getDetections_returnsOk() throws Exception {
@@ -95,5 +100,65 @@ class DetectionControllerTest {
                 "ko",
                 1,
                 10);
+    }
+
+    @Test
+    void getDetection_returnsOk() throws Exception {
+        var mockDetection = new DetectionResponse(1L, true, "매크로_판매", 0.95,
+                "이유", "원문", "번역문", "http://example.com", "tailstar.net", "zh-CN",
+                "2026-04-24T14:30:00Z");
+        when(detectionService.getDetectionById(1L)).thenReturn(mockDetection);
+
+        mockMvc.perform(get("/api/detections/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.isIllegal").value(true))
+                .andExpect(jsonPath("$.type").value("매크로_판매"))
+                .andExpect(jsonPath("$.confidence").value(0.95))
+                .andExpect(jsonPath("$.reason").value("이유"))
+                .andExpect(jsonPath("$.rawText").value("원문"))
+                .andExpect(jsonPath("$.translatedText").value("번역문"))
+                .andExpect(jsonPath("$.postUrl").value("http://example.com"))
+                .andExpect(jsonPath("$.siteName").value("tailstar.net"))
+                .andExpect(jsonPath("$.language").value("zh-CN"))
+                .andExpect(jsonPath("$.detectedAt").value("2026-04-24T14:30:00Z"))
+                .andExpect(header().exists("X-Correlation-ID"));
+    }
+
+    @Test
+    void getDetection_notFound_returns404() throws Exception {
+        when(detectionService.getDetectionById(999L))
+                .thenThrow(new DetectionNotFoundException(999L));
+
+        mockMvc.perform(get("/api/detections/999")
+                        .header("X-Correlation-ID", "not-found-cid"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("DETECTION_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(header().string("X-Correlation-ID", "not-found-cid"));
+    }
+
+    @Test
+    void postCrawlTrigger_returns202() throws Exception {
+        mockMvc.perform(post("/api/crawl/trigger")
+                        .header("X-Correlation-ID", "test-cid-1234"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("triggered"))
+                .andExpect(jsonPath("$.estimatedMinutes").value(3))
+                .andExpect(header().string("X-Correlation-ID", "test-cid-1234"));
+
+        verify(crawlTriggerService).trigger("test-cid-1234");
+    }
+
+    @Test
+    void postCrawlTrigger_publishFailure_returns500WithCorrelationId() throws Exception {
+        doThrow(new RuntimeException("redis unavailable"))
+                .when(crawlTriggerService).trigger("redis-fail-cid");
+
+        mockMvc.perform(post("/api/crawl/trigger")
+                        .header("X-Correlation-ID", "redis-fail-cid"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.errorCode").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(header().string("X-Correlation-ID", "redis-fail-cid"));
     }
 }

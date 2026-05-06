@@ -1,6 +1,7 @@
 package com.tracker.api.controller;
 
 import com.tracker.api.dto.DetectionListResponse;
+import com.tracker.api.dto.DetectionResponse;
 import com.tracker.api.service.DetectionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +37,24 @@ public class DetectionController {
             HttpServletRequest request) {
 
         var result = detectionService.getDetections(date, site, type, lang, page, size);
+
+        String correlationId = request.getHeader("X-Correlation-ID");
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+
+        return ResponseEntity.ok()
+                .header("X-Correlation-ID", correlationId)
+                .body(result);
+    }
+
+    @GetMapping("/detections/{id}")
+    @Operation(summary = "탐지 상세 조회", description = "지정된 ID의 탐지 결과 상세 정보 반환. 존재하지 않으면 404.")
+    public ResponseEntity<DetectionResponse> getDetection(
+            @PathVariable Long id,
+            HttpServletRequest request) {
+
+        var result = detectionService.getDetectionById(id);
 
         String correlationId = request.getHeader("X-Correlation-ID");
         if (correlationId == null || correlationId.isBlank()) {

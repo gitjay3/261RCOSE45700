@@ -1,5 +1,6 @@
 package com.tracker.api.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -11,35 +12,54 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
+import java.util.UUID;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
+    @ExceptionHandler(DetectionNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleDetectionNotFound(
+            DetectionNotFoundException ex,
+            HttpServletRequest request) {
+        var pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        pd.setTitle("Detection Not Found");
+        pd.setProperty("errorCode", "DETECTION_NOT_FOUND");
+        return withCorrelationId(pd, request);
+    }
+
     @ExceptionHandler(InvalidFilterParamException.class)
-    public ProblemDetail handleInvalidFilterParam(InvalidFilterParamException ex) {
-        return invalidFilterProblem(ex.getMessage());
+    public ResponseEntity<ProblemDetail> handleInvalidFilterParam(
+            InvalidFilterParamException ex,
+            HttpServletRequest request) {
+        return withCorrelationId(invalidFilterProblem(ex.getMessage()), request);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ProblemDetail handleConstraintViolation(ConstraintViolationException ex) {
-        return invalidFilterProblem(ex.getMessage());
+    public ResponseEntity<ProblemDetail> handleConstraintViolation(
+            ConstraintViolationException ex,
+            HttpServletRequest request) {
+        return withCorrelationId(invalidFilterProblem(ex.getMessage()), request);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        return invalidFilterProblem("파라미터 '%s'의 값이 올바르지 않습니다: %s".formatted(
-                ex.getName(), ex.getValue()));
+    public ResponseEntity<ProblemDetail> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex,
+            HttpServletRequest request) {
+        return withCorrelationId(
+                invalidFilterProblem("파라미터 '%s'의 값이 올바르지 않습니다: %s".formatted(
+                        ex.getName(), ex.getValue())),
+                request);
     }
 
     @ExceptionHandler(Exception.class)
-    public ProblemDetail handleAll(Exception ex) {
+    public ResponseEntity<ProblemDetail> handleAll(Exception ex, HttpServletRequest request) {
         logger.error("Unhandled exception", ex);
         var pd = ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "서버 내부 오류가 발생했습니다.");
         pd.setTitle("Internal Server Error");
         pd.setProperty("errorCode", "INTERNAL_SERVER_ERROR");
-        return pd;
+        return withCorrelationId(pd, request);
     }
 
     @Override
@@ -60,7 +80,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             responseBody = problemDetail;
         }
 
-        return super.handleExceptionInternal(ex, responseBody, headers, statusCode, request);
+        var responseHeaders = new HttpHeaders();
+        responseHeaders.putAll(headers);
+        responseHeaders.set("X-Correlation-ID", correlationIdFrom(request));
+
+        return super.handleExceptionInternal(ex, responseBody, responseHeaders, statusCode, request);
     }
 
     private ProblemDetail invalidFilterProblem(String detail) {
@@ -72,5 +96,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private String errorCodeFor(HttpStatusCode statusCode) {
         return statusCode.is4xxClientError() ? "INVALID_FILTER_PARAM" : "INTERNAL_SERVER_ERROR";
+    }
+
+    private ResponseEntity<ProblemDetail> withCorrelationId(
+            ProblemDetail problemDetail,
+            HttpServletRequest request) {
+
+        return ResponseEntity
+                .status(problemDetail.getStatus())
+                .header("X-Correlation-ID", correlationIdFrom(request))
+                .body(problemDetail);
+    }
+
+    private String correlationIdFrom(HttpServletRequest request) {
+        String correlationId = request.getHeader("X-Correlation-ID");
+        if (correlationId == null || correlationId.isBlank()) {
+            return UUID.randomUUID().toString();
+        }
+        return correlationId;
+    }
+
+    private String correlationIdFrom(WebRequest request) {
+        String correlationId = request.getHeader("X-Correlation-ID");
+        if (correlationId == null || correlationId.isBlank()) {
+            return UUID.randomUUID().toString();
+        }
+        return correlationId;
     }
 }

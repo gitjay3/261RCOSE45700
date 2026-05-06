@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.Instant;
+import java.util.Optional;
 
 public interface DetectionRepository extends JpaRepository<Detection, Long> {
 
@@ -38,4 +39,12 @@ public interface DetectionRepository extends JpaRepository<Detection, Long> {
             @Param("type")     String type,
             @Param("lang")     String lang,
             Pageable pageable);
+
+    @Query("""
+            SELECT d FROM Detection d
+            JOIN FETCH d.post p
+            JOIN FETCH p.source s
+            WHERE d.id = :id
+            """)
+    Optional<Detection> findByIdFetched(@Param("id") Long id);
 }

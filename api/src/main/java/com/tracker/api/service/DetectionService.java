@@ -2,6 +2,7 @@ package com.tracker.api.service;
 
 import com.tracker.api.dto.DetectionListResponse;
 import com.tracker.api.dto.DetectionResponse;
+import com.tracker.api.exception.DetectionNotFoundException;
 import com.tracker.api.exception.InvalidFilterParamException;
 import com.tracker.api.repository.DetectionRepository;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,13 @@ public class DetectionService {
                 .toList();
 
         return new DetectionListResponse(content, page, size, resultPage.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public DetectionResponse getDetectionById(Long id) {
+        return detectionRepository.findByIdFetched(id)
+                .map(DetectionResponse::from)
+                .orElseThrow(() -> new DetectionNotFoundException(id));
     }
 
     private void validatePagination(int page, int size) {

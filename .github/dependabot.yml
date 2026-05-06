@@ -1,0 +1,52 @@
+# Dependabot — 의존성 outdated를 매주 스캔해서 자동 PR을 생성한다.
+# 본 스토리(5-3) 검증에서 발견한 outdated 9건 같은 누적 방지가 목적.
+#
+# Reviewer는 CODEOWNERS와 별개로 명시 가능 — 여기서는 인프라 담당 @gitjay3.
+# 각 ecosystem이 한 주 한 번 PR을 만들어 호우 방지를 위해 open PR 상한 5로 제한.
+
+version: 2
+
+updates:
+  # ─────────────────────────────────────────────────────────────
+  # GitHub Actions — 모든 .github/workflows/*.yml 의 액션 핀
+  # ─────────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    reviewers:
+      - gitjay3
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: chore(ci)
+      include: scope
+
+  # ─────────────────────────────────────────────────────────────
+  # 프론트엔드 npm — Story 4.x 프론트 의존성 (Tracker 사용자 책임 영역)
+  # ─────────────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /dashboard
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    reviewers:
+      - gitjay3
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: chore(dashboard)
+      include: scope
+    # 메이저 업그레이드는 사람 review 필요 — 알림만 받고 자동 PR 안 함
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

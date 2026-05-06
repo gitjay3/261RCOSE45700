@@ -104,3 +104,61 @@
 ## Deferred from: code review of 1-5-github-actions-기본-ci-파이프라인-구성 (2026-04-29)
 
 - **Branch Protection strict merge gate / AC #5** [docs/ci-setup.md:17] — Story 1.5의 4개 workflow는 `paths:` 필터가 있어 required check로 직접 등록하면 무관 경로 PR에서 skipped check가 pending으로 남을 수 있다. Strict PR merge blocking은 Story 5.2에서 항상 실행되는 `ci-aggregator.yml` 또는 동등한 required check 설계로 처리한다.
+
+
+## Deferred from: dev of 5-3-aws-프로덕션-인프라-프로비저닝 (2026-05-04) — _OBSOLETE_
+
+> **2026-05-06 — 본 섹션 + 다음 PIVOT 섹션 모두 obsolete.** Story 5-3이 ClickOps로 전환되며 Terraform 자체가 폐기됨(commit `13d96a9`). 아래 항목들은 모두 Terraform 코드 가정 기반이라 더 이상 추적 대상 아님. 기록 보존만 목적. 새로운 ClickOps 환경에서의 deferred 항목은 본 파일 맨 아래 `Deferred from: Story 5-3 ClickOps PIVOT (2026-05-06)` 참조.
+
+- **dev 환경 실 apply 미실행** [Task 10.6, 13.1~13.5] — 본 세션은 코드/CI/문서까지(Option A). bootstrap 1회 apply 및 dev 환경 apply, SSM Session Manager 접속 검증, RDS SG 격리 검증, 24시간 비용 측정은 별도 ops 세션에서 수행. AC #1·#12·#19 일부의 실제 동작 확인 항목.
+- **GitHub repository Variables/Environments 등록 미실행** [`.github/workflows/terraform.yml`] — `AWS_TF_ROLE_DEV` / `AWS_TF_ROLE_PROD` Variables, `prod` Environment + reviewers 설정은 Console 작업이라 실 apply 후 수행. 등록 전까지 PR plan-dev / apply-* 잡은 OIDC assume 실패.
+- **Secrets Manager 시크릿 값 1회 주입 미실행** [`infra/terraform/modules/secrets/`] — `tracker/{env}/varco-api-key`, `tracker/{env}/proxy-credentials`는 placeholder만 생성. `aws secretsmanager put-secret-value`로 1회 주입 필요. RDS 비밀번호는 `random_password`가 자동 처리.
+- **GHA Terraform Role 와일드카드 액션** [`infra/terraform/modules/iam/main.tf` `MutateInfraResources` statement] — `ec2:*` `rds:*` 등 service-level write + `Resource: "*"`. 학생 프로젝트 운영 부담 절충. 장기 운영 전환 시 액션·ARN 단위로 좁혀 Checkov `CKV_AWS_111` 정식 통과 처리. 현재는 `.checkov.yml`에서 skip.
+- **OIDC provider thumbprint placeholder** [`infra/terraform/modules/iam/main.tf:resource "aws_iam_openid_connect_provider"`] — AWS provider v6 + GitHub IdP는 AWS-trusted CA 라이브러리로 검증되며 thumbprint는 retained but not used 상태. placeholder(`ffff...`)로 유지. 회전 영향 없음(초기 노트 정정). 출처: AWS IAM OIDC verify-thumbprint 문서, hashicorp/terraform-provider-aws#35112.
+- **EBS encryption region 단위 멱등성** [`infra/terraform/modules/security-baseline/main.tf:aws_ebs_encryption_by_default`] — region 단위 자원이라 dev/prod 양쪽에서 동일 값 set 시 idempotent하지만 drift 시 마지막 apply 환경의 값을 따른다. 단일 환경에서만 정의하고 다른 환경은 data source로 참조하는 구조로 옮길지 검토.
+- **bootstrap state 로컬 보관** [`infra/terraform/bootstrap/`] — bootstrap 자체는 자기 state를 자기가 만든 버킷에 두는 chicken-and-egg 문제로 로컬 보관. 1Password 등 안전한 백업 정책 별도 운영. 잘못 destroy 시 dev/prod 전체 state 손실.
+- **VPC CIDR 충돌 사전 점검 미수행** [`infra/terraform/environments/dev/variables.tf` `10.20.0.0/16`, prod `10.30.0.0/16`] — 회사/학교 다른 VPC와 peering 또는 VPN 연결 가능성을 고려한 CIDR 회피 미검증. dev/prod간 CIDR 분리는 했으나 외부 환경과의 충돌 검증은 실 apply 시점에 확인.
+- **Performance Insights 비활성** [`infra/terraform/modules/rds/main.tf`] — db.t4g.micro 미지원이라 `false`. 운영 모니터링 강화 시 인스턴스 클래스 업그레이드 + 활성화.
+- **CloudTrail 데이터 이벤트 미수집** [`infra/terraform/modules/security-baseline/main.tf:aws_cloudtrail`] — 학생 예산 절감을 위해 management events만. S3/Secrets 객체 수준 감사가 필요해지면 `data_resource` 추가 + 비용 협의.
+- **NAT 운영 방식 fallback 미구현** [`infra/terraform/modules/networking/main.tf` `nat_strategy = "instance"|"gateway"`] — 변수 분기만 보존, 실제 `instance`/`gateway` 분기 구현은 미완. 트래픽 증가 또는 발표 데모 직전 도입 결정 시 모듈 확장.
+- **EC2 접근 백업 방식 (SPIKE 5.0 #12)** — SSM Session Manager 단독 구현. 대규모 장애 시 EC2 진입 백업(예: 임시 IP 화이트리스트 SSH 룰 토글 워크플로우)은 한계 발생 시 별도 검토.
+- **terraform-aws-modules `iam` 미사용** [`infra/terraform/modules/iam/main.tf`] — IAM은 자체 리소스 정의로 작성. 추후 `terraform-aws-modules/iam/aws`의 oidc-provider / iam-assumable-role-with-oidc 서브모듈 도입 검토 가능.
+- **RDS Secrets Manager `manage_master_user_password` 미사용** [`infra/terraform/modules/rds/main.tf`] — RDS 모듈 7.x의 AWS-관리형 비밀번호 회전 기능 대신 `random_password` 직접 주입. tfstate에 평문 password 저장 트레이드오프 수용. 회전 자동화 도입 시 모듈 옵션 전환.
+- **dev/prod CloudTrail trail 중복** [`infra/terraform/modules/security-baseline/main.tf:aws_cloudtrail`] — env별로 별도 trail 생성. multi-region이라 한 환경 trail로 충분할 수도 있으나 명확한 분리 + 비용 영향 미미라 유지. 비용 점검 후 통합 검토 가능.
+- **Graviton4(r8g) 업그레이드 검토** [`infra/terraform/environments/{dev,prod}/main.tf`] — 본 스토리는 architecture.md backport(PR #18) 준수해 r6g.large/t4g.medium/t4g.large(Graviton2)로 박음. 그러나 2026-05 기준 Seoul region에서 r8g(Graviton4) 가용 + on-demand 가격이 r7g와 같고 30% 빠름. 단 t8g는 일부 region 제한 가능성. 다음 architecture decision 갱신 시 PM 합의 + 비용 재산정 후 r6g→r8g(crawler) / t4g→m8g(detection/api) 검토 가치. 메모리 우선 결정(crawler r6g.large 16GB)은 변하지 않으므로 동일 RAM 등급 인스턴스 매핑.
+- **GitHub Actions Node 20 EOL (2026-04)** — Node 20은 2026-04 EOL 도달. 워크플로우의 모든 액션을 Node 24 지원 버전으로 갱신 완료(checkout v6, github-script v8, setup-terraform v4, configure-aws-credentials v6, setup-tflint v6). 기존 4종 워크플로우(crawler/detection/api/dashboard.yml)는 Story 5.2 strict CI 합류 시점에 동일 갱신 필요.
+
+## Deferred from: dev of 5-3-aws-프로덕션-인프라-프로비저닝 — PIVOT 추가 (2026-05-04)
+
+학생 계정 SCP 제약으로 architecture 전면 재설계 후 추가 deferred.
+
+- **Crawler RAM 16GB → 4GB 다운그레이드** [`infra/terraform/environments/dev/main.tf:module "ec2_crawler"`] — 학생 계정 t3.medium(4GB)이 최대. `memory/project_crawler_ram_priority.md`(8~16GB 권장) 충족 불가. Story 5.4 부하 측정으로 다음 중 택1: ① Chromium + FlareSolverr 별도 EC2 분리 ② swap 4GB 추가 ③ `--single-process` 등 헤드리스 옵션 최적화 ④ APScheduler 동시 worker 1 강제.
+- **EC2 메모리 합 12GB (4×3)** — Detection/API도 4GB로 축소. Spring Boot + Redis docker-compose 동거(API)와 VARCO LLM 호출 동시 처리(Detection) 메모리 압박 가능. Story 5.4에서 측정.
+- **`aws_ebs_encryption_by_default` 미생성** [`infra/terraform/modules/security-baseline/main.tf`] — 학생 계정 권한 부족 보수적 가정으로 코드 비활성. 학교 region default 정책에 의존(콘솔에서 EC2 → "EBS encryption" 확인 필요). default off라면 EBS 볼륨 암호화 안 됨 → 콘솔 1회 enable 또는 학교 관리자 요청.
+- **VPC Flow Logs 미생성** [`infra/terraform/modules/networking/main.tf`] — Default VPC에 Flow Logs 자원 추가 권한 부족 가능성으로 비활성. NFR9 감사 요구 위반. 학교 organization 레벨 Flow Logs 또는 콘솔 1회 enable로 보강 필요.
+- **CloudTrail 미생성** [`infra/terraform/modules/security-baseline/main.tf`] — 학생 계정 권한 부족 가정. 학교 organization trail이 모든 학생 계정 이벤트를 기록하고 있는지 확인 필요. 없다면 NFR9 감사 요구 충족 X — 학교 관리자에게 organization trail 활성 요청.
+- **AWS Budgets 미생성** [`infra/terraform/modules/security-baseline/main.tf`] — 학생 계정 권한 부족 가정. 학교 사전 설정 budget 한도 확인 필요(보통 학생당 $50~100/월). Cost Explorer로 사후 모니터링.
+- **VPC Gateway Endpoint(S3) 미생성** [`infra/terraform/modules/networking/main.tf`] — Default VPC 라우트 테이블 수정 권한 불확실로 제외. EC2→S3 트래픽이 IGW를 통과하나 동일 region이라 비용 영향 미미.
+- **CloudWatch Log Group 14일 retention 미설정** — Flow Logs/CloudTrail 미생성으로 자동 미생성. RDS export logs(`postgresql`/`upgrade`)는 default(영구)로 적재될 수 있음 — 콘솔에서 retention 1회 설정 권장.
+- **MFA 운영 절차** — `<mfa-required-scp>` 정책으로 모든 IAM 사용자 액션이 MFA 인증 필요. README + Story Dev Notes에 절차 명시되어 있으나 팀원 onboarding 시 반복 안내 필요. CI 워크플로우는 OIDC라 MFA 우회됨(IAM Role assume 자체에 MFA 조건 없으면).
+- **prod 환경 미사용 — portfolio 코드만 보존** [`infra/terraform/environments/prod/`] — 학생 계정 1개로 prod 분리 의미 없음. CI workflow apply-prod 잡 `if: false` 비활성. README + main.tf 헤더에 미사용 명시. 졸업 후 실 production 계정 확보 시 git history에서 PIVOT 이전 코드 복원.
+- **architecture.md / epics.md / 기획서.md backport 필요** — 본 PIVOT으로 architecture.md Infrastructure & Deployment(L221-L256) + Project Structure(L669-L685) + epics.md Epic 5 + 기획서.md 10.1 결정값이 코드와 불일치. PR #18로 backport한 결정의 다수가 학생 계정 PIVOT으로 갱신됨. PM/팀(@byungju0, @erdmee) 합의 후 별도 PR로 backport 처리.
+- **publicly_accessible=true RDS 정기 점검** — SG inbound 5432 source 매핑 + `rds.force_ssl=1` parameter group이 정상 동작하는지 월 1회 검증. 콘솔 RDS → Connectivity & security 탭에서 publicly accessible 상태 + Security group 룰 확인 + `psql -h <endpoint> -U tracker_admin --no-password` (TLS 없이) 시도 시 거절되는지 검증.
+- **EC2 Instance Profile / OIDC Provider 생성 권한 미검증** — `<iam-advanced-policy>` 정책으로 가능 가정. 실제 apply 시 권한 거부 메시지 발생 가능. 그 경우 시나리오 Q(EC2 Role 비활성화 + 시크릿 user_data 주입 또는 Secrets Manager 미사용)로 다운그레이드 필요. apply 1차 시도 후 결과에 따라 결정.
+- **CI OIDC + <mfa-required-scp> 충돌 가능성** [`infra/terraform/modules/iam/main.tf:aws_iam_role.github_actions`] — GitHub Actions OIDC는 `sts:AssumeRoleWithWebIdentity` 호출. 학생 계정 SCP가 모든 sts:AssumeRole에 MFA 강제하면 CI 자동 apply가 영구 차단될 가능성. 우리 코드의 assume_role_policy에는 MFA 조건 없음(OIDC sub claim 매칭만)이지만 account-wide SCP 우선 적용. apply 후 GitHub Actions PR plan 시도해서 검증 필요. 차단 시 대응: ① CI 자동 apply 영구 비활성 + 사용자가 CloudShell에서 수동 apply ② 학교 관리자에게 OIDC Role의 MFA 우회 요청 (보통 거절).
+- **bootstrap state 파일 보관 — CloudShell 사용 시 추가 risk** — CloudShell 종료 시 home 디렉토리 1GB 제한 + 일정 기간 미사용 시 자동 wipe. bootstrap apply 후 즉시 `terraform.tfstate` 로컬 다운로드 + 안전한 곳(1Password 등) 백업 필수. 백업 안 하면 dev 환경 destroy 시 잔여 자원 manual cleanup 필요.
+- **IAM Access Key 발급 차단 가능성** — 학교가 보안상 IAM 사용자 Access Key 발급을 막아둔 경우 로컬 + MFA 토큰 옵션(README Option B) 사용 불가 → CloudShell만 가능. apply 시도 전 IAM 콘솔에서 "Create access key" 버튼 활성 여부 확인 필요.
+- **콘솔에서 EC2 launch wizard 외 인스턴스 타입 화이트리스트** — `<instance-type-allow-policy>` + `<t3-extra-allow-policy>` 정책 본문 조회 권한 부족으로 정확한 화이트리스트 미확정. 콘솔 EC2 launch wizard 드롭다운에 t3.{nano,micro,small,medium}만 표시되었으나 다른 타입(예: c5.large)은 시도 시 거부 예상. instance_type validation은 4종으로 좁혀둠 — 추가 타입 필요 시 학교 관리자 문의.
+
+## Deferred from: Story 5-3 ClickOps PIVOT (2026-05-06)
+
+학생 IAM 사용자(`ku-hys-02`)에서 Terraform 자격증명 통로 0개(IAM Access Key 차단 + CloudShell deny + IAM Role 생성 deny) 확인되어 Terraform IaC 폐기 + ClickOps 전환. 위 두 섹션의 deferred 항목들은 모두 Terraform 코드 가정 기반이라 더 이상 유효하지 않음. ClickOps 환경에서 새로 발생하는 deferred:
+
+- **인프라 변경 추적 불가** — ClickOps는 누가 언제 무엇을 바꿨는지 코드로 남지 않음. CloudTrail organization trail이 학교 측에 활성되어 있다면 그것에 의존, 없으면 변경 이력 0. 발표 자료엔 ClickOps 시점 스크린샷으로 대체.
+- **인프라 재현성 0** — 학생 계정 자체에서 자원이 destroy되거나 학기 종료 후 계정 회수되면 동일 환경 재현 불가. 졸업 후 개인 계정에서는 git history(`b7e24d3`, `bd172d9`)의 Terraform 코드로 1회 apply 시 재현 가능.
+- **IAM Role 생성 불가 → EC2 SSM 접속 가능성 미확정** — 학교가 미리 만든 EC2 Trust Role(예: `LabRole`, `voclabs`)이 있는지 확인 필요. 있고 `AmazonSSMManagedInstanceCore` 정책이 붙어있으면 SSM 접속 가능. 없으면 EC2 IAM Role 0 → SSM 불가 → 외부 22 SSH 키 또는 EC2 접속 자체 포기.
+- **Secrets Manager 접근 권한 미확정** — 위 EC2 Role이 `secretsmanager:GetSecretValue` 권한도 가지고 있는지 따로 확인 필요. 권한 없으면 VARCO API key + RDS 비밀번호를 EC2 user_data에 임시 평문으로 박는 방법(보안 trade-off) 또는 환경변수 직접 주입.
+- **RDS 보안 그룹 인바운드 검증** — ClickOps로 RDS 만들 때 publicly_accessible=true 강제되므로 SG 인바운드를 EC2 SG ID 한정으로 좁히는 게 유일한 방어선. 콘솔에서 SG 룰 정확히 입력하는지 1회 검증 필요(인터넷에서 직접 5432 접속 시도 → 거절 확인).
+- **rds.force_ssl=1 parameter group** — RDS 콘솔에서 custom parameter group 만들고 적용해야 평문 접속 차단. ClickOps 절차에서 빠뜨리기 쉬움 — 데모 전 체크리스트.
+- **인스턴스 종료 후 비용 누수** — 학기 종료 후 EC2 stop이 아니라 terminate, RDS도 final snapshot 후 delete, S3도 비우고 delete. ClickOps는 자동 destroy가 없어 수동 정리 필수. 학교 사전 설정 budget 한도 초과 시 강제 종료될 수도 있음.
+- **재현 가능성을 위한 ClickOps 절차 문서화** — 콘솔에서 만든 자원의 정확한 설정값(EC2 AMI ID, SG 룰, RDS 파라미터 등)을 별도 markdown 문서로 캡처해두는 게 졸업 후 재현/발표 자료에 유리. `docs/clickops-runbook.md` 같은 형식으로 남기는 걸 권장.

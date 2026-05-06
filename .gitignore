@@ -2,34 +2,83 @@
 .DS_Store
 .AppleDouble
 .LSOverride
+._*
+
+# Linux
+.directory
+
+# Windows
+Thumbs.db
+desktop.ini
 
 # IDEs and Editors
 .idea/
+*.iml
 .vscode/
+.history/
+.zed/
 *.swp
 *.swo
+*.code-workspace
 
-# Temporary files
+# Temporary / backup
 *~
 *.log
+*.bak
+*.tmp
 
-# Python virtual environments (Story 1.1: 로컬 셋업 산출물)
+# ──────────────────────────────────────────────────────────────────────────
+# Python (crawler / detection / shared)
+# ──────────────────────────────────────────────────────────────────────────
 .venv/
 __pycache__/
+*.py[cod]
 *.egg-info/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
 
-# Node / Vite
+# ──────────────────────────────────────────────────────────────────────────
+# Node / Vite / React (dashboard)
+# ──────────────────────────────────────────────────────────────────────────
 node_modules/
 dist/
+*.tsbuildinfo
+.vite/
+.eslintcache
+coverage/
 
-# Gradle / Spring Boot
+# ──────────────────────────────────────────────────────────────────────────
+# Gradle / Spring Boot (api)
+# ──────────────────────────────────────────────────────────────────────────
 .gradle/
 build/
+# *.class / *.jar는 trace 가능 — Gradle wrapper jar는 commit 필요하므로 패턴 화이트리스트:
+*.class
+!gradle/wrapper/*.jar
 
-# Environment files
+# ──────────────────────────────────────────────────────────────────────────
+# Environment / secrets
+# ──────────────────────────────────────────────────────────────────────────
 .env
 .env.local
 *.env.local
+
+# 시크릿 키/인증서 1차 가드 (실제 push 전 pre-commit `detect-private-key`도 실행)
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*credentials*.json
+.aws-vault/
 
 # Claude agents
 .agents/

@@ -701,13 +701,15 @@ API 응답 시간·에러율·Redis 큐 깊이가 Grafana에서 실시간으로 
 
 ### Story 5.3: AWS 프로덕션 인프라 프로비저닝
 
+> **2026-05-06 PIVOT — Terraform IaC 폐기, ClickOps로 전환.** 학생 IAM 사용자(`ku-hys-02`)에서 자격증명 통로 0개(IAM Access Key 차단 + CloudShell `cloudshell:CreateEnvironment` deny + IAM Role 생성 deny)로 Terraform apply 자체 불가능 — 코드/CI/lint 자산 일괄 제거(commit `13d96a9`). 데모는 ClickOps + 스크린샷, 코드는 git history(`b7e24d3`, `bd172d9`) 보존. 아래 AC는 **IaC 시도 시점의 historical record**이며, ClickOps 환경에서는 **인프라 사양(EC2/RDS/SG/IAM 권한 패턴)만 동일하게 적용**하고 Terraform/CI 자동화 관련 AC(#1, #2, #14, #16, #17, #20)는 적용 불가. 상세는 Story 5.3 결과 문서 + sprint-status.yaml 참조.
+>
 > **전제 조건:** SPIKE 5.0(배포 토폴로지 및 운영 인프라 상세 설계)이 완료된 상태에서 시작. SPIKE 결과(`docs/infrastructure-design.md`)가 본 스토리 Terraform 모듈 작성의 입력.
 
 인프라 담당자로서,  
 AWS EC2·RDS·S3·보안 그룹이 Terraform 코드로 프로덕션 환경에 맞게 구성되기를 원한다,  
 그래서 시스템이 안전하게 운영 가능한 상태로 배포되며 인프라 변경이 PR 리뷰를 거친다.
 
-**Acceptance Criteria:**
+**Acceptance Criteria:** _(2026-05-06 PIVOT 후 historical — 위 PIVOT 박스 참조)_
 
 **Given** AWS 계정과 IAM 권한이 준비된 상태에서  
 **When** 인프라 프로비저닝이 완료되면  

@@ -13,7 +13,7 @@
 ├── api/              # Java Spring Boot 3.5 — REST API (PostgreSQL + Flyway)
 ├── dashboard/        # React + Vite + TypeScript — 운영자 대시보드
 ├── shared/           # Python 공유 모듈 (CorrelationId, CrawlEvent, VarcoInterface 등)
-├── infra/            # Docker Compose (Redis + PostgreSQL), Prometheus, Grafana
+├── infra/            # 로컬: Docker Compose (Redis + PostgreSQL) + Prometheus + Grafana
 ├── tests/            # 크로스 컴포넌트 테스트 (fixtures/e2e/performance/chaos)
 └── .github/workflows/  # CI/CD 워크플로우 4종 (crawler/detection/api/dashboard)
 ```
@@ -153,9 +153,11 @@ cd dashboard && npm run build; cd ..
 | Epic 2 | 자동 크롤링 및 전처리 파이프라인 | **완료** |
 | Epic 3 | AI 기반 탐지 파이프라인 | 진행 중 (3-4, 3-5 예정) |
 | Epic 4 | 탐지 결과 조회 및 통계 대시보드 | 진행 중 (4-2, 4-3 예정) |
-| Epic 5 | 운영·모니터링·프로덕션 배포 | 예정 |
+| Epic 5 | 운영·모니터링·프로덕션 배포 | 진행 중 (5-3 ClickOps PIVOT closed, 5-1·5-2·5-4 예정) |
 
 자세한 스토리별 상태: [`_bmad-output/implementation-artifacts/sprint-status.yaml`](_bmad-output/implementation-artifacts/sprint-status.yaml)
+
+> **Story 5.3 인프라 — 2026-05-06 ClickOps PIVOT.** 학생 IAM 자격증명 통로 0개(IAM Access Key + CloudShell + IAM Role 생성 모두 차단)로 Terraform 폐기, 콘솔 ClickOps로 전환. Terraform 코드는 git history(`b7e24d3`, `bd172d9`)에 보존 — 졸업 후 개인 계정에서 1회 apply로 동일 인프라 재현 가능.
 
 ## 기획·아키텍처 문서
 
@@ -163,3 +165,8 @@ cd dashboard && npm run build; cd ..
 - [Architecture](_bmad-output/planning-artifacts/architecture.md) — 시스템 아키텍처 결정 문서
 - [Epics](_bmad-output/planning-artifacts/epics.md) — 에픽 및 스토리 분해
 - [Sprint Status](_bmad-output/implementation-artifacts/sprint-status.yaml) — 스프린트 진행 현황
+- [Deferred Work](_bmad-output/implementation-artifacts/deferred-work.md) — 보류 항목 트래킹
+
+## 인프라 문서
+
+- [infra/DATA_POLICY.md](infra/DATA_POLICY.md) — 수집 데이터 사용·공개 정책 (NFR9)

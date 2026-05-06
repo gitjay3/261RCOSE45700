@@ -75,11 +75,16 @@ skip-check:
   - CKV_AWS_19
 
   # ──────────────────────────────────────────────────────────────────────────
-  # CKV_AWS_158 / CKV_AWS_67 — CloudWatch Log Groups KMS / CloudTrail KMS
-  # 사유: 학생 계정 PIVOT — CloudTrail/KMS CMK 미생성. 학교 organization trail 의존.
+  # CKV_AWS_158 / CKV_AWS_67 / CKV_AWS_149 — CloudWatch / CloudTrail / Secrets Manager KMS CMK
+  # 사유: 학생 계정 PIVOT — KMS CMK 생성 권한 부족 가정 → 모든 KMS 사용처에서
+  # AWS-managed key(`alias/aws/{service}`) 자동 사용:
+  #   - CloudWatch Log Groups: 학교 default 정책 의존
+  #   - CloudTrail: 학교 organization trail 의존 (자체 trail 미생성)
+  #   - Secrets Manager: `alias/aws/secretsmanager` 자동 사용 (kms_key_id 미지정 시 default)
   # ──────────────────────────────────────────────────────────────────────────
   - CKV_AWS_158
   - CKV_AWS_67
+  - CKV_AWS_149
 
   # ──────────────────────────────────────────────────────────────────────────
   # CKV_AWS_145 — S3 buckets should be encrypted with KMS by default

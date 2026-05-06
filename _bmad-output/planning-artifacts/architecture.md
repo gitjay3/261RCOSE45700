@@ -172,7 +172,13 @@ npm install @tanstack/react-query axios recharts \
 - 페이지네이션: Offset 기반
 - 라우팅: React Router v7
 - 데이터 갱신: TanStack Query 폴링 60초
-- IaC 도구: Terraform (S3+DynamoDB state 백엔드, 디렉토리 분리 환경, dev 자동 / prod 수동 승인)
+- 인프라 운영 모델: **콘솔 ClickOps** (2026-05-06 PIVOT — 학생 IAM 자격증명 통로 0개로 IaC 폐기, Story 5.3 결과 문서 참조). Terraform 코드는 git history(`b7e24d3`, `bd172d9`)에 보존
+- EC2 인스턴스 사이징: Crawler / Detection / API 모두 **t3.medium x86_64** (2vCPU/4GB) — 학생 계정 SCP가 t3.{nano,micro,small,medium} 4종으로 한정, Graviton(arm64) 미가용
+- RDS: PostgreSQL 16.13 / **db.t3.micro** Single-AZ + automated backup 7일 (학생 계정 SCP가 db.t4g.micro arm64 미가용)
+- EC2 접근: SSM Session Manager (SSH 키 미사용, 외부 22번 차단) — 단, EC2에 attach할 IAM Role을 학생이 신규 생성 불가 → 학교 사전 생성 Role(예: `LabRole`)에 `AmazonSSMManagedInstanceCore` 정책이 포함되어야 가능
+- RDS 네트워크: 학생 계정 SCP가 `publicly_accessible=true` 강제 → SG inbound 5432 source = {detection-sg, api-sg} 한정 + parameter group `rds.force_ssl=1`로 평문 접속 차단 (3중 가드)
+- S3 트래픽: VPC Gateway Endpoint **미생성** (학생 계정 라우트 테이블 수정 권한 불확실) — IGW 경유, 동일 region 내라 비용 영향 미미
+- 보안 baseline: **모두 학교 default 정책 의존** — EBS encryption / VPC Flow Logs / CloudTrail / KMS CMK / AWS Budgets 모두 학생 계정 권한 부족 가정으로 미생성. 학교 organization trail 활성 여부는 별도 확인 필요
 
 **Deferred Decisions (Post-MVP):**
 - DLQ 알람 채널: Grafana UI만 사용 (Slack/이메일은 Growth 단계)
@@ -215,6 +221,14 @@ npm install @tanstack/react-query axios recharts \
 
 ### Infrastructure & Deployment
 
+> **2026-05-06 PIVOT — Terraform IaC 폐기, ClickOps 전환.**
+>
+> 학생 IAM 사용자(`arn:aws:iam::965814678898:user/ku-hys-02`)에서 (1) IAM Access Key 발급 차단 (2) CloudShell `cloudshell:CreateEnvironment` explicit deny (3) IAM Role 생성 차단 — Terraform이 AWS API 호출할 자격증명 통로가 0개로 apply 자체가 불가능. `infra/terraform/` + Terraform CI/lint configs 일괄 제거 (commit `13d96a9`). 데모는 콘솔 ClickOps + 스크린샷으로 진행하며, IaC 코드는 git history(`b7e24d3`, `bd172d9`, `3b98a13`) 보존 — 졸업 후 개인 계정에서 동일 인프라 재현 가능.
+>
+> **아래 표 전체가 production 사양 historical record.** Terraform 관련 결정 (IaC 도구 / state 백엔드 / 모듈 사용 정책 / OIDC / CI 게이트 / pre-commit / terraform-docs)은 2026-05-06 ClickOps PIVOT으로 obsolete. EC2 사이징(r6g.large / t4g.medium / t4g.large)·Graviton(arm64) 채택·db.t4g.micro·VPC Gateway Endpoint·EBS encryption / VPC Flow Logs / CloudTrail / KMS CMK / AWS Budgets·Crawl4AI `max_session_permit=6~8` 등 모든 사양 결정도 학생 계정 SCP(인스턴스 4종 한정 + Graviton 미가용 + 보안 baseline 자원 권한 부족)로 1차 PIVOT(2026-05-04) 시점에 모두 다운그레이드됨.
+>
+> **실제 ClickOps 적용 사양**: EC2 모두 **t3.medium x86_64 4GB ×3** / RDS **db.t3.micro publicly_accessible=true**(SG inbound source 한정 + `rds.force_ssl=1` 보강) / Default VPC + IGW 경유 / EBS encryption·Flow Logs·CloudTrail·KMS CMK·Budgets·Endpoint **모두 미생성** / Crawl4AI `max_session_permit` 4GB 환경에서 2~3 보수적. 정확한 사양은 Story 5.3 결과 문서 + 기획서 2.1.1.a 참조. production 사양은 git history(`b7e24d3`, `bd172d9`)에 보존되어 졸업 후 개인 계정에서 1회 apply로 재현 가능.
+
 | 결정 | 선택 | 근거 |
 |------|------|------|
 | VARCO 장애 처리 | 큐 대기 (Hold) | VARCO 다운 시 Redis 큐에 메시지 유지. 3회 재시도 후 DLQ 격리. 복구 후 DLQ → 재처리. Redis AOF 설정으로 EC2 재시작 후 메시지 보존. Translation 스킵 시 Recall 저하 리스크보다 데이터 정합성 우선. |
@@ -222,10 +236,33 @@ npm install @tanstack/react-query axios recharts \
 | CI/CD | GitHub Actions | 코드 푸시 시 자동 빌드·배포. Python(crawler, detection), Java Spring(api), React(dashboard) 각각 독립 워크플로우. |
 | 로컬 개발 환경 | Docker Compose | Redis + PostgreSQL 로컬 구동. `infra/docker-compose.yml`에 Redis DB index 환경변수 명시. |
 | IaC 도구 | Terraform | AWS EC2/RDS/S3/SG/IAM 프로비저닝을 코드로 관리. ClickOps 금지(drift 차단), `terraform plan`으로 PR 단계 변경 미리보기 가능. CDK 대비 멀티-언어 스택(Python/Java/Node)과 무관하게 작동. AWS 외 GitHub/Datadog provider 추가 시도 동일 구조 유지. |
-| Terraform state 백엔드 | S3 + DynamoDB lock | 표준 패턴. Terraform Cloud는 외부 의존 추가 — MVP 회피. state는 별도 `tracker-tfstate-{env}` S3 버킷에 저장(서버사이드 암호화 + 버전 관리), DynamoDB 테이블로 동시 apply 락. 부트스트랩(state 버킷 자체 생성)은 별도 `infra/terraform/bootstrap/` 1회성 apply로 처리. |
+| Terraform state 백엔드 | S3 + native locking (`use_lockfile = true`) | Terraform 1.10+에서 도입된 S3 conditional write 기반 잠금. 별도 DynamoDB 테이블 운영 부담 제거(요금·생성·권한 관리). state는 `tracker-tfstate-{env}` S3 버킷에 저장(서버사이드 암호화 + 버전 관리), 동일 키 옆에 `terraform.tflock` 파일이 자동 생성되어 동시 apply를 차단. 부트스트랩(state 버킷 자체 생성)은 별도 `infra/terraform/bootstrap/` 1회성 apply로 처리. |
 | 환경 분리 전략 | 디렉토리 분리 (`environments/dev/`, `environments/prod/`) | workspace는 3인 팀에서 잘못된 workspace 선택 사고 위험. 디렉토리 분리는 state·variables·backend 모두 환경별로 명시적이라 안전. |
+| Terraform 모듈 사용 정책 | terraform-aws-modules 공식 검증 모듈 우선 | 자체 작성 대신 `terraform-aws-modules/{vpc,ec2-instance,rds,security-group}/aws` 같은 verified 공식 모듈을 호출. 11주 일정에서 인프라 코드 작성 비용을 줄이고, NFR7·NFR8(보안 그룹·퍼블릭 차단) 같은 모범 패턴이 모듈 기본값에 반영되어 있어 누락 위험이 낮다. 모듈로 표현 불가능한 리소스만 root에서 직접 작성. |
+| GitHub Actions ↔ AWS 인증 | OIDC + IAM Role (`aws_iam_openid_connect_provider`) | 장기 Access Key를 GitHub Secrets에 저장하지 않고 워크플로우 실행 시점에 단기 자격증명만 발급(NFR6). 트러스트 정책으로 "특정 repo·branch만 prod role assume" 제어. Story 5.2 NFR6 AC와 일치. |
+| Terraform CI 품질 게이트 | `terraform fmt` + `terraform validate` + TFLint + Checkov | PR 단계에서 4종 검사를 GitHub Actions가 자동 실행하고, 1건 이상 실패 시 머지 차단. TFLint = AWS 인스턴스 타입 오타·deprecated 문법, Checkov = 보안 룰(퍼블릭 S3, 암호화 누락, IAM 와일드카드 등). 동일 규칙을 pre-commit hook에도 적용하여 push 전 셀프 점검. |
 | Terraform 시크릿 처리 | AWS Secrets Manager + SSM Parameter Store, `data` 블록 참조 | `tfvars`나 `tfstate`에 평문 시크릿 절대 금지(NFR5). 시크릿은 AWS 관리형 스토어에 저장하고 Terraform에서는 참조만. EC2는 IAM Instance Role로 런타임 조회. |
 | Terraform apply 정책 | dev 자동 / prod 수동 승인 | PR 단계: `terraform plan` 결과 PR 코멘트로 자동 게시. main 머지: dev 환경은 GitHub Actions가 자동 apply. prod는 GitHub Environments 보호 규칙으로 수동 승인 게이트(Story 5.2/5.3에서 도입). |
+| Terraform 버전 핀 | `>= 1.14, < 2.0` | 2026-04 시점 최신 안정 1.15.0. 1.14에서 native test verbose 개선 + `terraform query` 추가. S3 native locking은 1.10+에서 안정화. 2.x 메이저 출시 전까지 자유롭게 마이너 업데이트. |
+| AWS provider 버전 핀 | `~> 6.0` (2026-04 시점 최신 6.43.x) | 2025-06-18 GA. multi-region 지원 강화, OpsWorks·SimpleDB 제거(우리 영향 없음), boolean attribute 엄격화(`"0"`/`"1"` 불가 — 사소). 메이저 변경 전까지 핀. |
+| terraform-aws-modules 버전 핀 | vpc `~> 6.6` (실제 6.6.1) · rds `~> 7.2` (실제 7.2.0) · ec2-instance `~> 6.4` (실제 6.4.0) · security-group `~> 5.3` (실제 5.3.1) | 모듈별 메이저 변경 시 깨질 수 있어 핀. 업그레이드는 별도 PR로 격리. RDS 모듈은 v7 메이저로 한참 전에 진입했으니 v3로 잘못 핀하지 않도록 주의. |
+| 월 인프라 예산 | **30만원 (~$215, 환율 1400원/USD 기준)** | 학생 프로젝트 가용 예산. VARCO API와 프록시(IPRoyal/ThorData 등)는 별도 카테고리로 가정. **본 표의 EC2/RDS 가격은 미국 region 기준** — ap-northeast-2(Seoul) 등 한국 region 채택 시 일반적으로 5~15% 더 비싸 합계가 $230~245(약 32~34만원)로 증가할 수 있음. SPIKE 5.0 #3(Region·DNS·TLS) 결정 후 정확화 필수. BERT 도입 시 c6g 인스턴스 추가 비용 발생 — 도입 결정 시 예산 재협의 필요. |
+| EC2 사이징 — Crawler | **r6g.large** (2 vCPU, 16GB, arm64, 메모리 최적화) — 약 $73.6/월 | Crawl4AI(Playwright Chromium 200MB/instance) + FlareSolverr Docker + (옵션 A 시) BeautifulSoup/lxml 전처리. 동시 8 사이트 + MemoryAdaptiveDispatcher가 RAM 보고 동시성 자동 조절. RAM 우선 정책에 따라 t4g.large(8GB) 대신 r6g.large 채택. 1시간 주기 전제 — 15분 결정 시 m6g.xlarge 상향 검토. |
+| EC2 사이징 — Detection | **t4g.medium** (2 vCPU, 4GB, arm64, burstable) — 약 $24.5/월 | VARCO API 호출 위주(외부 LLM)라 자체 연산 부담 작음. BERT 도입 결정 시 c6g.large 이상으로 상향 — 도입 시 예산 재산정. GPU(g4dn) 인스턴스는 30만원 예산 초과로 사용 불가. |
+| EC2 사이징 — API | **t4g.large** (2 vCPU, 8GB, arm64, burstable) — 약 $49.0/월 | Java Spring(JVM heap ~500MB) + Redis docker-compose + Prometheus + Grafana + Nginx + (옵션 B 시) 전처리 Worker 동거 — 4GB는 OOM 리스크. |
+| Graviton(arm64) 채택 | t3 → **t4g + r6g (모두 Graviton2)** 일괄 전환 | t3 대비 동급 RAM 기준 약 40% 비용 절감. Python(boto3, Crawl4AI/Playwright), Java(Corretto JDK ARM64), Spring/JVM 모두 ARM 공식 지원. AMI 선정 시 `arm64` 명시 + Docker base image multi-arch(`linux/arm64`) 사용 필수. **상위 세대 옵션**: Graviton3(r7g, +25% 성능, ~$4.6/월 추가) / Graviton4(r8g, +추가 30%) — Story 5.4 성능 한계 발견 시 r6g→r7g 한 단계 업그레이드 검토. |
+| RDS 사이징 | **db.t4g.micro Single-AZ + automated backup 7일** — 약 $11.5/월 | MVP 트래픽(수천~수만 게시글) + 4테이블 단순 스키마 + 인덱스. Multi-AZ는 비용 2배로 학생 예산엔 미도입. automated backup으로 데이터 손실 위험 완화. |
+| PostgreSQL 메이저 버전 | **16.13** | RDS PG17은 2026-04 시점 안정 GA(17.9 minor 제공) 상태이며 pgvector 0.8.x도 PG17과 완전 호환. 그러나 **PG16은 2년+ 운영으로 minor patch 23회 누적된 성숙 버전**이라 학생 11주 프로젝트 안정성 우선 측면에서 16 채택. PG17의 I/O·병렬 성능 향상은 우리 트래픽 규모(수천~수만 게시글)에서 차이 미미. 자동 minor 업그레이드 활성. 8.3절 Class-RAG 확장 단계에서 pgvector 사용 가능(PG16/17 모두 지원). |
+| EC2 접근 방식 | **SSM Session Manager** (SSH 키 미사용) | EC2에 IAM Instance Role + SSM agent(Amazon Linux 2023 기본 포함). 외부 22번 포트 차단(NFR7), SSH 키 분배·회수 운영 부담 0, 세션 로그 자동 기록(NFR9 충족). 4명 팀 운영 비용 최소화. |
+| S3 트래픽 라우팅 | **VPC Gateway Endpoint** (S3) | Crawler→S3 + Detection→S3 트래픽이 NAT을 통과하면 GB당 $0.045 + NAT 자체 시간당 $0.045. Gateway Endpoint는 무료 + 라우트 테이블에 추가만 하면 됨. 우리는 이미지 + 원시 데이터 트래픽이 크므로 효과 큼. |
+| NAT 운영 방식 (SPIKE 5.0 #11, 2026-05-04 확정) | **NAT 없음 — public subnet only** ($0/월) | 학생 11주 + 30만원 예산. EC2 3종(crawler/detection/api) 모두 public subnet 배치 + 자동 public IP 할당, RDS만 private subnet. 인바운드는 보안 그룹 4종 모두 0으로 차단(SSM Session Manager outbound로 운영자 접근), Checkov CI 게이트가 SG 실수 자동 차단. 보안 그룹만 잘 잠그면 NAT 뒤 private subnet과 사실상 동등 보안 수준이며 NFR7(RDS/Redis는 VPC 내부망)은 RDS의 private subnet 배치로 만족. **확장 여지:** Terraform 변수 `nat_strategy = "none" \| "instance" \| "gateway"` 분기 보존, 발표 데모 직전 또는 트래픽 증가 시 fck-nat($3.5/월) 또는 NAT Gateway($35/월)로 전환 가능. **수용 trade-off:** Checkov `CKV_AWS_88`(EC2 퍼블릭 IP 비할당) skip 필요 — `.checkov.yml`에 본 결정 사유 주석. 대안 비교: NAT Gateway(편함, $35) / fck-nat(가성비, $4 + ASG 자동 복구) 모두 검토 후 학생 프로젝트 비용 우선 + SG 자동 검증으로 보안 절충 가능 판단. |
+| 보안 baseline — EBS 암호화 | `aws_ebs_encryption_by_default = true` (region 기준) | 무료. Checkov 룰 `CKV_AWS_3` 자동 통과. 신규 EBS 볼륨 자동 KMS 암호화. |
+| 보안 baseline — VPC Flow Logs | CloudWatch Logs 14일 보관 | 네트워크 트래픽 감사. NFR9(데이터 접근 이력) 충족. 약 $1~2/월(트래픽 규모 기반). |
+| 보안 baseline — CloudTrail | 모든 region + KMS 암호화 + 90일 보관 (S3) | NFR9 충족. KMS 암호화는 Checkov 룰 `CKV_AWS_35` 통과. |
+| 도입 안 하는 보안 서비스 | AWS Config / SecurityHub / GuardDuty | 학생 예산(30만원) 초과($30~100/월). Checkov + TFLint IaC 스캔이 PR 단계에서 같은 룰을 검사하여 대체. |
+| pre-commit hooks 표준 저장소 | `antonbabenko/pre-commit-terraform` | terraform_fmt / terraform_validate / terraform_tflint / terraform_checkov / terraform_docs hook을 한 저장소에서 관리. tfsec은 Trivy로 흡수되어 deprecated — 우리는 Checkov 단독 사용. |
+| Terraform 모듈 문서화 | `terraform-docs` (pre-commit hook) | 모듈별 README의 Inputs/Outputs/Resources 표 자동 생성·갱신. 코드 리뷰에서 변수 누락 즉시 발견. |
+| Crawl4AI 운영 표준 | `--shm-size=2g` + `max_session_permit=6~8` + MemoryAdaptiveDispatcher 활성 | Chromium IPC가 `/dev/shm`을 사용 — 기본 64MB는 동시 4개+면 SIGBUS 크래시. 2GB 권장. 동시성 상한은 r6g.large 16GB + 8 사이트 기준 안정선. dispatcher가 메모리 압박 시 자동 감소. |
 
 ### Decision Impact Analysis
 
@@ -639,25 +676,10 @@ tracker/
 │   ├── grafana/
 │   │   └── dashboards/
 │   │       └── tracker.json
-│   └── terraform/                     # AWS IaC (Story 5.3에서 본격 구현)
-│       ├── bootstrap/                 # state 백엔드 1회성 부트스트랩
-│       │   └── main.tf                # S3 state 버킷 + DynamoDB lock 테이블
-│       ├── modules/                   # 재사용 모듈
-│       │   ├── networking/            # VPC + subnets + 보안 그룹
-│       │   ├── ec2-service/           # crawler/detection/api 공통 패턴
-│       │   ├── rds/                   # PostgreSQL (NFR7 보안 그룹 포함)
-│       │   ├── elasticache/           # Redis (NFR8 — t3.medium, AOF on)
-│       │   └── s3-frontend/           # dashboard 정적 호스팅 (CloudFront 옵션)
-│       └── environments/
-│           ├── dev/
-│           │   ├── main.tf
-│           │   ├── variables.tf
-│           │   ├── terraform.tfvars   # gitignore (시크릿 변수 없도록 검증)
-│           │   └── backend.tf         # S3 backend (dev tfstate)
-│           └── prod/
-│               └── (동일 구조, prod tfstate)
 │
 └── .env.example                       # 루트 공통 환경변수 템플릿
+
+# Note: AWS 인프라(EC2/RDS/S3/SG/IAM)는 2026-05-06 ClickOps PIVOT으로 콘솔 수동 생성. 1차 IaC 시도(Terraform)는 git history(b7e24d3, bd172d9)에 보존 — 졸업 후 개인 계정에서 1회 apply로 동일 인프라 재현 가능. 사유는 Story 5.3 결과 문서 참조.
 ```
 
 ### Architectural Boundaries

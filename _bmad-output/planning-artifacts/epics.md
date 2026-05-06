@@ -658,8 +658,10 @@ AWS 프로덕션 인프라 프로비저닝(Story 5.3)에 들어가기 전에 VPC
 6. **로그 수집 전략** — CloudWatch Logs 통합 / 자체 stack(Loki) / structured_logger의 stdout을 어떻게 수집할지
 7. **CI → AWS 배포 파이프라인** — `terraform apply` 호출 시점, EC2 코드 배포 방식(Docker pull / SCP / CodeDeploy / SSM) — Story 5.2의 입력
 8. **Backup / DR 정책** — RDS automated snapshot 보관 기간, S3 versioning, 재해 복구 RPO/RTO 목표
-9. **Bootstrap 절차** — Terraform state 백엔드(S3 + DynamoDB) 자체를 어떻게 만들지 — `infra/terraform/bootstrap/` 구체 절차
-10. **비용 예측** — 월 추정 (3 t3.medium EC2 + RDS + S3 + 데이터 전송), 임계값 초과 시 알림 옵션
+9. **Bootstrap 절차** — Terraform state 백엔드(S3 + native locking, Terraform 1.10+ `use_lockfile = true`) 자체를 어떻게 만들지 — `infra/terraform/bootstrap/` 구체 절차
+10. **비용 예측** — **월 인프라 예산 30만원(~$215, 환율 1400원/USD 기준)** 상한 내 추정. architecture.md "EC2 사이징" 결정값(Crawler r6g.large + Detection t4g.medium + API t4g.large + RDS db.t4g.micro Single-AZ) 기반으로 합계 ~$208/월(~29만원). 임계값 초과 시 알림(AWS Budgets) 옵션. BERT 도입 시 예산 재산정.
+11. **NAT 운영 방식** — NAT Gateway(~$37/월, 자동 HA) / NAT Instance(t4g.nano $3/월 + 직접 운영, SPOF) / public subnet only(NAT 자체 제거, NFR7 정합 검토 필요) 중 택. 결정에 따라 Terraform networking 모듈 구조와 비용이 달라짐 — Story 5.3 AC에 반영.
+12. **EC2 접근/관리 방식** — SSM Session Manager 단독(SSH 키 미사용) vs EC2 Instance Connect(임시 SSH 키) vs SSH Bastion. architecture.md 결정값은 SSM Session Manager 단독 — 구현 상 한계(Linux 외 OS, 특수 도구) 발견 시 본 SPIKE에서 백업 방식 지정.
 
 **And** 각 항목에 대해 "선택 / 근거 / 대안 / 다음 스토리(5.1·5.2·5.3) 영향" 4개 항목이 표 또는 섹션 형식으로 기록된다
 **And** 결정 결과가 `architecture.md`의 Infrastructure & Deployment 섹션에 짧은 요약 행으로 backport된다 (단일 진실의 원천 유지)
@@ -699,26 +701,36 @@ API 응답 시간·에러율·Redis 큐 깊이가 Grafana에서 실시간으로 
 
 ### Story 5.3: AWS 프로덕션 인프라 프로비저닝
 
+> **2026-05-06 PIVOT — Terraform IaC 폐기, ClickOps로 전환.** 학생 IAM 사용자(`ku-hys-02`)에서 자격증명 통로 0개(IAM Access Key 차단 + CloudShell `cloudshell:CreateEnvironment` deny + IAM Role 생성 deny)로 Terraform apply 자체 불가능 — 코드/CI/lint 자산 일괄 제거(commit `13d96a9`). 데모는 ClickOps + 스크린샷, 코드는 git history(`b7e24d3`, `bd172d9`) 보존. 아래 AC는 **IaC 시도 시점의 historical record**이며, ClickOps 환경에서는 **인프라 사양(EC2/RDS/SG/IAM 권한 패턴)만 동일하게 적용**하고 Terraform/CI 자동화 관련 AC(#1, #2, #14, #16, #17, #20)는 적용 불가. 상세는 Story 5.3 결과 문서 + sprint-status.yaml 참조.
+>
 > **전제 조건:** SPIKE 5.0(배포 토폴로지 및 운영 인프라 상세 설계)이 완료된 상태에서 시작. SPIKE 결과(`docs/infrastructure-design.md`)가 본 스토리 Terraform 모듈 작성의 입력.
 
 인프라 담당자로서,  
 AWS EC2·RDS·S3·보안 그룹이 Terraform 코드로 프로덕션 환경에 맞게 구성되기를 원한다,  
 그래서 시스템이 안전하게 운영 가능한 상태로 배포되며 인프라 변경이 PR 리뷰를 거친다.
 
-**Acceptance Criteria:**
+**Acceptance Criteria:** _(2026-05-06 PIVOT 후 historical — 위 PIVOT 박스 참조)_
 
 **Given** AWS 계정과 IAM 권한이 준비된 상태에서  
 **When** 인프라 프로비저닝이 완료되면  
 **Then** 모든 AWS 리소스가 `infra/terraform/` 코드로 정의되며 Console 수동 생성(ClickOps)이 금지된다 (architecture.md "IaC 도구: Terraform" 결정 준수)  
-**And** Crawler EC2(t3.medium), Detection EC2(t3.medium), API EC2(t3.medium) 3개 인스턴스가 각각 분리된 보안 그룹으로 구성된다  
-**And** RDS PostgreSQL 보안 그룹이 Detection EC2와 API EC2에서만 접근을 허용하고 퍼블릭 접근을 차단한다 (NFR7)  
+**And** Terraform `>= 1.14` + AWS provider `~> 6.0`이 명시적으로 핀되며, `terraform-aws-modules/vpc/aws ~> 6.6` · `rds/aws ~> 7.2` · `ec2-instance/aws ~> 6.4` · `security-group/aws ~> 5.3` 공식 모듈 버전이 모두 핀된다  
+**And** Crawler EC2(**r6g.large**, 2vCPU/16GB, arm64), Detection EC2(**t4g.medium**, 2vCPU/4GB, arm64), API EC2(**t4g.large**, 2vCPU/8GB, arm64) 3개 Graviton 인스턴스가 각각 분리된 보안 그룹으로 구성되며, AMI는 ARM64 명시 선택된다 (architecture.md "EC2 사이징" 결정 준수)  
+**And** RDS PostgreSQL **16.13** 보안 그룹이 Detection EC2와 API EC2에서만 접근을 허용하고 퍼블릭 접근을 차단하며, **db.t4g.micro Single-AZ + automated backup 7일** 설정으로 프로비저닝된다 (NFR7)  
 **And** Redis(docker-compose on API EC2) 포트가 외부 접근을 차단하고 API EC2 내부에서만 접근된다  
-**And** S3 버킷 정책이 퍼블릭 접근을 차단하고 Crawler EC2 IAM Role에만 쓰기 권한을 부여한다 (NFR8)  
+**And** S3 버킷 정책이 퍼블릭 접근을 차단하고 Crawler EC2 IAM Role에만 쓰기 권한을 부여하며, **VPC Gateway Endpoint(S3)**가 라우트 테이블에 추가되어 EC2→S3 트래픽이 NAT을 통과하지 않는다 (NFR8 + 비용 절감)  
 **And** 각 EC2에 IAM Instance Role이 부여되어 AWS SDK가 환경변수 Access Key 없이 동작한다 (NFR6)  
-**And** S3 버킷 및 RDS에 AWS CloudTrail 또는 S3 Access Logging이 활성화되어 데이터 접근 이력이 기록된다 (NFR9)  
-**And** `infra/terraform/bootstrap/`을 1회 apply하여 state 백엔드(S3 + DynamoDB lock)가 생성되며, `infra/terraform/environments/{dev,prod}/`가 해당 백엔드를 사용한다  
+**And** **EC2 접근은 SSM Session Manager**를 통해 이루어지며, 외부 22번 포트는 보안 그룹에서 완전 차단된다(SSH 키 미사용). 각 EC2 IAM Role에 `AmazonSSMManagedInstanceCore` 정책이 부여된다 (NFR6 + NFR7)  
+**And** **EBS encryption by default**가 region 단위로 활성화되어 모든 EBS 볼륨이 KMS로 자동 암호화된다 (Checkov `CKV_AWS_3` 통과)  
+**And** **VPC Flow Logs**가 CloudWatch Logs(14일 보관)로 적재되어 네트워크 트래픽이 감사 가능하다 (NFR9)  
+**And** S3 버킷 및 RDS에 AWS CloudTrail(KMS 암호화, 모든 region) 또는 S3 Access Logging이 활성화되어 데이터 접근 이력이 기록된다 (NFR9, Checkov `CKV_AWS_35` 통과)  
+**And** `infra/terraform/bootstrap/`을 1회 apply하여 state 백엔드(S3 버킷 + native locking `use_lockfile = true`, 별도 DynamoDB 테이블 불필요)가 생성되며, `infra/terraform/environments/{dev,prod}/`가 해당 백엔드를 사용한다  
 **And** `infra/terraform/environments/dev/`와 `environments/prod/`가 동일 모듈을 다른 변수로 호출하며, 환경별 state는 분리된다  
+**And** EC2·RDS·VPC·Security Group은 `terraform-aws-modules/{vpc,ec2-instance,rds,security-group}/aws` 공식 검증 모듈을 우선 사용하며, 자체 리소스 직접 정의는 모듈로 표현 불가능한 경우로 한정한다  
 **And** 시크릿(VARCO_API_KEY 등)은 AWS Secrets Manager 또는 SSM Parameter Store에 저장되며 `tfvars`/`tfstate`에 평문으로 포함되지 않는다 (NFR5)  
+**And** pre-commit hook은 `antonbabenko/pre-commit-terraform` 표준 저장소의 hook(`terraform_fmt`, `terraform_validate`, `terraform_tflint`, `terraform_checkov`, `terraform_docs`)을 사용하며, 모듈별 README.md의 Inputs/Outputs 표가 `terraform-docs`에 의해 자동 생성·갱신된다  
+**And** PR에서 `terraform fmt`·`terraform validate`·TFLint·Checkov가 GitHub Actions로 자동 실행되며, 1건 이상 실패 시 머지가 차단된다  
+**And** 인프라 월 비용이 **30만원(~$215) 예산 상한** 내로 운영되며, AWS Budgets 알림이 80%·100% 임계값에 설정된다 (BERT 도입 등 예산 영향 변경은 별도 협의)  
 **And** PR에서 `terraform plan` 결과가 자동으로 PR 코멘트에 게시되며, dev 환경 `apply`는 main 머지 시 자동, prod 환경 `apply`는 GitHub Environments 보호 규칙으로 수동 승인을 요구한다  
 **And** `infra/DATA_POLICY.md`에 수집 데이터의 탐지 목적 전용 사용 방침과 외부 공개 금지 정책이 문서화된다 (NFR9)  
 **And** Terraform 모듈·환경 사용법, bootstrap 절차, drift 점검 가이드가 `infra/terraform/README.md`에 문서화된다

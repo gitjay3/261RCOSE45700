@@ -17,6 +17,10 @@ RUN npm run build
 # ---------- runtime ----------
 FROM nginx:1.27-alpine AS runtime
 
+# nginx는 SIGQUIT로 graceful shutdown. compose는 기본 SIGTERM이라 STOPSIGNAL을
+# 명시하지 않으면 10s 후 SIGKILL로 강제 종료된다.
+STOPSIGNAL SIGQUIT
+
 # Single-page-app fallback + healthcheck endpoint.
 RUN printf '%s\n' \
     'server {' \

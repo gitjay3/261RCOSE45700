@@ -1,6 +1,58 @@
 # Tracker
 
-불법 프로그램 탐지 AI — NC AI 게임 보안 담당자를 위한 자동화된 불법 프로그램 유포 탐지 시스템.
+> 불법 프로그램 탐지 AI — NC AI 게임 보안 담당자를 위한 자동화된 불법 프로그램 유포 탐지 시스템
+
+[![CI](https://github.com/byungju0/261RCOSE45700/actions/workflows/ci.yml/badge.svg)](https://github.com/byungju0/261RCOSE45700/actions/workflows/ci.yml)
+[![Deploy](https://github.com/byungju0/261RCOSE45700/actions/workflows/deploy.yml/badge.svg)](https://github.com/byungju0/261RCOSE45700/actions/workflows/deploy.yml)
+[![Last commit](https://img.shields.io/github/last-commit/byungju0/261RCOSE45700)](https://github.com/byungju0/261RCOSE45700/commits)
+[![Open PRs](https://img.shields.io/github/issues-pr/byungju0/261RCOSE45700)](https://github.com/byungju0/261RCOSE45700/pulls)
+[![Issues](https://img.shields.io/github/issues/byungju0/261RCOSE45700)](https://github.com/byungju0/261RCOSE45700/issues)
+[![Top language](https://img.shields.io/github/languages/top/byungju0/261RCOSE45700)](https://github.com/byungju0/261RCOSE45700)
+[![Wiki](https://img.shields.io/badge/wiki-19_pages-blue)](https://github.com/byungju0/261RCOSE45700/wiki)
+
+한·중·대만 게임 커뮤니티 6개 사이트를 1시간 주기로 자동 크롤링하고, NC AI VARCO Translation/LLM 파이프라인으로 다국어 텍스트를 한국어로 번역·분류해, React 대시보드에서 담당자가 확인하고 원본 URL 로 즉시 이동해 조치하는 흐름을 **5분 이내 SLA** 로 보장합니다.
+
+## 목차
+
+- [시스템 개요](#시스템-개요)
+- [프로젝트 구조 개요](#프로젝트-구조-개요)
+- [사전 요구사항](#사전-요구사항)
+- [로컬 셋업](#로컬-셋업)
+- [빠른 검증](#빠른-검증)
+- [서브시스템별 구현 현황](#서브시스템별-구현-현황)
+  - [crawler (Epic 2 — 완료)](#crawler-epic-2--완료)
+  - [detection (Epic 3 — 진행 중)](#detection-epic-3--진행-중)
+  - [api (Epic 4 — 백엔드 4-1--4-2-done--4-3-진행-중)](#api-epic-4--백엔드-4-1--4-2-done--4-3-진행-중)
+  - [dashboard (Epic 4 — 완료)](#dashboard-epic-4--완료)
+- [Redis DB 구성](#redis-db-구성)
+- [CI/CD](#cicd)
+- [스프린트 현황](#스프린트-현황)
+- [문서](#문서)
+  - [Wiki](#wiki-byungju0261rcose45700wiki)
+
+## 시스템 개요
+
+```mermaid
+flowchart LR
+    Sites["한·중·대만 게임 커뮤니티<br/>tailstar / PTT / Dcard<br/>tieba / 52pojie / NGA"]
+    Sites -->|Playwright + stealth| Crawler[crawler<br/>Python · crawl4ai]
+    Crawler -->|원본 + 이미지| S3[(S3 archive)]
+    Crawler -->|posts:queue LPUSH| Redis{{Redis · DB0~3<br/>MQ · dedup · ratelimit · cache}}
+    Redis -->|BRPOPLPUSH| Detection[detection<br/>Python · VARCO]
+    Detection -->|Translation + LLM| VARCO[(NC AI VARCO)]
+    Detection -->|JDBC INSERT| RDS[(RDS PostgreSQL<br/>detections)]
+    RDS -->|Spring Data JPA| API[api<br/>Spring Boot 3.5]
+    API -->|REST + ProblemDetail| Dashboard[dashboard<br/>React 19 · Vite 8]
+
+    classDef container fill:#e8f4f8,stroke:#0366d6,stroke-width:2px,color:#000
+    classDef external fill:#fff5e6,stroke:#f9a825,stroke-width:2px,color:#000
+    classDef storage fill:#f0f0f0,stroke:#586069,stroke-width:2px,color:#000
+    class Crawler,Detection,API,Dashboard container
+    class Sites,VARCO external
+    class S3,Redis,RDS storage
+```
+
+자세한 결정 근거는 [Architecture Overview (Wiki)](https://github.com/byungju0/261RCOSE45700/wiki/Architecture-Overview) 또는 [`_bmad-output/planning-artifacts/architecture.md`](_bmad-output/planning-artifacts/architecture.md) 참조.
 
 ## 프로젝트 구조 개요
 
@@ -34,8 +86,8 @@
 신규 팀원이 저장소를 클론한 뒤 실행하는 표준 절차입니다.
 
 ```bash
-git clone <repository-url>
-cd 20261R0136COSE45700
+git clone https://github.com/byungju0/261RCOSE45700.git
+cd 261RCOSE45700
 
 # 0) 인프라 기동 (Redis + PostgreSQL)
 cp infra/.env.example infra/.env   # DB_PASSWORD 등 값 입력
@@ -105,14 +157,16 @@ cd dashboard && npm run build; cd ..
 | `src/mocks/varco_mock.py` | VARCO Mock 서버 (로컬/테스트 환경) | 완료 |
 | RDS 저장 (Story 3-4) | 탐지 결과 PostgreSQL 저장 | 예정 |
 
-### api (Epic 4 — 일부 완료)
+### api (Epic 4 — 백엔드 4-1 / 4-2 done · 4-3 진행 중)
 
 | 항목 | 설명 |
 |------|------|
 | Spring Boot 3.5 + PostgreSQL | JPA + Flyway (V1~V4 마이그레이션 자동 적용) |
-| `GET /api/detections` | 탐지 목록 조회 (페이지네이션 + 필터) |
+| `GET /api/detections` | 탐지 목록 조회 (페이지네이션 + 필터) — Story 4-1 done |
+| `GET /api/detections/{id}` | 탐지 상세 조회 — Story 4-2 done |
+| `POST /api/crawl/trigger` | 수동 크롤링 트리거 (Redis pub/sub) — Story 4-2 done |
+| `GET /api/stats` | 통계 (오늘 / 주간 / 월간 + 분포) — Story 4-3 PR #27 진행 중 |
 | Swagger UI | `/swagger-ui.html` 에서 API 문서 확인 |
-| 탐지 상세/수동 트리거/통계 (Story 4-2, 4-3) | 예정 |
 
 ### dashboard (Epic 4 — 완료)
 
@@ -136,37 +190,61 @@ cd dashboard && npm run build; cd ..
 
 ## CI/CD
 
-`.github/workflows/` 에 4개 워크플로우가 구성되어 있습니다:
+`.github/workflows/` 에 6개 워크플로우가 구성되어 있습니다 (Story 1.5 + Story 5.2):
 
 | 파일 | 트리거 | 내용 |
 |------|--------|------|
-| `crawler.yml` | push/PR (crawler/**) | pytest 단위·통합 테스트, flake8 |
-| `detection.yml` | push/PR (detection/**) | pytest 단위·통합 테스트, flake8 |
-| `api.yml` | push/PR (api/**) | Gradle build + JUnit 테스트 |
-| `dashboard.yml` | push/PR (dashboard/**) | npm build + lint |
+| `crawler.yml` | push/PR (`crawler/**`) + `workflow_call:` | pytest 단위 테스트, flake8 |
+| `detection.yml` | push/PR (`detection/**`) + `workflow_call:` | pytest 단위 테스트, flake8 |
+| `api.yml` | push/PR (`api/**`) + `workflow_call:` | Gradle build + JUnit 테스트 |
+| `dashboard.yml` | push/PR (`dashboard/**`) + `workflow_call:` | npm build + lint |
+| **`ci.yml`** | PR + push:main (no path filter) | 4 reusable lint-test 호출 + `aggregator` 잡 (`ci / aggregator` strict required check) |
+| **`deploy.yml`** | push:main + workflow_dispatch | BuildKit cache mode=max → GHCR push (`:sha` + `:latest`) → `appleboy/ssh-action` → EC2 SSH 배포 + 60s healthcheck + 자동 롤백 |
+
+자세한 사양은 [CI/CD Pipeline (Wiki)](https://github.com/byungju0/261RCOSE45700/wiki/CI-CD-Pipeline) 또는 [docs/deployment.md](docs/deployment.md) (운영 절차) 참조.
 
 ## 스프린트 현황
 
 | Epic | 설명 | 상태 |
 |------|------|------|
-| Epic 1 | 프로젝트 토대 및 인프라 | **완료** |
+| Epic 1 | 프로젝트 토대 및 인프라 | **완료** (회고 done) |
 | Epic 2 | 자동 크롤링 및 전처리 파이프라인 | **완료** |
-| Epic 3 | AI 기반 탐지 파이프라인 | 진행 중 (3-4, 3-5 예정) |
-| Epic 4 | 탐지 결과 조회 및 통계 대시보드 | 진행 중 (4-2, 4-3 예정) |
-| Epic 5 | 운영·모니터링·프로덕션 배포 | 진행 중 (5-3 ClickOps PIVOT closed, 5-1·5-2·5-4 예정) |
+| Epic 3 | AI 기반 탐지 파이프라인 | 진행 중 (mockup, 3-4 / 3-5 예정) |
+| Epic 4 | 탐지 결과 조회 및 통계 대시보드 | 진행 중 (프론트엔드 5/5 done · 백엔드 4-1 / 4-2 done · 4-3 PR #27 진행) |
+| Epic 5 | 운영·모니터링·프로덕션 배포 | 진행 중 (5-0 SPIKE done · 5-3 ClickOps PIVOT closed · **5-2 in-progress, [PR #28](https://github.com/byungju0/261RCOSE45700/pull/28)** · 5-1 / 5-4 예정) |
 
-자세한 스토리별 상태: [`_bmad-output/implementation-artifacts/sprint-status.yaml`](_bmad-output/implementation-artifacts/sprint-status.yaml)
+자세한 스토리별 상태: [Sprint Status (Wiki)](https://github.com/byungju0/261RCOSE45700/wiki/Sprint-Status) 또는 [`sprint-status.yaml`](_bmad-output/implementation-artifacts/sprint-status.yaml)
 
-> **Story 5.3 인프라 — 2026-05-06 ClickOps PIVOT.** 학생 IAM 자격증명 통로 0개(IAM Access Key + CloudShell + IAM Role 생성 모두 차단)로 Terraform 폐기, 콘솔 ClickOps로 전환. Terraform 코드는 git history(`b7e24d3`, `bd172d9`)에 보존 — 졸업 후 개인 계정에서 1회 apply로 동일 인프라 재현 가능.
+> **Story 5.3 인프라 — 2026-05-06 ClickOps PIVOT.** 학생 IAM 자격증명 통로 0개(IAM Access Key + CloudShell + IAM Role 생성 모두 차단)로 Terraform 폐기, 콘솔 ClickOps로 전환. Terraform 코드는 git history(`b7e24d3`, `bd172d9`)에 보존 — 학생 계정 사용 기간 종료 후 개인 계정에서 1회 apply 로 동일 인프라 재현 가능.
+>
+> **Story 5.2 자동 배포 — 2026-05-07 SSH `.pem` PIVOT.** OIDC + IAM Role + Access Key + CodeDeploy 모두 봉인된 학생 IAM SCP 환경에서 GHA → GHCR push → `appleboy/ssh-action` 으로 EC2 SSH 직결 자동 배포 + 60초 healthcheck + 자동 롤백. 단일 EC2 t3.xlarge 16GB (5컨테이너 합반). 자세한 흐름은 [docs/deployment.md](docs/deployment.md).
 
-## 기획·아키텍처 문서
+## 문서
 
-- [PRD](_bmad-output/planning-artifacts/prd.md) — 제품 요구사항 정의서
+### 기획·아키텍처 (`_bmad-output/planning-artifacts/`)
+
+- [PRD](_bmad-output/planning-artifacts/prd.md) — 제품 요구사항 정의서 (FR1~32, NFR1~17)
 - [Architecture](_bmad-output/planning-artifacts/architecture.md) — 시스템 아키텍처 결정 문서
 - [Epics](_bmad-output/planning-artifacts/epics.md) — 에픽 및 스토리 분해
+- [UX Specification](_bmad-output/planning-artifacts/ux-design-specification.md) — UX 설계 명세
+
+### 진행 / 운영 (`_bmad-output/implementation-artifacts/` + `docs/`)
+
 - [Sprint Status](_bmad-output/implementation-artifacts/sprint-status.yaml) — 스프린트 진행 현황
-- [Deferred Work](_bmad-output/implementation-artifacts/deferred-work.md) — 보류 항목 트래킹
-
-## 인프라 문서
-
+- [Deferred Work](_bmad-output/implementation-artifacts/deferred-work.md) — 보류 항목 트래킹 (31건)
+- [docs/deployment.md](docs/deployment.md) — 자동 배포 runbook (Story 5.2)
+- [docs/ci-setup.md](docs/ci-setup.md) — CI / Branch protection 가이드
 - [infra/DATA_POLICY.md](infra/DATA_POLICY.md) — 수집 데이터 사용·공개 정책 (NFR9)
+
+### Wiki ([byungju0/261RCOSE45700/wiki](https://github.com/byungju0/261RCOSE45700/wiki))
+
+19페이지 통합 문서 — 제품 / 아키텍처 / 서브시스템별 구현 / 운영 / 회고. 가독성을 위한 핵심 결정 정리 뷰입니다.
+
+| 카테고리 | 페이지 |
+|---|---|
+| 제품 / 아키텍처 | [Product Overview](https://github.com/byungju0/261RCOSE45700/wiki/Product-Overview) · [Architecture Overview](https://github.com/byungju0/261RCOSE45700/wiki/Architecture-Overview) · [UX Design System](https://github.com/byungju0/261RCOSE45700/wiki/UX-Design-System) |
+| 시작 | [Getting Started](https://github.com/byungju0/261RCOSE45700/wiki/Getting-Started) |
+| 서브시스템 | [Shared Module](https://github.com/byungju0/261RCOSE45700/wiki/Shared-Module) · [Crawler](https://github.com/byungju0/261RCOSE45700/wiki/Crawler) · [Detection](https://github.com/byungju0/261RCOSE45700/wiki/Detection) · [Backend API](https://github.com/byungju0/261RCOSE45700/wiki/Backend-API) · [Frontend Dashboard](https://github.com/byungju0/261RCOSE45700/wiki/Frontend-Dashboard) |
+| 인프라 / 운영 | [Infrastructure](https://github.com/byungju0/261RCOSE45700/wiki/Infrastructure) · [CI/CD Pipeline](https://github.com/byungju0/261RCOSE45700/wiki/CI-CD-Pipeline) |
+| 진행 / 품질 | [Sprint Status](https://github.com/byungju0/261RCOSE45700/wiki/Sprint-Status) · [Implementation Readiness](https://github.com/byungju0/261RCOSE45700/wiki/Implementation-Readiness) · [Deferred Work](https://github.com/byungju0/261RCOSE45700/wiki/Deferred-Work) |
+| 회고 | [Epic 1 Retrospective](https://github.com/byungju0/261RCOSE45700/wiki/Epic-1-Retrospective) · [Epic 4 Frontend Retrospective](https://github.com/byungju0/261RCOSE45700/wiki/Epic-4-Frontend-Retrospective) |

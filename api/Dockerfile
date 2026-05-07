@@ -38,9 +38,10 @@ RUN chmod +x /usr/local/bin/secret-shim
 USER appuser
 EXPOSE 8080
 
-# Spring Boot Actuator /actuator/health — already on classpath (build.gradle).
+# Spring Boot Actuator readiness probe — DataSource 포함, DB DOWN 시 503 반환.
+# (default /actuator/health는 ping만 집계해 DB 단절도 UP으로 보고하는 footgun.)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -fsS http://localhost:8080/actuator/health || exit 1
+    CMD curl -fsS http://localhost:8080/actuator/health/readiness || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/secret-shim"]
 CMD ["java", "-jar", "/app/app.jar"]

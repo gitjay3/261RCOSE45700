@@ -1,6 +1,8 @@
 # Story 4.4: React 대시보드 메인 화면 및 라우팅 구조
 
-Status: review
+Status: done
+
+<!-- Note: 2026-05-11 status 정정 — 디자인 시스템 v10 overhaul로 4-4-1 / 4-4-2 / v10 사이클이 그 위에 누적되어 사실상 완료. PR #9 머지 + Epic 4 retro(2026-05-08) 완료 시점에 done 확정. sprint-status.yaml과 일치. -->
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

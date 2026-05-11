@@ -1,6 +1,8 @@
 # Story 5.3: AWS 프로덕션 인프라 프로비저닝 (학생 계정 사양)
 
-Status: closed (ClickOps demo)
+Status: done
+
+<!-- Note: 2026-05-11 status 정규화 — `closed`는 BMad 표준 상태값이 아니므로 `done`으로 통일. closure 사유(Terraform IaC 폐기 → ClickOps PIVOT)는 아래 PIVOT 메모로 보존. AC 24개 코드 측면은 작성/정적 검증(fmt/validate/TFLint/Checkov)까지 충족, 실 인프라는 ClickOps로 재구축됨. -->
 
 > **2026-05-06 PIVOT (최종) — Terraform IaC 자체 폐기, ClickOps로 전환.**
 >

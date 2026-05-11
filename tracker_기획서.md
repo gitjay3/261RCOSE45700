@@ -560,11 +560,13 @@ LLM 기반 콘텐츠 분류 시스템의 실제 성능 벤치마크(OpenAI Moder
 6. **BERT 2차 필터 도입 여부 및 모델** (4.2, 5.1, 6) — 학생 계정에선 c5/c6 시리즈 + GPU(g4dn) 모두 SCP로 미가용 → t3.medium 4GB에 BERT 적재 비현실적이므로 **MVP 범위에서 BERT 도입 보류**. 졸업 후 개인 계정에서 재검토
 7. **NAT Gateway 운영 방식** — Default VPC + public subnet only로 확정 (학생 계정 라우트 테이블 수정 권한 불확실 + NAT 비용 회피). 모든 EC2가 public subnet에 자동 public IP 할당 + 보안 그룹 inbound 최소화로 보안 보강
 
-### 10.1.a 2026-04-30 개정으로 해소된 항목 (참고)
+### 10.1.a 학생 계정 PIVOT 최종 확정 사양 (2026-05-11 기준)
 
-- **EC2/RDS 인스턴스 타입** → 2.1.1.a로 확정 (학생 계정 PIVOT 최종: 단일 EC2 t3.xlarge x86_64 16GB / RDS db.t4g.micro arm64 PostgreSQL 18.3 Single-AZ — production 사양 r6g.large 16GB 등은 git history 보존, 졸업 후 개인 계정에서 재현 가능)
-- **PostgreSQL 메이저 버전** → 16.13 (PG17도 pgvector 호환되지만 PG16의 minor patch 누적·운영 성숙도 우선)
-- **EC2 접근 방식** → SSM Session Manager (SSH 키 미사용) — 학교 사전 생성 IAM Role의 `AmazonSSMManagedInstanceCore` 정책 포함 여부에 의존
+> 본 섹션은 2026-04-30 초기 개정 → 2026-05-04~05-09 다단계 PIVOT(1~4차) → 2026-05-11 콘솔 launch 확인까지 누적된 최종 확정값.
+
+- **EC2/RDS 인스턴스 타입** → 2.1.1.a로 확정 (단일 EC2 t3.xlarge x86_64 16GB / RDS db.t4g.micro arm64 PostgreSQL 18.3 Single-AZ — production 사양 r6g.large 16GB 등은 git history 보존, 졸업 후 개인 계정에서 재현 가능)
+- **PostgreSQL 메이저 버전** → **18.3** (학생 SCP가 16/17 노출 안 해 18.3-R1 강제, 4차 PIVOT 2026-05-09). Flyway 10 ↔ PG 18 호환성은 첫 배포 시 V1~V4 마이그레이션 실행 로그 모니터링 필수, 실패 시 Flyway 12.x 핀 적용 (deferred-work 첫 항목)
+- **EC2 접근 방식** → **SSH `.pem` only** (2026-05-06 Story 5-2 PIVOT). 학생 IAM이 SSM Session Manager / EC2 Instance Connect / IAM Role 생성 모두 차단하여 SSH `.pem` 키만 가용. 22번 인바운드 `0.0.0.0/0` + ed25519 + fail2ban 3 layer defense-in-depth로 안전화 (host fingerprint verification은 운영 단순화 trade-off로 미적용)
 - **S3 트래픽 라우팅** → IGW 경유 (VPC Gateway Endpoint는 학생 계정 라우트 테이블 수정 권한 불확실로 미생성, 동일 region 내라 비용 영향 미미)
 
 ### 10.2 잔존 표기 불일치 (재확인·정리 필요)

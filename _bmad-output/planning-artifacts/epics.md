@@ -72,7 +72,7 @@ NFR17: 크롤링 스케줄 간격(`CRAWL_INTERVAL_MINUTES`)은 환경 변수 변
 
 ### Additional Requirements
 
-- **[ARCH-1] 모노레포 초기화:** 모노레포 디렉토리 구조(crawler/, detection/, api/, dashboard/, shared/, infra/, .github/workflows/) 초기화 및 서브시스템별 스캐폴딩 (Python pip, Spring Boot 4.0.5 Initializr, Vite 8 + React-TS)
+- **[ARCH-1] 모노레포 초기화:** 모노레포 디렉토리 구조(crawler/, detection/, api/, dashboard/, shared/, infra/, .github/workflows/) 초기화 및 서브시스템별 스캐폴딩 (Python pip, Spring Boot 3.5.0 Initializr, Vite 8 + React-TS)
 - **[ARCH-2] Day 1 공유 모듈 (shared/):** `shared/pyproject.toml`, `shared/correlation_id.py`, `shared/models/crawl_event.py`, `shared/interfaces/varco.py`, `shared/config/redis_config.py`, `shared/structured_logger.py` — 3개 서브시스템 구현 시작 전 반드시 완료
 - **[ARCH-3] infra/docker-compose.yml:** Redis DB0~3(`appendonly yes`) + PostgreSQL 로컬 환경, dev/prod 오버라이드 분리
 - **[ARCH-4] VARCO Mock 서버:** `detection/src/mocks/varco_mock.py` — rate limit 시뮬레이션, 실패 주입, 재시도 검증 지원. 통합 테스트 선행 조건

@@ -117,13 +117,13 @@ playwright install chromium
 pip install redis boto3 httpx python-dotenv
 ```
 
-**② Java Spring Boot 3.4.x (api/)**
+**② Java Spring Boot 3.5.0 (api/)**
 
 ```bash
 curl https://start.spring.io/starter.zip \
   -d type=gradle-project \
   -d language=java \
-  -d bootVersion=3.4.5 \
+  -d bootVersion=3.5.0 \
   -d baseDir=api \
   -d groupId=com.tracker \
   -d artifactId=tracker-api \
@@ -147,7 +147,7 @@ npm install @tanstack/react-query axios recharts \
 |------|------|
 | Python 런타임 | 3.11+ |
 | Java 런타임 | Java 21 LTS (Virtual Threads 지원) |
-| Spring Boot | 3.4.x (Spring Framework 6.2.x, Hibernate 6.6.x, Tomcat 10.1.x) |
+| Spring Boot | 3.5.0 (Spring Framework 6.2.x, Hibernate 6.6.x, Tomcat 10.1.x) |
 | Frontend 빌드 | Vite 8.0.10 (Node.js 20.19+, @vitejs/plugin-react v6) |
 | API 문서화 | springdoc-openapi (Swagger UI 자동 생성) |
 | React 서버 상태 | TanStack Query |

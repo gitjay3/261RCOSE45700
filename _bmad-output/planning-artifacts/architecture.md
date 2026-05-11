@@ -117,13 +117,13 @@ playwright install chromium
 pip install redis boto3 httpx python-dotenv
 ```
 
-**② Java Spring Boot 3.4.x (api/)**
+**② Java Spring Boot 3.5.0 (api/)**
 
 ```bash
 curl https://start.spring.io/starter.zip \
   -d type=gradle-project \
   -d language=java \
-  -d bootVersion=3.4.5 \
+  -d bootVersion=3.5.0 \
   -d baseDir=api \
   -d groupId=com.tracker \
   -d artifactId=tracker-api \
@@ -147,7 +147,7 @@ npm install @tanstack/react-query axios recharts \
 |------|------|
 | Python 런타임 | 3.11+ |
 | Java 런타임 | Java 21 LTS (Virtual Threads 지원) |
-| Spring Boot | 3.4.x (Spring Framework 6.2.x, Hibernate 6.6.x, Tomcat 10.1.x) |
+| Spring Boot | 3.5.0 (Spring Framework 6.2.x, Hibernate 6.6.x, Tomcat 10.1.x) |
 | Frontend 빌드 | Vite 8.0.10 (Node.js 20.19+, @vitejs/plugin-react v6) |
 | API 문서화 | springdoc-openapi (Swagger UI 자동 생성) |
 | React 서버 상태 | TanStack Query |
@@ -223,11 +223,16 @@ npm install @tanstack/react-query axios recharts \
 
 > **2026-05-06 PIVOT — Terraform IaC 폐기, ClickOps 전환.**
 >
-> 학생 IAM 사용자(`arn:aws:iam::965814678898:user/ku-hys-02`)에서 (1) IAM Access Key 발급 차단 (2) CloudShell `cloudshell:CreateEnvironment` explicit deny (3) IAM Role 생성 차단 — Terraform이 AWS API 호출할 자격증명 통로가 0개로 apply 자체가 불가능. `infra/terraform/` + Terraform CI/lint configs 일괄 제거 (commit `13d96a9`). 데모는 콘솔 ClickOps + 스크린샷으로 진행하며, IaC 코드는 git history(`b7e24d3`, `bd172d9`, `3b98a13`) 보존 — 졸업 후 개인 계정에서 동일 인프라 재현 가능.
+> 학생 IAM 사용자(`arn:aws:iam::<aws-account-id>:user/<student-iam-user>`)에서 (1) IAM Access Key 발급 차단 (2) CloudShell `cloudshell:CreateEnvironment` explicit deny (3) IAM Role 생성 차단 — Terraform이 AWS API 호출할 자격증명 통로가 0개로 apply 자체가 불가능. `infra/terraform/` + Terraform CI/lint configs 일괄 제거 (commit `13d96a9`). 데모는 콘솔 ClickOps + 스크린샷으로 진행하며, IaC 코드는 git history(`b7e24d3`, `bd172d9`, `3b98a13`) 보존 — 졸업 후 개인 계정에서 동일 인프라 재현 가능.
 >
 > **아래 표 전체가 production 사양 historical record.** Terraform 관련 결정 (IaC 도구 / state 백엔드 / 모듈 사용 정책 / OIDC / CI 게이트 / pre-commit / terraform-docs)은 2026-05-06 ClickOps PIVOT으로 obsolete. EC2 사이징(r6g.large / t4g.medium / t4g.large)·Graviton(arm64) 채택·db.t4g.micro·VPC Gateway Endpoint·EBS encryption / VPC Flow Logs / CloudTrail / KMS CMK / AWS Budgets·Crawl4AI `max_session_permit=6~8` 등 모든 사양 결정도 학생 계정 SCP(인스턴스 4종 한정 + Graviton 미가용 + 보안 baseline 자원 권한 부족)로 1차 PIVOT(2026-05-04) 시점에 모두 다운그레이드됨.
 >
-> **실제 ClickOps 적용 사양**: EC2 모두 **t3.medium x86_64 4GB ×3** / RDS **db.t3.micro publicly_accessible=true**(SG inbound source 한정 + `rds.force_ssl=1` 보강) / Default VPC + IGW 경유 / EBS encryption·Flow Logs·CloudTrail·KMS CMK·Budgets·Endpoint **모두 미생성** / Crawl4AI `max_session_permit` 4GB 환경에서 2~3 보수적. 정확한 사양은 Story 5.3 결과 문서 + 기획서 2.1.1.a 참조. production 사양은 git history(`b7e24d3`, `bd172d9`)에 보존되어 졸업 후 개인 계정에서 1회 apply로 재현 가능.
+> **실제 ClickOps 적용 사양**: EC2 모두 **t3.medium x86_64 4GB ×3** / RDS **db.t3.micro publicly_accessible=true**(SG inbound source 한정 + `rds.force_ssl=1` 보강) / Default VPC + IGW 경유 / EBS encryption·Flow Logs·CloudTrail·KMS CMK·Budgets·Endpoint **모두 미생성** / Crawl4AI `max_session_permit` 4GB 환경에서 2~3 보수적. 정확한 사양은 Story 5.3 결과 문서 + 기획서 2.1.1.a 참조. production 사양은 git history(`b7e24d3`, `bd172d9`)에 보존되어 학생 계정 사용 기간 종료 후 개인 계정에서 1회 apply로 재현 가능.
+>
+> **2026-05-06 추가 갱신 (region + EC2 접근 + Story 5.2 PIVOT)**:
+> - **Region `us-east-1` 확정** — 학생 계정 <student-iam-user>는 다른 region에서 자원 생성 거부 확인. 이전 ap-northeast-2 가정은 잘못된 가정.
+> - **EC2 접근 통로 = SSH `.pem` 키만 가능** — 표의 "EC2 접근 방식: SSM Session Manager" 행 obsolete. SSM Session Manager / EC2 Instance Connect 모두 사용자 권한 차단 확인.
+> - **Story 5.2 자동 배포 PIVOT** — OIDC + IAM Role + CodeDeploy 모두 봉인(IAM Role 생성 차단 + IAMFullAccess attach 차단 + Access Key 차단). 표의 "GitHub Actions ↔ AWS 인증: OIDC + IAM Role" 행 obsolete. 신 사양: GHA → GHCR push (`GITHUB_TOKEN`) → main 머지 시 `appleboy/ssh-action`으로 EC2에 SSH(`.pem` GH Secret) 직결 → `docker pull` + healthcheck + 자동 롤백. 단일 EC2 docker compose. 외부 SaaS(Cloudflare Tunnel/Tailscale) 가입 회피 결정으로 22번 인바운드는 0.0.0.0/0 + defense-in-depth 6 layer로 안전화. 신 사양 source of truth: epics.md Story 5.2 PIVOT 박스 + 5-2 스토리 파일.
 
 | 결정 | 선택 | 근거 |
 |------|------|------|
@@ -246,7 +251,7 @@ npm install @tanstack/react-query axios recharts \
 | Terraform 버전 핀 | `>= 1.14, < 2.0` | 2026-04 시점 최신 안정 1.15.0. 1.14에서 native test verbose 개선 + `terraform query` 추가. S3 native locking은 1.10+에서 안정화. 2.x 메이저 출시 전까지 자유롭게 마이너 업데이트. |
 | AWS provider 버전 핀 | `~> 6.0` (2026-04 시점 최신 6.43.x) | 2025-06-18 GA. multi-region 지원 강화, OpsWorks·SimpleDB 제거(우리 영향 없음), boolean attribute 엄격화(`"0"`/`"1"` 불가 — 사소). 메이저 변경 전까지 핀. |
 | terraform-aws-modules 버전 핀 | vpc `~> 6.6` (실제 6.6.1) · rds `~> 7.2` (실제 7.2.0) · ec2-instance `~> 6.4` (실제 6.4.0) · security-group `~> 5.3` (실제 5.3.1) | 모듈별 메이저 변경 시 깨질 수 있어 핀. 업그레이드는 별도 PR로 격리. RDS 모듈은 v7 메이저로 한참 전에 진입했으니 v3로 잘못 핀하지 않도록 주의. |
-| 월 인프라 예산 | **30만원 (~$215, 환율 1400원/USD 기준)** | 학생 프로젝트 가용 예산. VARCO API와 프록시(IPRoyal/ThorData 등)는 별도 카테고리로 가정. **본 표의 EC2/RDS 가격은 미국 region 기준** — ap-northeast-2(Seoul) 등 한국 region 채택 시 일반적으로 5~15% 더 비싸 합계가 $230~245(약 32~34만원)로 증가할 수 있음. SPIKE 5.0 #3(Region·DNS·TLS) 결정 후 정확화 필수. BERT 도입 시 c6g 인스턴스 추가 비용 발생 — 도입 결정 시 예산 재협의 필요. |
+| 월 인프라 예산 | **30만원 (~$215, 환율 1400원/USD 기준)** | 학생 프로젝트 가용 예산. VARCO API와 프록시(IPRoyal/ThorData 등)는 별도 카테고리로 가정. **본 표의 EC2/RDS 가격은 미국 region(`us-east-1`) 기준** — 2026-05-06 region 정정 PIVOT으로 us-east-1 확정(학생 계정 제약), 한국 region 가산 추정치(이전 5~15% 가산 가정)는 무효. BERT 도입 시 c6g 인스턴스 추가 비용 발생 — 도입 결정 시 예산 재협의 필요. |
 | EC2 사이징 — Crawler | **r6g.large** (2 vCPU, 16GB, arm64, 메모리 최적화) — 약 $73.6/월 | Crawl4AI(Playwright Chromium 200MB/instance) + FlareSolverr Docker + (옵션 A 시) BeautifulSoup/lxml 전처리. 동시 8 사이트 + MemoryAdaptiveDispatcher가 RAM 보고 동시성 자동 조절. RAM 우선 정책에 따라 t4g.large(8GB) 대신 r6g.large 채택. 1시간 주기 전제 — 15분 결정 시 m6g.xlarge 상향 검토. |
 | EC2 사이징 — Detection | **t4g.medium** (2 vCPU, 4GB, arm64, burstable) — 약 $24.5/월 | VARCO API 호출 위주(외부 LLM)라 자체 연산 부담 작음. BERT 도입 결정 시 c6g.large 이상으로 상향 — 도입 시 예산 재산정. GPU(g4dn) 인스턴스는 30만원 예산 초과로 사용 불가. |
 | EC2 사이징 — API | **t4g.large** (2 vCPU, 8GB, arm64, burstable) — 약 $49.0/월 | Java Spring(JVM heap ~500MB) + Redis docker-compose + Prometheus + Grafana + Nginx + (옵션 B 시) 전처리 Worker 동거 — 4GB는 OOM 리스크. |

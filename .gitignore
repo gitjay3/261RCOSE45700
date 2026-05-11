@@ -80,5 +80,8 @@ id_ed25519.pub
 *credentials*.json
 .aws-vault/
 
+# Story 5.2 — EC2 /opt/app/secrets/ 미러 폴더가 레포에 실수로 들어가는 것 방지.
+secrets/
+
 # Claude agents
 .agents/

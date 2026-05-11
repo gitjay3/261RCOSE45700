@@ -4,7 +4,7 @@ Status: closed (ClickOps demo)
 
 > **2026-05-06 PIVOT (최종) — Terraform IaC 자체 폐기, ClickOps로 전환.**
 >
-> 학생 IAM 사용자(`arn:aws:iam::965814678898:user/ku-hys-02`)에서 다음 통로가 모두 차단됨이 확인됨:
+> 학생 IAM 사용자(`arn:aws:iam::<aws-account-id>:user/<student-iam-user>`)에서 다음 통로가 모두 차단됨이 확인됨:
 > 1. **IAM Access Key 발급 차단** (`iam:ListAccessKeys` 권한 거부, 2026-05-04 확인) — 로컬 머신에서 `aws configure` 사용 불가
 > 2. **CloudShell explicit deny** (`cloudshell:CreateEnvironment`, 2026-05-06 확인) — 콘솔 안에서 셸 사용 불가
 > 3. **IAM Role 생성 차단** (학생 본인 확인) — GitHub Actions OIDC + AssumeRole 통로도 불가

@@ -1,0 +1,311 @@
+name: deploy
+
+# Story 5.2 — main 머지 시 GHCR push → SSH 직결 배포 + healthcheck + 자동 롤백.
+# OIDC / IAM Role / CodeDeploy 모두 봉인된 학생 계정 제약 하에서의 PIVOT 사양.
+
+on:
+  # 자동 배포 트리거 임시 비활성 — 운영 셋업(.env/secrets/RDS) 검증 전까지는
+  # workflow_dispatch로만 수동 트리거. 운영 준비 완료 시 push 블록 주석 해제.
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: "롤백 대상 git SHA (비우면 최신 main 배포)"
+        required: false
+        default: ""
+
+# 배포 워크플로는 직렬 처리 — state 일관성 보호. CI(`ci.yml`)와 의도적으로 다름.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) lint-test gate — branch protection 우회(workflow_dispatch 등) 시에도 안전.
+  # ---------------------------------------------------------------------------
+  lint-test-crawler:
+    uses: ./.github/workflows/crawler.yml
+
+  lint-test-detection:
+    uses: ./.github/workflows/detection.yml
+
+  lint-test-api:
+    uses: ./.github/workflows/api.yml
+
+  lint-test-dashboard:
+    uses: ./.github/workflows/dashboard.yml
+
+  # ---------------------------------------------------------------------------
+  # 2) BuildKit multi-stage + GHCR registry cache mode=max.
+  #    rollback_to 입력 시에는 build-push 생략 — 기존 :sha 이미지를 그대로 사용.
+  # ---------------------------------------------------------------------------
+  build-push:
+    name: build-push (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    if: ${{ inputs.rollback_to == '' }}
+    needs:
+      - lint-test-crawler
+      - lint-test-detection
+      - lint-test-api
+      - lint-test-dashboard
+    strategy:
+      # 한 서비스 빌드 실패 시 다른 서비스의 진행 중인 :latest push가 중단되어
+      # GHCR :latest 태그가 서비스별로 어긋나는 사고를 막는다.
+      fail-fast: false
+      matrix:
+        service: [crawler, detection, api, dashboard]
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      registry_path: ${{ steps.meta.outputs.registry_path }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compute image metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          REPO="$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')"
+          REG_PATH="ghcr.io/${OWNER}/${REPO}"
+          TAG="${{ github.sha }}"
+          echo "registry_path=${REG_PATH}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (${{ matrix.service }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          # main push 시 :sha + :latest 동시 태깅. workflow_dispatch도 동일.
+          tags: |
+            ${{ steps.meta.outputs.registry_path }}/${{ matrix.service }}:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.registry_path }}/${{ matrix.service }}:latest
+          # mode=max — 멀티스테이지 모든 레이어 캐싱 (inline cache는 min만 가능 → 미사용).
+          cache-from: type=registry,ref=${{ steps.meta.outputs.registry_path }}/${{ matrix.service }}:cache
+          cache-to: type=registry,ref=${{ steps.meta.outputs.registry_path }}/${{ matrix.service }}:cache,mode=max
+          provenance: false
+
+  # ---------------------------------------------------------------------------
+  # 3) SSH .pem GH Secret 직결 배포 + healthcheck + 자동 롤백 (단일 호스트).
+  #
+  # 2026-05-07 3차 PIVOT: 학생 IAM SCP가 cross-SG ingress(redis 6379 source =
+  # crawler-sg)를 차단해 2대 분리 불가 → 단일 EC2 합반으로 회귀. redis 트래픽이
+  # docker network 내부에 머물러 SG 룰 불필요. mem_limit는 hard cap이 아니라
+  # 가벼운 격리 hint (16GB 환경).
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # 학생 collaborator 권한이 GH Environment 만들기 차단 → Repository secrets로 우회.
+    # environment 보호 게이트(required reviewers 등) 잃지만 학생 프로젝트 규모에서 수용.
+    needs: [build-push]
+    # rollback_to 입력 시 build-push가 skip되므로, success || skipped 둘 다 허용.
+    if: ${{ !cancelled() && (needs.build-push.result == 'success' || needs.build-push.result == 'skipped') }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve target tag
+        id: target
+        env:
+          ROLLBACK: ${{ inputs.rollback_to }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ROLLBACK:-}" ]; then
+            # SHA 형식 검증 — workflow_dispatch가 collaborator에게 열려 있어
+            # 임의 문자열이 IMAGE_TAG로 흘러 들어가는 경로를 차단한다.
+            case "$ROLLBACK" in
+              ''|*[!a-fA-F0-9]*)
+                echo "::error::Invalid rollback_to '$ROLLBACK' — must be hex SHA"
+                exit 1
+                ;;
+            esac
+            LEN=${#ROLLBACK}
+            if [ "$LEN" -lt 7 ] || [ "$LEN" -gt 40 ]; then
+              echo "::error::Invalid rollback_to length ($LEN) — expected 7..40"
+              exit 1
+            fi
+            echo "image_tag=${ROLLBACK}" >> "$GITHUB_OUTPUT"
+            echo "::notice::Rollback mode — deploying tag ${ROLLBACK}"
+          else
+            echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          REPO="$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')"
+          echo "registry_path=ghcr.io/${OWNER}/${REPO}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload compose.prod.yml to EC2
+        # SHA-pinned for supply-chain integrity (action receives EC2 .pem).
+        # fingerprint 검증 생략 — 학생 프로젝트 trade-off: MITM 방어/EC2 host key 변경
+        # 감지를 포기하는 대신 운영 단순화. EC2 교체 시점에 EC2_HOST secret 갱신만으로
+        # 동작하도록 의도. (deferred-work에 host fingerprint sanity check 항목 닫음)
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "infra/compose.prod.yml"
+          target: "/opt/app/compose.prod.yml"
+          overwrite: true
+
+      - name: Deploy + healthcheck + auto-rollback
+        # SHA-pinned for supply-chain integrity (action receives EC2 .pem + GHCR token).
+        # fingerprint 검증 생략 — 위 step과 동일한 trade-off.
+        uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0  # v1.2.4
+        env:
+          IMAGE_TAG: ${{ steps.target.outputs.image_tag }}
+          REGISTRY_PATH: ${{ steps.target.outputs.registry_path }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          envs: IMAGE_TAG,REGISTRY_PATH,GHCR_USER,GHCR_TOKEN
+          script: |
+            set -euo pipefail
+
+            DOCKER="$(command -v docker)" || { echo "::error::docker not found in PATH"; exit 1; }
+            DCOMPOSE="$DOCKER compose"
+            DATE="$(command -v date)"
+            SLEEP="$(command -v sleep)"
+            CAT="$(command -v cat)"
+            ECHO="$(command -v echo)"
+
+            # GHCR 자격증명이 ~/.docker/config.json에 영속되지 않도록 종료 시 logout.
+            cleanup() { "$DOCKER" logout ghcr.io >/dev/null 2>&1 || true; }
+            trap cleanup EXIT
+
+            # 두 번째 방어선 — input 검증을 한 번 더 (GHA env가 검증을 우회한 경로 대비).
+            case "$IMAGE_TAG" in
+              ''|*[!a-fA-F0-9]*)
+                $ECHO "::error::Invalid IMAGE_TAG (non-hex)"
+                exit 1
+                ;;
+            esac
+            TAG_LEN=${#IMAGE_TAG}
+            if [ "$TAG_LEN" -lt 7 ] || [ "$TAG_LEN" -gt 40 ]; then
+              $ECHO "::error::IMAGE_TAG length ($TAG_LEN) out of bounds"
+              exit 1
+            fi
+
+            cd /opt/app
+
+            # GHCR login — 명시적으로 fatal. 캐시된 자격증명에 의존하지 않는다.
+            if ! printf '%s' "$GHCR_TOKEN" | "$DOCKER" login ghcr.io -u "$GHCR_USER" --password-stdin; then
+              $ECHO "::error::GHCR login failed"
+              exit 2
+            fi
+            # 토큰을 셸 env에서 즉시 제거 — /proc/<pid>/environ 노출 창 단축.
+            unset GHCR_TOKEN
+
+            PREV_TAG="$($CAT /opt/app/IMAGE_TAG 2>/dev/null || true)"
+            $ECHO "previous_tag=${PREV_TAG:-<none>}"
+            $ECHO "new_tag=${IMAGE_TAG}"
+
+            export IMAGE_TAG REGISTRY_PATH
+
+            # 일시적 GHCR 5xx/rate-limit 대비 3-회 재시도.
+            PULL_OK=0
+            for i in 1 2 3; do
+              if $DCOMPOSE -f /opt/app/compose.prod.yml pull; then
+                PULL_OK=1
+                break
+              fi
+              $ECHO "::warning::compose pull attempt $i failed, retrying in 5s..."
+              $SLEEP 5
+            done
+            if [ "$PULL_OK" != "1" ]; then
+              $ECHO "::error::compose pull failed after 3 attempts"
+              exit 3
+            fi
+
+            $DCOMPOSE -f /opt/app/compose.prod.yml up -d --remove-orphans
+
+            # crawler start_period=90s + 콜드 부팅 여유를 고려해 deadline 180s.
+            DEADLINE=$(( $($DATE +%s) + 180 ))
+            ALL_OK=0
+            while [ $($DATE +%s) -lt $DEADLINE ]; do
+              $SLEEP 3
+              ALL_OK=1
+              for SVC in redis crawler detection api dashboard; do
+                CID=$($DCOMPOSE -f /opt/app/compose.prod.yml ps -q "$SVC" || true)
+                if [ -z "$CID" ]; then ALL_OK=0; break; fi
+                STATUS=$("$DOCKER" inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CID" 2>/dev/null || $ECHO unknown)
+                $ECHO "  ${SVC}: ${STATUS}"
+                if [ "$STATUS" != "healthy" ]; then ALL_OK=0; fi
+              done
+              if [ "$ALL_OK" = "1" ]; then break; fi
+            done
+
+            if [ "$ALL_OK" = "1" ]; then
+              # IMAGE_TAG 마커는 "달라졌을 때만" 갱신 — 같은 SHA 재배포가
+              # last-known-good을 erase하는 사고를 막는다. 별도 audit log는
+              # 항상 append.
+              if [ "$IMAGE_TAG" != "${PREV_TAG:-}" ]; then
+                $ECHO "$IMAGE_TAG" > /opt/app/IMAGE_TAG
+              fi
+              $ECHO "$($DATE -u +%FT%TZ) deploy ${IMAGE_TAG}" >> /opt/app/IMAGE_TAG.log
+              $ECHO "::notice::Deployed ${IMAGE_TAG} successfully."
+              exit 0
+            fi
+
+            # ---- Rollback path ----
+            FAILED_TAG="$IMAGE_TAG"
+
+            if [ -z "${PREV_TAG:-}" ]; then
+              $ECHO "::error::Healthcheck failed and no /opt/app/IMAGE_TAG marker exists — refusing to roll back to ':latest' (which is the same just-pushed broken image). Manual intervention required."
+              exit 4
+            fi
+            if [ "$PREV_TAG" = "$FAILED_TAG" ]; then
+              $ECHO "::error::Healthcheck failed and previous tag == current tag — refusing to redeploy the same broken image. Manual intervention required."
+              exit 4
+            fi
+
+            $ECHO "::error::Healthcheck failed within 180s — rolling back ${FAILED_TAG} → ${PREV_TAG}"
+            export IMAGE_TAG="$PREV_TAG"
+            # NOTE: || true 없이 — 롤백 pull 실패는 무음으로 넘기지 않는다.
+            $DCOMPOSE -f /opt/app/compose.prod.yml pull
+            $DCOMPOSE -f /opt/app/compose.prod.yml up -d --remove-orphans
+
+            # 롤백도 실제로 healthy해졌는지 다시 확인. "롤백 했다"가 아니라 "롤백 후 정상"을 검증.
+            RB_DEADLINE=$(( $($DATE +%s) + 120 ))
+            RB_OK=0
+            while [ $($DATE +%s) -lt $RB_DEADLINE ]; do
+              $SLEEP 3
+              RB_OK=1
+              for SVC in redis crawler detection api dashboard; do
+                CID=$($DCOMPOSE -f /opt/app/compose.prod.yml ps -q "$SVC" || true)
+                if [ -z "$CID" ]; then RB_OK=0; break; fi
+                STATUS=$("$DOCKER" inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CID" 2>/dev/null || $ECHO unknown)
+                if [ "$STATUS" != "healthy" ]; then RB_OK=0; fi
+              done
+              if [ "$RB_OK" = "1" ]; then break; fi
+            done
+
+            $ECHO "$($DATE -u +%FT%TZ) rollback ${FAILED_TAG}->${PREV_TAG} ok=${RB_OK}" >> /opt/app/IMAGE_TAG.log
+
+            if [ "$RB_OK" = "1" ]; then
+              $ECHO "::error::Rolled back to ${PREV_TAG}. Investigate failed deploy ${FAILED_TAG}."
+              exit 1
+            fi
+
+            $ECHO "::error::Rollback to ${PREV_TAG} ALSO failed within 120s — manual intervention required. EC2 state undefined."
+            exit 5

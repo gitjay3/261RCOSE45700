@@ -652,7 +652,7 @@ AWS 프로덕션 인프라 프로비저닝(Story 5.3)에 들어가기 전에 VPC
 **Then** 다음 10개 항목에 대한 결정과 근거가 모두 기록된다:
 1. **VPC 토폴로지** — AZ 개수(1개 vs 2개+), 퍼블릭/프라이빗 서브넷 분리 여부, NAT Gateway 사용 여부 (비용 vs 보안 trade-off)
 2. **dashboard 호스팅** — S3 + CloudFront / Vercel / Cloudflare Pages / 별도 EC2 중 선택 + 근거
-3. **Region · DNS · TLS** — AWS region (ap-northeast-2 등), 도메인 사용 여부, ACM 인증서 발급 전략
+3. **Region · DNS · TLS** — AWS region **`us-east-1` 확정 (2026-05-06 학생 계정 <student-iam-user> 제약 — 다른 region에서 자원 생성 거부, 이전 ap-northeast-2 가정은 잘못된 가정)**, 도메인 사용 여부, ACM 인증서 발급 전략
 4. **Load Balancer** — API EC2 단일 인스턴스 vs ALB 도입 (HTTPS 종단 / 헬스체크 / 향후 스케일 대비)
 5. **모니터링 인프라 위치** — Prometheus/Grafana 호스팅 위치 (별도 EC2 / API EC2 공존 / Managed Grafana / docker-compose)
 6. **로그 수집 전략** — CloudWatch Logs 통합 / 자체 stack(Loki) / structured_logger의 stdout을 어떻게 수집할지
@@ -686,11 +686,19 @@ API 응답 시간·에러율·Redis 큐 깊이가 Grafana에서 실시간으로 
 
 ### Story 5.2: GitHub Actions 완전 통합 CI/CD 파이프라인
 
+> **2026-05-06 PIVOT — OIDC + IAM Role 자동 배포 봉인, SSH `.pem` GH Secret으로 전환.** 학생 IAM 사용자 `<student-iam-user>`에서 (1) IAM Role 신규 생성 차단 (2) IAMFullAccess 등 권한 정책 attach 화이트리스트 외 차단 (`AmazonAPIGatewayPushToCloudWatchLogs` / `AWSCloud9SSMInstanceProfile` / `AWSLambdaBasicExecutionRole` 3개만 허용 — 모두 service role용) (3) AWS Access Key 발급 차단 — GHA→AWS 자동 배포 통로(OIDC / Access Key / CodeDeploy) 모두 봉인 확인. EC2 접근 통로도 SSM Session Manager / EC2 Instance Connect 모두 권한 차단되어 **SSH `.pem` 키만 가능** 확인. 외부 SaaS(Cloudflare Tunnel / Tailscale) 가입 회피 결정으로 22번 인바운드는 `0.0.0.0/0` + defense-in-depth 6 layer로 안전화.
+>
+> **신 사양**: GHA → Docker 이미지 빌드 → GHCR push (`GITHUB_TOKEN` + `permissions: packages: write`) → main 머지 시 `appleboy/ssh-action`으로 EC2에 SSH(`.pem` GH Secret 등록) 직결 → `docker pull` + healthcheck + 자동 롤백. **단일 EC2 docker compose** 운영 (Story 5.3 PIVOT으로 EC2 1대로 통합). 자동 배포 안전장치: `concurrency: deploy-prod / cancel-in-progress: false`, branch protection (PR + 1 리뷰, direct push 금지, auto-merge OFF), GitHub Environment "production" Secret 격리, host fingerprint verification, BuildKit registry cache `mode=max`, dependabot.yml 제거. 12 AC (이전 권장 14 AC에서 GHA 전용 deploy 키 분리 + deploy 전용 SSH 사용자 제거 — 사용자 결정으로 단일 `.pem` 사용).
+>
+> **신 사양 source of truth**: 5-2 스토리 파일 (`_bmad-output/implementation-artifacts/5-2-*.md`, 작성 예정).
+>
+> **아래 AC는 historical record** — OIDC + 4개 서브시스템 분산 배포 + JAR/Nginx 분리 가정은 모두 stale.
+
 개발자로서,  
 4개 서브시스템의 CI 파이프라인이 통합 테스트·빌드·AWS 배포까지 자동화되기를 원한다,  
 그래서 코드 푸시만으로 각 EC2에 최신 버전이 배포된다.
 
-**Acceptance Criteria:**
+**Acceptance Criteria:** _(2026-05-06 PIVOT 후 historical — 위 PIVOT 박스 참조)_
 
 **Given** main 브랜치에 코드가 push될 때  
 **When** GitHub Actions 워크플로우가 실행되면  
@@ -701,7 +709,7 @@ API 응답 시간·에러율·Redis 큐 깊이가 Grafana에서 실시간으로 
 
 ### Story 5.3: AWS 프로덕션 인프라 프로비저닝
 
-> **2026-05-06 PIVOT — Terraform IaC 폐기, ClickOps로 전환.** 학생 IAM 사용자(`ku-hys-02`)에서 자격증명 통로 0개(IAM Access Key 차단 + CloudShell `cloudshell:CreateEnvironment` deny + IAM Role 생성 deny)로 Terraform apply 자체 불가능 — 코드/CI/lint 자산 일괄 제거(commit `13d96a9`). 데모는 ClickOps + 스크린샷, 코드는 git history(`b7e24d3`, `bd172d9`) 보존. 아래 AC는 **IaC 시도 시점의 historical record**이며, ClickOps 환경에서는 **인프라 사양(EC2/RDS/SG/IAM 권한 패턴)만 동일하게 적용**하고 Terraform/CI 자동화 관련 AC(#1, #2, #14, #16, #17, #20)는 적용 불가. 상세는 Story 5.3 결과 문서 + sprint-status.yaml 참조.
+> **2026-05-06 PIVOT — Terraform IaC 폐기, ClickOps로 전환.** 학생 IAM 사용자(`<student-iam-user>`)에서 자격증명 통로 0개(IAM Access Key 차단 + CloudShell `cloudshell:CreateEnvironment` deny + IAM Role 생성 deny)로 Terraform apply 자체 불가능 — 코드/CI/lint 자산 일괄 제거(commit `13d96a9`). 데모는 ClickOps + 스크린샷, 코드는 git history(`b7e24d3`, `bd172d9`) 보존. 아래 AC는 **IaC 시도 시점의 historical record**이며, ClickOps 환경에서는 **인프라 사양(EC2/RDS/SG/IAM 권한 패턴)만 동일하게 적용**하고 Terraform/CI 자동화 관련 AC(#1, #2, #14, #16, #17, #20)는 적용 불가. 상세는 Story 5.3 결과 문서 + sprint-status.yaml 참조.
 >
 > **전제 조건:** SPIKE 5.0(배포 토폴로지 및 운영 인프라 상세 설계)이 완료된 상태에서 시작. SPIKE 결과(`docs/infrastructure-design.md`)가 본 스토리 Terraform 모듈 작성의 입력.
 

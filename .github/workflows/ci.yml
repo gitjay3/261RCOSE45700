@@ -1,0 +1,54 @@
+name: ci
+
+# Aggregator that always runs (no path filter) so a single required check —
+# `ci / aggregator` — covers all 4 subsystems. Resolves the Story 1.5 deferred
+# strict gate (docs/ci-setup.md → "Paths 필터와 Required Status Checks 주의사항").
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  crawler:
+    uses: ./.github/workflows/crawler.yml
+
+  detection:
+    uses: ./.github/workflows/detection.yml
+
+  api:
+    uses: ./.github/workflows/api.yml
+
+  dashboard:
+    uses: ./.github/workflows/dashboard.yml
+
+  aggregator:
+    name: aggregator
+    runs-on: ubuntu-latest
+    needs: [crawler, detection, api, dashboard]
+    # Always evaluate so that a skipped/failed dependency surfaces here too.
+    if: ${{ always() }}
+    steps:
+      - name: Verify all subsystem checks succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # 결과(.result)만 추출해서 로그 — 향후 reusable workflow가 outputs로
+          # 민감정보를 노출하더라도 aggregator 로그가 그대로 dump하지 않도록.
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          # Whitelist: 모든 needs.<job>.result == "success"여야만 통과.
+          # blacklist 방식은 새로운 result type(action_required 등)이나 빈 result를
+          # 무심코 통과시키는 footgun이라 jq -e all() 로 명시적 단언.
+          if ! echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' >/dev/null; then
+            echo "::error::One or more subsystem lint-test jobs did not succeed."
+            exit 1
+          fi
+          echo "All 4 subsystems passed."

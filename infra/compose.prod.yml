@@ -1,0 +1,143 @@
+# Story 5.2 — 단일 EC2 (`tracker-prod`) docker compose.
+#
+# 2026-05-07 3차 PIVOT 결정 흐름:
+#   1차) 단일 EC2 가정으로 작성
+#   2차) t3.medium 4GB OOM 우려 → 2대 분리(crawler/app)로 보강
+#   3차) 학생 IAM SCP가 cross-SG ingress(app-sg에 redis 6379 source = crawler-sg)
+#        를 차단 → 2대 분리 불가 → 단일 EC2 회귀, 대신 t3.medium → **t3.xlarge
+#        (16GB)** 상향으로 메모리 여유 확보 (월 ~$124, budget $215 안에서 OK).
+#
+# 컨테이너: redis + crawler + detection + api + dashboard (5개)
+# 노출 포트: 22 (SSH) + 80 (dashboard) + 8080 (api). redis 6379는 호스트 노출 X
+# (cross-SG ingress 차단 우회는 docker network 내부 통신으로 자연스럽게 해소).
+#
+# 사전 요구사항:
+#   1. /opt/app/                          (chmod 755, owner ubuntu)
+#   2. /opt/app/secrets/varco_api_key     (chmod 600, root:root)
+#   3. /opt/app/secrets/db_password       (chmod 600, root:root)
+#   4. /opt/app/.env                      (chmod 600) — REDIS_HOST=redis (compose 내부)
+#
+# 16GB 환경이라 mem_limit는 hard cap이 아니라 가벼운 격리 hint 수준으로 둠 —
+# 실제로 16GB의 21%(~3.3GB)도 안 쓰지만 한 컨테이너 폭주가 다른 컨테이너 굶기지
+# 않도록 reserve. swap 셋업 불필요.
+#
+# AC #12: 시크릿은 secrets: 마운트 → secret-shim이 env로 변환.
+
+x-image-defaults: &image-defaults
+  pull_policy: always
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: tracker-redis
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - tracker-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  crawler:
+    <<: *image-defaults
+    image: ${REGISTRY_PATH}/crawler:${IMAGE_TAG:-latest}
+    container_name: tracker-crawler
+    env_file: /opt/app/.env
+    environment:
+      SERVICE_NAME: crawler
+    secrets:
+      - varco_api_key
+      - db_password
+    networks:
+      - tracker-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Playwright Chromium이 메모리 hog. 16GB 환경이라 hard cap은 후하게 4GB.
+    mem_limit: 4g
+    mem_reservation: 1g
+
+  detection:
+    <<: *image-defaults
+    image: ${REGISTRY_PATH}/detection:${IMAGE_TAG:-latest}
+    container_name: tracker-detection
+    env_file: /opt/app/.env
+    environment:
+      SERVICE_NAME: detection
+    secrets:
+      - varco_api_key
+      - db_password
+    networks:
+      - tracker-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 1g
+    mem_reservation: 256m
+
+  api:
+    <<: *image-defaults
+    image: ${REGISTRY_PATH}/api:${IMAGE_TAG:-latest}
+    container_name: tracker-api
+    env_file: /opt/app/.env
+    environment:
+      SERVICE_NAME: api
+      # 시크릿(DB_PASSWORD)은 /run/secrets/db_password 마운트 → secret-shim이
+      # 컨테이너 안에서 DB_PASSWORD env로 export. application.properties는
+      # ${DB_PASSWORD}를 직접 읽도록 구성되어 있다 (AC #12 — env 직접 주입 금지).
+      # ⚠ compose `environment:`로 SPRING_DATASOURCE_PASSWORD를 주입하지 말 것:
+      #    compose interpolation은 호스트 셸 env에서 평가되며, /opt/app/.env는
+      #    의도적으로 DB_PASSWORD를 포함하지 않으므로 default 문자열로 떨어진다.
+      # 16GB 환경 → JVM heap 1.5~2GB로 충분. G1GC 기본 사용.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+    secrets:
+      - db_password
+    ports:
+      - "8080:8080"
+    networks:
+      - tracker-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 2g
+    mem_reservation: 768m
+
+  dashboard:
+    <<: *image-defaults
+    image: ${REGISTRY_PATH}/dashboard:${IMAGE_TAG:-latest}
+    container_name: tracker-dashboard
+    ports:
+      - "80:80"
+    networks:
+      - tracker-net
+    # nginx-alpine + Vite 번들 워커 burst 시 OOM-kill 방지를 위해 256m로 상향.
+    mem_limit: 256m
+
+secrets:
+  varco_api_key:
+    file: /opt/app/secrets/varco_api_key
+  db_password:
+    file: /opt/app/secrets/db_password
+
+networks:
+  tracker-net:
+    driver: bridge
+
+volumes:
+  redis_data:

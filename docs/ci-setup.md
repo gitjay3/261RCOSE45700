@@ -1,9 +1,13 @@
 # CI / Branch Protection Setup
 
 Story 1.5의 GitHub Actions 워크플로우 4종은 서브시스템별 lint/test/build를
-자동 실행합니다. PR 머지를 실제로 블로킹하는 strict required check 구성은
-path-filtered workflow의 pending check 문제 때문에 Story 5.2에서 aggregator 방식으로
-구성합니다.
+자동 실행합니다. Story 5.2가 strict required check를 `ci.yml` aggregator
+워크플로로 추가했고, 자동 배포 통로(`deploy.yml`)도 같은 reusable workflow를
+재사용합니다.
+
+> **Story 5.2 시점 갱신**: 본 문서가 정의했던 "Story 5.2 Strict" 단계가
+> 실제 코드로 들어왔습니다. Story 1.5 시점의 deferred 항목(strict required
+> check)은 아래 [§Story 5.2 변경](#story-52-aggregator--배포-게이트-추가) 참조.
 
 ## 워크플로우 4종
 
@@ -16,16 +20,22 @@ path-filtered workflow의 pending check 문제 때문에 Story 5.2에서 aggrega
 
 각 워크플로우는 자기 파일(`.github/workflows/*.yml`) 변경 시에도 트리거됩니다.
 
-## Branch Protection 절차 (Story 1.5 MVP)
+## Branch Protection 절차 (Story 5.2 Strict)
 
 1. GitHub repo → **Settings** → **Branches**
 2. **Branch protection rules** → **Add rule** (또는 기존 `main` 규칙 편집)
 3. **Branch name pattern**: `main`
 4. 다음 옵션 활성화:
-   - ☑ **Require a pull request before merging**
+   - ☑ **Require a pull request before merging** (1 approval)
+   - ☑ **Require status checks to pass**
+     - Required: **`ci / aggregator`** (단일 strict gate — 4개 서브시스템 결과를 합산)
+     - 옵션: `deploy / deploy` (배포 실패 시 후속 PR 차단)
    - ☑ **Do not allow bypassing the above settings**
-5. Story 1.5에서는 4개 path-filtered workflow를 required check로 등록하지 않습니다.
-   PR 리뷰어가 변경 경로에 맞는 Actions 결과를 확인합니다.
+   - **Allow auto-merge: OFF** (자동 배포와 충돌 방지)
+
+> Story 1.5 MVP에서는 path-filtered workflow의 pending 문제로 strict required
+> check 등록을 보류했습니다. Story 5.2가 `ci.yml` aggregator를 추가하면서
+> 단일 진입점이 생겨 이 보류가 해소됐습니다.
 
 ## Paths 필터와 Required Status Checks 주의사항
 
@@ -33,13 +43,21 @@ path-filtered workflow의 pending check 문제 때문에 Story 5.2에서 aggrega
 실행되지 않습니다**. GitHub Branch Protection은 실행되지 않은 required check를
 "pending"으로 간주해 머지를 블로킹할 수 있습니다.
 
-대응 방향:
+### Story 5.2 Aggregator 도입
 
-- **Story 1.5 MVP**: 4 워크플로우를 required로 등록하지 않고, PR 리뷰어가 각 status를
-  수동 확인합니다.
-- **Story 5.2 Strict**: 모든 PR에서 항상 실행되는 `ci-aggregator.yml` 메타 워크플로우를
-  추가하고, aggregator check만 required로 등록합니다. 4 워크플로우는 path filter로 실제
-  일을 하고 aggregator가 결과를 합산합니다.
+`ci.yml`이 모든 PR + push:main에서 path filter 없이 항상 실행되며, 4개
+서브시스템 reusable workflow(`crawler.yml`/`detection.yml`/`api.yml`/
+`dashboard.yml`)를 `uses:`로 호출합니다. 마지막 `aggregator` 잡이
+`needs: [crawler, detection, api, dashboard]` + `if: always()`로 결과를 합산합니다.
+
+| 워크플로우 | 트리거 | 역할 |
+|---|---|---|
+| `crawler.yml` / `detection.yml` / `api.yml` / `dashboard.yml` | path filter (PR/push:main) **+** `workflow_call` | 서브시스템별 빠른 lint/test (path 변경 시) |
+| `ci.yml` | PR + push:main, **no path filter** | 4개 reusable 호출 + `aggregator` strict gate |
+| `deploy.yml` | push:main + `workflow_dispatch` | 같은 reusable 4종 호출 후 GHCR 빌드 + EC2 배포 |
+
+main 머지 1회당 reusable workflow 4종이 두 번 실행되는 비용이 있지만(`ci.yml`
++ `deploy.yml`), 배포 안전성 우선으로 수용합니다.
 
 ## 시크릿 관리
 
@@ -62,3 +80,14 @@ path-filtered workflow의 pending check 문제 때문에 Story 5.2에서 aggrega
 1. 어떤 워크플로우가 트리거됐는지 확인 (paths 필터 동작)
 2. 변경 경로에 해당하는 워크플로우의 `lint-test` job이 통과했는지 확인
 3. 의도적으로 lint 위반 commit을 한 번 push해 빨강 → revert로 검증
+
+## Story 5.2 Aggregator + 배포 게이트 추가
+
+Story 1.5 시점 deferred 항목(strict required check)이 본 스토리에서 다음과 같이 해소:
+
+- `ci.yml` (aggregator) 추가 — 모든 PR/push:main에서 실행, single required check.
+- 기존 4개 워크플로에 `workflow_call:` 트리거 추가 (기존 path-filter 트리거와 공존).
+- `deploy.yml`이 동일 reusable 4종을 게이트로 호출 — `workflow_dispatch` 우회 시에도 lint-test 재검증.
+
+운영 절차/시크릿/롤백 등 배포 관련 자세한 내용은
+[`docs/deployment.md`](./deployment.md) 참조.

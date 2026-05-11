@@ -10,6 +10,8 @@ on:
     paths:
       - 'dashboard/**'
       - '.github/workflows/dashboard.yml'
+  # Reusable entry — called by ci.yml (PR strict gate) and deploy.yml (main push gate).
+  workflow_call:
 
 jobs:
   lint-test:

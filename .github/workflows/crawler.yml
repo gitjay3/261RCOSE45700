@@ -12,6 +12,8 @@ on:
       - 'crawler/**'
       - 'shared/**'
       - '.github/workflows/crawler.yml'
+  # Reusable entry — called by ci.yml (PR strict gate) and deploy.yml (main push gate).
+  workflow_call:
 
 jobs:
   lint-test:

@@ -434,6 +434,14 @@ redis-cli -n 0 del posts:dlq
   - [x] 9.3 `localhost:9090` Prometheus targets `tracker-api: up`, `localhost:8080/actuator/prometheus` 메트릭, `localhost:3000` 대시보드 확인
   - [x] 9.4 이 스토리 파일 Dev Notes 하단에 검증 결과 기록 후 Status: `review` 변경
 
+### Review Findings
+
+- [x] [Review][Patch] Redis queue gauge의 0.0 fallback은 유지하되 Redis scrape 실패를 별도 metric/alert로 노출한다. [api/src/main/java/com/tracker/api/metrics/RedisQueueMetrics.java:30]
+- [x] [Review][Patch] DLQ 알림 조건이 `>=1`이 아니라 `>1`로 동작한다. [infra/grafana/provisioning/alerting/dlq-alert.yml:33]
+- [x] [Review][Patch] API p95 패널이 `http_server_requests_seconds_bucket`을 조회하지만 HTTP server request 히스토그램 발행 설정이 없다. [infra/grafana/dashboards/tracker.json:32]
+- [x] [Review][Patch] APScheduler misfire 로그가 `job_id`, `scheduled_run_time`을 구조화 필드로 남기지 않는다. [crawler/src/scheduler/crawl_scheduler.py:220]
+- [x] [Review][Defer] `EVENT_JOB_MISSED` 리스너가 `max_instances=1`로 인한 장시간 실행/중복 실행 skip 경로까지 관측하지는 않는다. [crawler/src/scheduler/crawl_scheduler.py:229] — deferred, pre-existing
+
 ## Dev Agent Record
 
 ### Implementation Notes

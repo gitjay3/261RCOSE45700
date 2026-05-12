@@ -167,6 +167,29 @@ Repo Settings → Branches → **Add rule** (또는 기존 `main` 룰 편집):
 > 지금 거는 순간 첫 PR을 본인이 못 머지함 (`ci / aggregator`가 아직 한 번도
 > 실행된 적 없어서 required check 후보로 안 뜸).
 
+### 2.5.1 RDS readiness 사전 확인 (첫 배포 전 필수)
+
+첫 배포에서 `/opt/app/IMAGE_TAG` cold-start 가드가 자동 롤백을 차단하므로, RDS가 **Available** 상태일 때만 워크플로 실행을 시작해야 한다. 시작 전 검증:
+
+```bash
+# AWS Console — RDS 인스턴스 status = "Available" + Storage status = "OK" 확인
+
+# EC2에서 RDS 접속 검증 (psql client 필요)
+sudo apt install -y postgresql-client
+PGPASSWORD='<rds-master-password>' psql \
+  -h <rds-endpoint> -U postgres -d postgres \
+  --set=sslmode=require \
+  -c "SELECT version();"
+# 기대: PostgreSQL 18.3 ... 라인 출력
+```
+
+연결 실패 시 자가진단:
+- `Connection refused` / `timeout` → RDS 보안그룹 inbound 5432 미허용 (EC2 SG ID source로 추가 — §2.2 RDS 보안그룹 표)
+- `password authentication failed` → master password 오타
+- `SSL connection required` → `--set=sslmode=require` 옵션 누락
+
+**RDS가 Available 상태이고 EC2에서 SELECT version()이 통과해야 첫 배포 시작 가능.** 미통과 상태로 시작하면 Spring Boot startup이 60s start-period 내 Flyway 마이그레이션 실패 → api 컨테이너 unhealthy → 자동 롤백 발화 → IMAGE_TAG cold-start 가드(`exit 4`)로 deploy job fail. 수동 복구 필요.
+
 ### 2.6 EC2 디렉토리 + 시크릿 파일 + .env
 
 EC2에 SSH 접속 후:
@@ -184,12 +207,20 @@ sudo chown root:root /opt/app/secrets/*
 
 # 비-시크릿 환경 (chmod 600 권장)
 sudo tee /opt/app/.env <<'EOF'
+# -------- PostgreSQL --------
 DB_HOST=<rds-endpoint>
 DB_PORT=5432
+# api/application.properties는 ${DB_HOST_PORT:5432}로 읽음 — 둘 다 정의해 두면 안전
+DB_HOST_PORT=5432
 DB_NAME=tracker
 DB_USER=tracker_user
+# RDS는 parameter group `rds.force_ssl=1` 적용 시 비-SSL 거부 — require 필수
+DB_SSL_MODE=require
 
-# 모든 컨테이너가 docker network 내부 redis에 접근 → compose 호스트네임 사용.
+# -------- Redis --------
+# Python 서비스(crawler, detection)는 REDIS_URL 단일 변수를 사용 — compose 내부 호스트네임 `redis`
+REDIS_URL=redis://redis:6379
+# Spring Boot API는 host/port 별도 사용
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_MQ_DB=0
@@ -197,14 +228,28 @@ REDIS_DEDUP_DB=1
 REDIS_RATELIMIT_DB=2
 REDIS_CACHE_DB=3
 
+# -------- VARCO --------
+# detection/src/pipeline/varco_client.py가 직접 읽음. 미설정 시 placeholder URL → DNS 실패
+VARCO_API_BASE_URL=<varco-api-base-url>
+
+# -------- AWS --------
 AWS_REGION=us-east-1
 S3_BUCKET_NAME=<bucket-name>
+# S3 업로드 활성 여부 (crawler/src/storage.py). 학생 IAM이 Crawler EC2에 IAM Role
+# attach 불가능 → 첫 배포에는 false 권장, IAM Role 확보 후 true로 변경
+ENABLE_S3_UPLOAD=false
+
 LOG_LEVEL=INFO
 EOF
 sudo chmod 600 /opt/app/.env
 ```
 
 > `SERVICE_NAME`은 compose 파일에서 서비스별로 주입되므로 `.env`에 두지 않습니다.
+>
+> ⚠️ **위 env 템플릿 누락 시 첫 배포 실패 패턴**:
+> - `REDIS_URL` 누락 → crawler/detection가 `redis://localhost:6379` default로 떨어져 docker network 내부 redis 접속 실패. healthcheck 실패 → 자동 롤백.
+> - `VARCO_API_BASE_URL` 누락 → detection이 `https://varco.placeholder/v1` placeholder hit → DNS NXDOMAIN → translate/classify 100% fail → DLQ 폭증.
+> - `DB_HOST_PORT` 누락은 default `:5432`로 rescue됨 (subtle bug, 표준 포트만 안전).
 
 ---
 

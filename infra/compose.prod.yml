@@ -126,6 +126,12 @@ services:
       - "80:80"
     networks:
       - tracker-net
+    # api healthy 후 dashboard 시작 — nginx /api proxy가 502 Bad Gateway를 받는
+    # cold-start race 회피 (Dockerfile inline nginx.conf에 /api → http://api:8080
+    # proxy_pass 정의됨). 첫 페이지 새로고침 시 frontend → /api/* 호출이 502 받지 않도록.
+    depends_on:
+      api:
+        condition: service_healthy
     # nginx-alpine + Vite 번들 워커 burst 시 OOM-kill 방지를 위해 256m로 상향.
     mem_limit: 256m
 

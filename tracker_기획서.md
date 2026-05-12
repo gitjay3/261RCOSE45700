@@ -80,7 +80,7 @@
 | **탐지 모델 EC2** | AI 탐지 파이프라인 실행 | **BERT [TBD]**, VARCO Translation API, VARCO LLM API, VARCO Vision API, RDS 저장 |
 | **API 서버 EC2** | REST API · 대시보드 · Redis 호스팅 (+ 옵션 B 시 전처리 Worker 구동) | Java Spring, **Redis (docker-compose 공존)**, Prometheus, Grafana, (옵션 B 시 전처리 Worker 프로세스) |
 | **AWS S3** | 원시 데이터 저장 | 크롤링 텍스트 + 이미지 원시 데이터 적재. EC2 간 데이터 공유, 재처리용 아카이브. **VPC Gateway Endpoint를 통해 NAT 통과 없이 접근하여 데이터 전송 비용 절감** |
-| **AWS RDS (PostgreSQL 16.13)** | 탐지 결과 저장 | sources / posts / post_images / detections 4개 테이블. 관계형 구조로 참조 무결성 보장. **db.t3.micro Single-AZ + 7일 automated backup**로 비용 최소화 (학생 계정 SCP가 db.t4g.micro arm64 미가용 강제). 학생 계정 강제로 publicly_accessible=true이지만 SG inbound source 한정 + parameter group `rds.force_ssl=1`로 인터넷 접속 차단. PostgreSQL 16은 minor patch 누적(2년+ 운영)된 성숙 버전 — PG17도 pgvector 등 extension 호환되지만 학생 11주 프로젝트엔 안정성 우선. 8.3절 Class-RAG(pgvector) 확장은 PG16/17 모두에서 지원됨 |
+| **AWS RDS (PostgreSQL 18.3)** | 탐지 결과 저장 | sources / posts / post_images / detections 4개 테이블. 관계형 구조로 참조 무결성 보장. **db.t4g.micro Single-AZ + 7일 automated backup**로 비용 최소화. 학생 계정 강제로 publicly_accessible=true이지만 SG inbound source 한정 + parameter group `rds.force_ssl=1`로 인터넷 접속 차단. **2026-05-11 사용자 콘솔 launch 확인**: 학생 SCP가 RDS 엔진 16/17 노출 안 해 PG 18.3-R1만 가용 (4차 PIVOT). RDS Graviton(arm64) db.t4g.micro는 EC2 SCP와 별개로 학생 계정에서 가용 — 이전 "db.t4g.micro arm64 미가용" 기록은 1차 PIVOT 시 잘못된 가정. 8.3절 Class-RAG(pgvector) 확장은 PG 18에서도 지원 |
 | **Redis (API EC2 내 공존)** | MQ + 캐시 + rate limit | `posts:queue` (main), `posts:processing` (in-flight), `posts:dlq` (실패), `posts:dedup` (해시 SET), `varco:rate_limit` (토큰 버킷), 세션/대시보드 캐시 |
 
 #### 2.1.1.a 인스턴스 사이징 (학생 계정 PIVOT 적용)
@@ -92,7 +92,7 @@
 | **Crawler EC2** | **t3.medium** (x86_64) | 2 | 4GB | 학생 계정 4종 한정 + Graviton 미가용 → 최대 사양 t3.medium 강제. 본래 RAM 우선 정책(16GB 권장)과 12GB 갭 — Crawl4AI(Playwright Chromium 200MB/instance) + FlareSolverr + 전처리가 4GB에 모두 적재되므로 Story 5.4 부하 측정 후 ① 사이트 분리 ② swap 4GB ③ `--single-process` ④ 동시 worker 1 강제 중 택1 (deferred-work) |
 | **Detection EC2** | **t3.medium** (x86_64) | 2 | 4GB | 학생 계정 강제. VARCO API 호출 위주(외부 LLM)라 자체 연산 부담은 작아 다운그레이드 영향 작음. BERT 도입(10.1) 시 학생 계정에선 c5/c6 시리즈 불가능하므로 도입 보류 |
 | **API EC2** | **t3.medium** (x86_64) | 2 | 4GB | 학생 계정 강제. Java Spring(JVM heap ~500MB) + Redis docker-compose + Prometheus + Grafana + Nginx + 전처리 Worker(옵션 B)가 4GB에 동거 → OOM risk 큼. JVM heap 조정 + Prometheus retention 단축 또는 Story 5.4 측정 후 컴포넌트 일부 분리 |
-| **AWS RDS** | **db.t3.micro Single-AZ** | 2 | 1GB | 학생 계정 강제 (db.t4g.micro arm64 미가용). MVP 트래픽(수천~수만 게시글) + 4테이블 단순 스키마 + 인덱스(2.3절) 처리 가능. Multi-AZ는 샌드박스 템플릿 강제로 자동 비활성. publicly_accessible=true 강제 → SG inbound 5432 source 한정 + `rds.force_ssl=1` 보강 |
+| **AWS RDS** | **db.t4g.micro Single-AZ** (PostgreSQL 18.3 arm64) | 2 | 1GB | 2026-05-11 사용자 콘솔 launch 확인 — RDS Graviton(arm64)은 EC2 SCP와 별개로 학생 계정 가용. MVP 트래픽(수천~수만 게시글) + 4테이블 단순 스키마 + 인덱스(2.3절) 처리 가능. Multi-AZ는 샌드박스 템플릿 강제로 자동 비활성. publicly_accessible=true 강제 → SG inbound 5432 source 한정 + `rds.force_ssl=1` 보강 |
 | 비용 | — | — | — | 학교 사전 설정 budget 한도 활용 (Cost Explorer 사후 모니터링). 30만원 자체 Budget 자원은 학생 계정 권한 부족으로 미생성 |
 
 > 📌 **운영 모델 — 콘솔 ClickOps** (2026-05-06 PIVOT). 학생 IAM 자격증명 통로 0개(IAM Access Key + CloudShell + IAM Role 생성 모두 차단)로 Terraform IaC 폐기 후 콘솔 수동 생성으로 전환. 1차 IaC 코드(production 사양 r6g.large 등)는 git history(`b7e24d3`, `bd172d9`)에 보존되어 졸업 후 개인 계정에서 1회 apply 재현 가능. 자세한 사유는 Story 5.3 결과 문서 참조.
@@ -432,9 +432,9 @@ flowchart TD
 | 전처리 | BeautifulSoup/lxml, langdetect, 정규식 키워드 사전 | HTML 파싱·언어 감지·키워드 필터 |
 | 메시지 큐 + 캐시 | **Redis** (API EC2 docker-compose 공존) | `posts:queue`/`processing`/`dlq`/`dedup`, VARCO rate limit, 세션/대시보드 캐시 |
 | AI (VARCO) | **BERT [TBD]**, VARCO LLM, Translation, Vision | 2차 필터(미정) + 다국어 번역 + 불법 분류 + 이미지 탐지 |
-| 클라우드 | AWS EC2 x3 (**t3.medium x86_64** ×3, 학생 계정 SCP 강제), S3 (VPC Gateway Endpoint 미생성 — IGW 경유), RDS PostgreSQL 16.13 (**db.t3.micro Single-AZ**, publicly_accessible=true + SG/force_ssl 보강) | 크롤러·탐지·API 서버 분리 + 데이터 저장. 학생 계정 SCP 다운그레이드 사유 + 학교 사전 설정 budget 활용 — 인스턴스 사이징 근거는 2.1.1.a 참조 |
+| 클라우드 | AWS **단일 EC2 t3.xlarge x86_64 16GB** (3차 PIVOT 회귀), S3 (VPC Gateway Endpoint 미생성 — IGW 경유), RDS **PostgreSQL 18.3 db.t4g.micro arm64 Single-AZ**, publicly_accessible=true + SG/force_ssl 보강 | 4개 서비스 + Redis 단일 호스트 docker compose 공존 + 데이터 저장. EC2 SCP는 Graviton 차단되나 RDS Graviton은 가용. 인스턴스 사이징 근거는 2.1.1.a 참조 |
 | 인프라 관리 | **콘솔 ClickOps** (2026-05-06 PIVOT) | 본래 Terraform IaC 채택. 학생 IAM 자격증명 통로 0개(IAM Access Key 차단 + CloudShell deny + IAM Role 생성 deny)로 apply 불가능 → ClickOps 전환. Terraform 코드는 git history(`b7e24d3`, `bd172d9`) 보존, 졸업 후 개인 계정에서 1회 apply 재현 가능. 자세한 사유는 본 문서 2.1 인프라 박스 + Story 5.3 PIVOT 참조 |
-| EC2 접근·운영 | **AWS SSM Session Manager** (SSH 키 미사용) | EC2에 IAM Instance Role + SSM agent(Amazon Linux 2023 기본 포함). 외부 22번 포트 차단(NFR7), SSH 키 분배·회수 운영 부담 0, 세션 로그 자동 기록(NFR9 충족) |
+| EC2 접근·운영 | **SSH `.pem` only** (Ubuntu 24.04) | 2026-05-06 Story 5-2 PIVOT — 학생 IAM이 SSM Session Manager / EC2 Instance Connect / IAM Role 생성 모두 차단으로 SSM 통로 봉인. 22번 인바운드 `0.0.0.0/0` + ed25519 + fail2ban 3 layer defense-in-depth. host fingerprint verification은 운영 단순화 trade-off로 미적용 (NFR9 세션 로그는 EC2 측 `/var/log/auth.log` + journalctl로 대체) |
 | 보안 baseline | S3 퍼블릭 차단 (콘솔에서 4종 활성) + RDS `rds.force_ssl=1` + 보안 그룹 inbound 최소화 + SSE-S3(AES256) 자동 암호화 | EBS encryption by default / VPC Flow Logs / CloudTrail / KMS CMK / AWS Budgets / AWS Config / SecurityHub / GuardDuty 모두 학생 계정 권한 부족으로 미생성 — 학교 organization trail + region default 정책 의존 (활성 여부는 학교 측 별도 확인 필요). 발견 시 콘솔 1회 enable로 보강 |
 | API 서버 | Java Spring | REST API, 자동 Swagger 문서화 |
 | 대시보드 | React | 탐지 현황·차트·게시글 목록 시각화 |
@@ -560,11 +560,13 @@ LLM 기반 콘텐츠 분류 시스템의 실제 성능 벤치마크(OpenAI Moder
 6. **BERT 2차 필터 도입 여부 및 모델** (4.2, 5.1, 6) — 학생 계정에선 c5/c6 시리즈 + GPU(g4dn) 모두 SCP로 미가용 → t3.medium 4GB에 BERT 적재 비현실적이므로 **MVP 범위에서 BERT 도입 보류**. 졸업 후 개인 계정에서 재검토
 7. **NAT Gateway 운영 방식** — Default VPC + public subnet only로 확정 (학생 계정 라우트 테이블 수정 권한 불확실 + NAT 비용 회피). 모든 EC2가 public subnet에 자동 public IP 할당 + 보안 그룹 inbound 최소화로 보안 보강
 
-### 10.1.a 2026-04-30 개정으로 해소된 항목 (참고)
+### 10.1.a 학생 계정 PIVOT 최종 확정 사양 (2026-05-11 기준)
 
-- **EC2/RDS 인스턴스 타입** → 2.1.1.a로 확정 (학생 계정 PIVOT: Crawler/Detection/API 모두 t3.medium x86_64 4GB / RDS db.t3.micro Single-AZ — production 사양 r6g.large 16GB 등은 git history 보존, 졸업 후 개인 계정에서 재현 가능)
-- **PostgreSQL 메이저 버전** → 16.13 (PG17도 pgvector 호환되지만 PG16의 minor patch 누적·운영 성숙도 우선)
-- **EC2 접근 방식** → SSM Session Manager (SSH 키 미사용) — 학교 사전 생성 IAM Role의 `AmazonSSMManagedInstanceCore` 정책 포함 여부에 의존
+> 본 섹션은 2026-04-30 초기 개정 → 2026-05-04~05-09 다단계 PIVOT(1~4차) → 2026-05-11 콘솔 launch 확인까지 누적된 최종 확정값.
+
+- **EC2/RDS 인스턴스 타입** → 2.1.1.a로 확정 (단일 EC2 t3.xlarge x86_64 16GB / RDS db.t4g.micro arm64 PostgreSQL 18.3 Single-AZ — production 사양 r6g.large 16GB 등은 git history 보존, 졸업 후 개인 계정에서 재현 가능)
+- **PostgreSQL 메이저 버전** → **18.3** (학생 SCP가 16/17 노출 안 해 18.3-R1 강제, 4차 PIVOT 2026-05-09). Flyway 10 ↔ PG 18 호환성은 첫 배포 시 V1~V4 마이그레이션 실행 로그 모니터링 필수, 실패 시 Flyway 12.x 핀 적용 (deferred-work 첫 항목)
+- **EC2 접근 방식** → **SSH `.pem` only** (2026-05-06 Story 5-2 PIVOT). 학생 IAM이 SSM Session Manager / EC2 Instance Connect / IAM Role 생성 모두 차단하여 SSH `.pem` 키만 가용. 22번 인바운드 `0.0.0.0/0` + ed25519 + fail2ban 3 layer defense-in-depth로 안전화 (host fingerprint verification은 운영 단순화 trade-off로 미적용)
 - **S3 트래픽 라우팅** → IGW 경유 (VPC Gateway Endpoint는 학생 계정 라우트 테이블 수정 권한 불확실로 미생성, 동일 region 내라 비용 영향 미미)
 
 ### 10.2 잔존 표기 불일치 (재확인·정리 필요)

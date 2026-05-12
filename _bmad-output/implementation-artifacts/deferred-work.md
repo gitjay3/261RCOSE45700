@@ -3,7 +3,7 @@
 ## Deferred from: Story 5-2 dev (2026-05-07)
 
 - **Flyway 10 + PostgreSQL 18.3 호환성 검증** — Spring Boot 3.5 default Flyway 10.x는 PG 17까지 공식 지원. 학생 SCP가 RDS 엔진 16/17 노출 안 해 18.3 채택. V1~V4 migration이 표준 DDL이라 작동 가능성 높지만 첫 배포 시 Flyway 실행 로그 모니터링 필수. 실패 시 `api/build.gradle`에 `dependencies { implementation 'org.flywaydb:flyway-core:12.0.0' }` 식으로 Flyway 12.x 핀 추가 (5분 작업). [Story 5.2 4차 변경 노트 참조]
-- **architecture.md 사양 backport (Story 5-2 / 5-3 ClickOps 결과 반영)** — PostgreSQL 16.13 → 18.3, EC2 ×3 사양 → 단일 EC2 t3.xlarge 16GB, NAT/SSM Session Manager 라인 → SSH `.pem` only로 일괄 갱신 필요. 현재는 Story 5.2 PIVOT 박스에 보강 형태로만 명시 → 본 표 backport는 Story 5.2 review 통과 후 별도 PR.
+- ~~**architecture.md 사양 backport (Story 5-2 / 5-3 ClickOps 결과 반영)**~~ — **2026-05-11 RESOLVED (`chore/bmad-sprint-cleanup` PR)**: architecture.md Infrastructure & Deployment 섹션 + tracker_기획서.md 2.1.1.a 표 + 클라우드 표 모두 단일 EC2 t3.xlarge + PG 18.3 + SSH `.pem` only로 일괄 backport 완료. epics.md Story 5.3 AC 본문은 OBSOLETE 마커 강화(historical record 유지). epics.md Story 1.1 Spring Boot 3.4.x → 3.5.0 + docs/deployment.md L38 `environment: production` stale 표기 + Story 5-2 파일의 fingerprint 잔존 ref도 함께 정리.
 - **GH repo Organization transfer 검토** — 현재 byungju0 personal repo + collaborator는 admin/Environment 권한 부여 불가능(GitHub 구조적 제약). Required reviewers / Environment 격리 / fine-grain branch protection이 필요해지면 Organization 만들고 transfer 검토. 학생 기간 종료 시점에 결정.
 - **EC2 Public IP 고정 (EIP) 검토** — 현재 stop/start 시 Public IP 변경 → GH Secret `EC2_HOST` 갱신 필요. EIP allocation은 학생 SCP 권한 미확인. 운영 부담 측정 후 도입 결정.
 - **mem_limit 실측 후 튜닝** — compose.prod.yml의 mem_limit는 16GB 환경에 맞춘 보수적 hard cap(crawler 4G / api 2G / detection 1G / dashboard 128M, 합 ~7G). Story 5.4 부하 시점에 `docker stats` 실측 후 조정. 특히 crawler Playwright 동시 세션이 늘어나면 4G 너머로 가능.

@@ -89,7 +89,7 @@ Tracker는 NC AI 게임 보안 담당자를 위한 자동화된 불법 프로그
 - AI: VARCO Translation(중국어·번체) + VARCO LLM(불법 분류)
 - 백엔드: Java Spring REST API + Redis MQ + RDS PostgreSQL
 - 대시보드: 탐지 목록 / 상세 / 통계 화면
-- 인프라: AWS EC2 ×3, S3, RDS, Redis (t3.medium 기준)
+- 인프라: AWS EC2 ×3, S3, RDS, Redis (t3.medium 기준) <!-- 2026-04-24 PRD freeze 시점 사양. 실 deployment는 2026-05-09 3차 PIVOT으로 **단일 t3.xlarge 16GB**로 회귀 — architecture.md / 기획서 2.1.1.a 참조 -->
 
 ### Growth Features (Post-MVP)
 
@@ -265,6 +265,8 @@ Tracker는 세 개의 독립 레이어로 구성된 복합 시스템이다. 각 
 | 크롤링 완료 → 대시보드 반영 | ≤ 5분 |
 
 ### Infrastructure (AWS)
+
+> ⚠️ **2026-04-24 PRD freeze 시점 사양.** 실 deployment는 2026-05-04~2026-05-09 학생 IAM SCP 제약 발견으로 다단계 PIVOT 적용 (1차: 3대 t3.medium x86_64 강제 다운그레이드, 2차: 2 EC2 분리 시도, 3차 최종: 단일 t3.xlarge 16GB 회귀). 최신 사양은 [architecture.md](architecture.md) Infrastructure & Deployment 섹션 + [tracker_기획서.md](../../tracker_기획서.md) 2.1.1.a 참조.
 
 | 리소스 | 사양 | 역할 |
 |--------|------|------|

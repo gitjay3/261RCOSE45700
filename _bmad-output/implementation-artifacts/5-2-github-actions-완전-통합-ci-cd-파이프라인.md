@@ -6,7 +6,7 @@ Status: in-progress
 >
 > 학생 IAM 사용자 `<student-iam-user>`에서 (1) IAM Role 신규 생성 차단 (2) IAMFullAccess 등 권한 정책 attach 화이트리스트 외 차단 (`AmazonAPIGatewayPushToCloudWatchLogs` / `AWSCloud9SSMInstanceProfile` / `AWSLambdaBasicExecutionRole` 3개만 허용 — 모두 service role용) (3) AWS Access Key 발급 차단으로 **GHA→AWS 자동 배포 통로(OIDC / Access Key / CodeDeploy) 모두 봉인** 확인. EC2 접근 통로도 SSM Session Manager / EC2 Instance Connect 모두 권한 차단되어 **SSH `.pem` 키만 가능**.
 >
-> 외부 SaaS(Cloudflare Tunnel / Tailscale) 가입 회피 결정으로 22번 인바운드는 `0.0.0.0/0` + defense-in-depth(ed25519 + fail2ban + host fingerprint verification)로 안전화. 단일 `.pem` 사용 — 관리자 접속용 + GHA 자동 배포용 분리 안 함 (사용자 결정으로 단순함 우선, 이전 권장 14 AC에서 GHA 전용 deploy 키 + deploy 전용 SSH 사용자 분리 2개 항목 제거 → 12 AC).
+> 외부 SaaS(Cloudflare Tunnel / Tailscale) 가입 회피 결정으로 22번 인바운드는 `0.0.0.0/0` + defense-in-depth(ed25519 + fail2ban)로 안전화. **host fingerprint verification은 2026-05-11 commit `75e9ac5`로 trade-off 결정 후 제거** — EC2 인스턴스 교체 시 `EC2_HOST` secret 갱신과 fingerprint 갱신 빈도가 동일하므로 운영 단순화 우선, AWS 네트워크 내 GHA→EC2 직결이라 인터넷 구간 MITM 위험 0에 가까움. 단일 `.pem` 사용 — 관리자 접속용 + GHA 자동 배포용 분리 안 함 (사용자 결정으로 단순함 우선, 이전 권장 14 AC에서 GHA 전용 deploy 키 + deploy 전용 SSH 사용자 분리 2개 항목 제거 → 12 AC).
 >
 > **신 사양 흐름:**
 > ```
@@ -35,7 +35,7 @@ main 브랜치 머지가 4개 서브시스템(crawler / detection / api / dashbo
 
 4. **And** main 머지 후 `deploy` job이 `appleboy/ssh-action@v1.2.4`로 EC2에 SSH 접속하여 `docker pull` + `docker compose up -d <service>` + healthcheck를 실행한다. 4개 서비스(crawler / detection / api / dashboard)에 매핑된 EC2 인스턴스(또는 단일 EC2 다중 service)에 각각 배포
 
-5. **And** SSH 인증에 4개 GH Secret을 사용한다: `EC2_SSH_KEY`(이미 보유한 `.pem` 파일 내용 통째 — `-----BEGIN ... PRIVATE KEY-----` 부터 `-----END ... PRIVATE KEY-----`까지), `EC2_HOST`(EC2 public IP), `EC2_USER`(`ec2-user` 또는 `ubuntu`), `EC2_HOST_FINGERPRINT`(`ssh-keyscan -t ed25519 <ip>` 결과). `appleboy/ssh-action`의 `fingerprint:` 옵션으로 host fingerprint verification 적용 → MITM 공격 차단
+5. **And** SSH 인증에 3개 GH Secret을 사용한다: `EC2_SSH_KEY`(이미 보유한 `.pem` 파일 내용 통째 — `-----BEGIN ... PRIVATE KEY-----` 부터 `-----END ... PRIVATE KEY-----`까지), `EC2_HOST`(EC2 public IP), `EC2_USER`(`ec2-user` 또는 `ubuntu`). **2026-05-11 PIVOT (commit `75e9ac5`)**: `EC2_HOST_FINGERPRINT` 및 `appleboy/ssh-action`의 `fingerprint:` 옵션 제거 — 학생 프로젝트 trade-off로 host fingerprint verification 미적용 (운영 단순화 우선, AWS 네트워크 내 직결로 MITM 위험 ~0). 이전 사양(4개 secret + fingerprint verification → MITM 차단)은 본 변경 이전의 historical record
 
 6. **And** healthcheck(`curl -fsS http://localhost:<port>/health` 또는 `docker inspect --format '{{.State.Health.Status}}'`)가 30초 내 통과하지 못하면 **자동 롤백** — 이전 SHA 태그(`docker inspect --format '{{.Config.Image}}' <service>` 로 배포 전 캡처)로 다시 `docker pull` + `docker compose up -d <service>` 실행. 워크플로는 `exit 1`로 종료하여 GHA UI에 fail 표시
 
@@ -43,7 +43,7 @@ main 브랜치 머지가 4개 서브시스템(crawler / detection / api / dashbo
 
 8. **And** main branch protection이 활성화된다: (a) PR 필수 + 최소 1명 리뷰 (b) direct push 금지 (c) auto-merge 비활성 (d) Story 1.5의 4개 path-filtered workflow + aggregator + 본 스토리의 `deploy.yml`이 모두 통과 시에만 머지 가능 — Repo Settings → Branches → `main` 룰
 
-9. **And** GitHub Environment "production"이 생성되어 모든 EC2 관련 secret 4개(`EC2_SSH_KEY`, `EC2_HOST`, `EC2_USER`, `EC2_HOST_FINGERPRINT`)가 그 environment scope에 등록된다 (Repository scope 대비 격리 강함). `deploy` job은 `environment: production`으로 묶여 실행되며, 필요 시 Required reviewers를 등록하여 추가 사람 게이트를 걸 수 있다 (옵션 — 평소 비활성, 주요 릴리스 시점에 활성화)
+9. ~~**And** GitHub Environment "production"이 생성되어 모든 EC2 관련 secret 4개가 그 environment scope에 등록된다~~ — **2026-05-11 4차 PIVOT으로 적용 불가**: byungju0 personal repo + gitjay3 collaborator(write) 구조에서 Environment 관리 권한은 owner 외 부여 불가능 (GitHub 구조적 제약). **대체 채택**: Repository secrets에 3종 (`EC2_SSH_KEY`/`EC2_HOST`/`EC2_USER`) 등록 + `deploy` job의 `environment: production` 줄 제거. Required reviewers 게이트는 잃지만 학생 프로젝트 규모에서 수용. Organization transfer는 deferred-work 등재. (`EC2_HOST_FINGERPRINT`는 commit `75e9ac5`로 별도 제거 — AC #5 참조)
 
 10. **And** EC2 OS hardening: `fail2ban` 설치 + `/etc/fail2ban/jail.local`의 `[sshd]` 섹션에 `enabled=true, maxretry=3, findtime=600, bantime=86400` (3 fail / 10분 / 24h ban) 설정. SSH brute-force 99% 차단 (defense-in-depth — `0.0.0.0/0` 22번 노출 트레이드오프 보강)
 
@@ -53,9 +53,9 @@ main 브랜치 머지가 4개 서브시스템(crawler / detection / api / dashbo
 
 ## Tasks / Subtasks
 
-> **선행 조건:** Story 5.3 ClickOps PIVOT 완료(EC2 t3.medium ×3 또는 단일 EC2 + RDS db.t3.micro + S3 + Default VPC). 본 스토리는 그 위에 자동 배포 파이프라인을 얹는다.
+> **선행 조건:** Story 5.3 ClickOps PIVOT 완료(**단일 EC2 t3.xlarge 16GB** + RDS db.t3.micro PG 18.3 + S3 + Default VPC — 2026-05-09 3·4차 PIVOT 반영. 1차 t3.medium ×3 / 2차 2 EC2 분리는 historical record). 본 스토리는 그 위에 자동 배포 파이프라인을 얹는다.
 >
-> **외부 의존성 결정:** Cloudflare Tunnel / Tailscale 등 외부 SaaS 가입 회피 결정 (memory `feedback_no_external_services.md`) — 22번 인바운드는 `0.0.0.0/0` + fail2ban + ed25519 + host fingerprint verification으로 안전화.
+> **외부 의존성 결정:** Cloudflare Tunnel / Tailscale 등 외부 SaaS 가입 회피 결정 (memory `feedback_no_external_services.md`) — 22번 인바운드는 `0.0.0.0/0` + fail2ban + ed25519로 안전화. host fingerprint verification은 2026-05-11 commit `75e9ac5`로 trade-off 제거.
 >
 > **키 관리 결정:** 단일 `.pem` 사용 — 관리자 접속용 + GHA 자동 배포용 분리 안 함. 분리 시 보안 폭발 반경 축소 효과 있으나 학생 프로젝트 규모에서 키 관리 부담 ↑ vs 보안 이득 trade-off에서 단순함 선택. `.pem` 분실 시 EC2 키페어 재발급 권한 없음 → 1Password 등 안전한 곳에 백업 필수.
 
@@ -66,16 +66,16 @@ main 브랜치 머지가 4개 서브시스템(crawler / detection / api / dashbo
   - [ ] EC2에 `fail2ban` 설치 (`sudo dnf install fail2ban` 또는 `sudo apt install fail2ban`)
   - [ ] `/etc/fail2ban/jail.local` 설정: `[sshd]` 섹션에 `enabled=true, maxretry=3, findtime=600, bantime=86400`
   - [ ] `sudo systemctl enable --now fail2ban` 활성
-  - [ ] EC2 host fingerprint 추출: 노트북에서 `ssh-keyscan -t ed25519 <ec2-ip> | awk '{print $3}'` 결과를 GH Secret으로 사용
+  - [~] ~~EC2 host fingerprint 추출~~ — **2026-05-11 commit `75e9ac5`로 제거** (학생 프로젝트 trade-off: 운영 단순화 우선)
 
-- [ ] **Task 2. GitHub Environment "production" + Secrets 등록** (AC: #5, #9) — GH 콘솔 ClickOps
-  - [ ] Repo Settings → Environments → New environment "production" 생성
-  - [ ] Environment secrets에 4개 등록:
+- [~] **Task 2. GitHub Secrets 등록** (AC: #5, #9) — GH 콘솔 ClickOps. **PIVOT: Environment "production" 불가** (byungju0 personal repo + collaborator 권한 제약으로 Environment 생성 불가) → **Repository secrets 우회**
+  - [ ] ~~Repo Settings → Environments → New environment "production" 생성~~ — **불가** (위 PIVOT 참조)
+  - [ ] Repo Settings → Secrets and variables → Actions → **Repository secrets**에 3개 등록 (2026-05-11 fingerprint 제거 반영):
     - [ ] `EC2_SSH_KEY` — `.pem` 파일 내용 통째 (`-----BEGIN ... -----END ...`)
     - [ ] `EC2_HOST` — EC2 public IP 또는 도메인
     - [ ] `EC2_USER` — `ec2-user` (Amazon Linux) 또는 `ubuntu` (Ubuntu)
-    - [ ] `EC2_HOST_FINGERPRINT` — Task 1에서 추출한 fingerprint
-  - [ ] (옵션) Required reviewers 1명 등록 — 평소 비활성, 주요 릴리스 시점에만 활성화
+    - [~] ~~`EC2_HOST_FINGERPRINT`~~ — **2026-05-11 commit `75e9ac5`로 제거**
+  - [ ] ~~Required reviewers 1명 등록~~ — Environment 불가로 적용 불가
 
 - [ ] **Task 3. Branch protection 설정** (AC: #8) — GH 콘솔 ClickOps
   - [ ] Repo Settings → Branches → Add rule (또는 기존 `main` 룰 편집)
@@ -91,8 +91,8 @@ main 브랜치 머지가 4개 서브시스템(crawler / detection / api / dashbo
   - [x] jobs:
     - [x] `lint-test` — Story 1.5의 4개 path-filtered workflow를 `workflow_call:` 추가로 reusable로 만들고 aggregator + deploy.yml 모두에서 호출 (ci.yml 신규 + deploy.yml에서 동일 reusable 4종 호출)
     - [x] `build-push` — `docker/setup-buildx-action@v3` + `docker/login-action@v3`(GHCR) + `docker/build-push-action@v6`(`cache-from/to type=registry,...:cache,mode=max`) × 4개 서비스 (matrix)
-    - [x] `deploy` — `environment: production` + `needs: [build-push]`(lint-test도 deploy.yml에 직접 호출되어 build-push의 needs로 들어감) + `appleboy/ssh-action@v1.2.4`로 SSH → 절대 경로 명령(`/usr/bin/docker`/`/usr/bin/date`/`/usr/bin/sleep`/`/usr/bin/cat`/`/usr/bin/echo`) → `docker pull` / `docker compose up -d` / 30s healthcheck 폴링 / 실패 시 이전 SHA로 자동 롤백
-  - [x] `script_stop: true` + `fingerprint: ${{ secrets.EC2_HOST_FINGERPRINT }}` 옵션 적용
+    - [x] `deploy` — ~~`environment: production`~~ (2026-05 PIVOT 제거 — personal repo 권한 제약) + `needs: [build-push]`(lint-test도 deploy.yml에 직접 호출되어 build-push의 needs로 들어감) + `appleboy/ssh-action@v1.2.4`로 SSH → 절대 경로 명령(`/usr/bin/docker`/`/usr/bin/date`/`/usr/bin/sleep`/`/usr/bin/cat`/`/usr/bin/echo`) → `docker pull` / `docker compose up -d` / 30s healthcheck 폴링 / 실패 시 이전 SHA로 자동 롤백
+  - [x] `script_stop: true` + ~~`fingerprint: ${{ secrets.EC2_HOST_FINGERPRINT }}`~~ (2026-05-11 commit `75e9ac5`로 제거) 옵션 적용
 
 - [~] **Task 5. EC2 docker compose + healthcheck 정의** (AC: #6, #12) — 코드 템플릿 + EC2 SSH 작업 분리
   - [x] `infra/compose.prod.yml` 작성 — 4개 서비스(crawler / detection / api / dashboard) + redis 정의 (deploy.yml의 scp-action으로 EC2 `/opt/app/compose.prod.yml`에 매 배포마다 업로드)
@@ -196,7 +196,7 @@ claude-opus-4-7 (BMad dev-story workflow, 2026-05-07 세션)
 
 1. `.github/workflows/ci.yml` (신규, 50 lines) — PR + push:main에서 path filter 없이 항상 실행되는 strict aggregator. 4개 reusable workflow를 `uses:`로 호출 + 마지막 `aggregator` 잡이 `if: always()` + `toJSON(needs)` 검사로 4종 결과 합산. `ci / aggregator` 단일 required check 후보. `concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }`로 stale PR 실행 자동 취소.
 
-2. `.github/workflows/deploy.yml` (신규, 205 lines) — 12 AC 거의 전부를 한 워크플로에 통합. `concurrency: { group: deploy-prod, cancel-in-progress: false }` (AC #7), `permissions: { packages: write, contents: read }` (AC #3), 4개 reusable lint-test 호출 (AC #1) → matrix build-push 4종 (BuildKit `cache-from/to type=registry,...:cache,mode=max` — AC #2, GHCR `:sha` + `:latest` 태깅 — AC #3) → deploy 잡 (`environment: production` — AC #9, `appleboy/scp-action@v1.0.0` + `appleboy/ssh-action@v1.2.4` — AC #4/#11, `fingerprint:` host 검증 + `script_stop: true`로 Issue #297 회피, 30초 healthcheck 폴링 → 실패 시 `/opt/app/IMAGE_TAG` 파일에서 이전 SHA 읽어 재배포 — AC #6). `workflow_dispatch.inputs.rollback_to`로 수동 롤백 지원.
+2. `.github/workflows/deploy.yml` (신규, 205 lines) — 12 AC 거의 전부를 한 워크플로에 통합. `concurrency: { group: deploy-prod, cancel-in-progress: false }` (AC #7), `permissions: { packages: write, contents: read }` (AC #3), 4개 reusable lint-test 호출 (AC #1) → matrix build-push 4종 (BuildKit `cache-from/to type=registry,...:cache,mode=max` — AC #2, GHCR `:sha` + `:latest` 태깅 — AC #3) → deploy 잡 (~~`environment: production`~~ 4차 PIVOT 제거 — personal repo 권한 제약, `appleboy/scp-action@v1.0.0` + `appleboy/ssh-action@v1.2.4` — AC #4/#11, ~~`fingerprint:` host 검증~~ 2026-05-11 commit `75e9ac5`로 제거 + `script_stop: true`로 Issue #297 회피, 30초 healthcheck 폴링 → 실패 시 `/opt/app/IMAGE_TAG` 파일에서 이전 SHA 읽어 재배포 — AC #6). `workflow_dispatch.inputs.rollback_to`로 수동 롤백 지원. **2026-05-11 추가 변경**: `on.push.branches: [main]` 주석 처리 (commit `0d8a277`) — 운영 셋업 검증 전까지 workflow_dispatch만 활성.
 
 3. 기존 4개 워크플로(`crawler.yml` / `detection.yml` / `api.yml` / `dashboard.yml`)에 `workflow_call:` 트리거 추가 — 기존 path-filter trigger와 공존. ci.yml + deploy.yml 양쪽에서 reusable로 호출 가능.
 
@@ -218,8 +218,8 @@ claude-opus-4-7 (BMad dev-story workflow, 2026-05-07 세션)
 9. `docs/ci-setup.md` 갱신 — Story 1.5 시점 deferred 항목이 ci.yml aggregator + 4개 reusable workflow_call 조합으로 본 스토리에서 해소됐음을 §"Story 5.2 Aggregator + 배포 게이트 추가"에 정리. Branch protection 절차도 5.2 strict 사양으로 갱신 (`ci / aggregator` required + Allow auto-merge OFF).
 
 **사용자 의존성 (별도 진행):**
-- Task 1 (EC2 SSH/fail2ban/host fingerprint) — `docs/deployment.md` §2.1 절차 그대로 EC2 SSH 작업
-- Task 2 (GH Environment "production" + 4 secrets) — §2.2
+- Task 1 (EC2 SSH/fail2ban) — `docs/deployment.md` §2.1 절차 그대로 EC2 SSH 작업. ~~host fingerprint 추출~~ 2026-05-11 commit `75e9ac5`로 제거
+- Task 2 (~~GH Environment "production"~~ 4차 PIVOT 제거 → **Repository secrets** 3종 — `EC2_SSH_KEY`/`EC2_HOST`/`EC2_USER`) — §2.2
 - Task 3 (Branch protection — `ci / aggregator` required) — §2.3
 - Task 5 user 부분 (`/opt/app/secrets/` mkdir + 시크릿 파일 등록) — §2.4
 - Task 6 (dependabot 제거 commit) — 사용자 git workflow 정책상 사용자 commit
@@ -227,9 +227,9 @@ claude-opus-4-7 (BMad dev-story workflow, 2026-05-07 세션)
 
 **알려진 제약/주의:**
 - 첫 배포 cold-start: `/opt/app/IMAGE_TAG` 파일이 없으면 롤백 fallback 태그가 `latest`로 떨어짐 (이미 `latest`도 동일 broken 이미지). 첫 배포 시 healthcheck 동작을 별도로 검증하고, 필요 시 `workflow_dispatch + rollback_to: <known-good-sha>`로 수동 처리 — `docs/deployment.md` §4 명시.
-- 단일 EC2 t3.medium 4GB에 4개 서비스 + redis 동거 — Playwright Chromium 200MB + JVM 500MB 등으로 OOM 리스크. 측정 후 분리 검토 — `docs/deployment.md` §6.3 명시.
+- 단일 EC2 **t3.xlarge 16GB**에 4개 서비스 + redis 동거 (3차 PIVOT 회귀). compose.prod.yml mem_limit hard cap 합 ~7GB / 16GB. Story 5.4 부하 시점 `docker stats` 실측 후 mem_limit 조정 — `docs/deployment.md` §6.3 명시.
 - main push 1회당 reusable workflow 4종이 ci.yml + deploy.yml 양쪽에서 실행되어 비용 2x — 배포 안전성 우선으로 수용 (deploy.yml이 workflow_dispatch 우회 시에도 lint-test gate 보장하기 위함). `docs/ci-setup.md`에 명시.
-- AC #5의 GH Secret 4종 등록·AC #8 Branch protection·AC #9 Environment "production" + Required reviewers는 모두 GitHub UI ClickOps라 코드로 자동화 불가 — 절차는 docs/deployment.md에 정확히 기술.
+- AC #5의 GH Secret 3종 등록(2026-05-11 fingerprint 제거 반영)·AC #8 Branch protection은 모두 GitHub UI ClickOps라 코드로 자동화 불가 — 절차는 docs/deployment.md에 정확히 기술. AC #9 Environment "production" + Required reviewers는 4차 PIVOT으로 적용 불가(personal repo + collaborator 권한 제약).
 
 ### File List
 

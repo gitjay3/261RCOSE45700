@@ -59,23 +59,24 @@ main 브랜치 머지가 4개 서브시스템(crawler / detection / api / dashbo
 >
 > **키 관리 결정:** 단일 `.pem` 사용 — 관리자 접속용 + GHA 자동 배포용 분리 안 함. 분리 시 보안 폭발 반경 축소 효과 있으나 학생 프로젝트 규모에서 키 관리 부담 ↑ vs 보안 이득 trade-off에서 단순함 선택. `.pem` 분실 시 EC2 키페어 재발급 권한 없음 → 1Password 등 안전한 곳에 백업 필수.
 
-- [ ] **Task 1. EC2 SSH 셋업** (AC: #4, #5, #10) — 콘솔 ClickOps + EC2 SSH 작업
-  - [ ] EC2 launch 검증 (이미 launch된 경우 생략) — Amazon Linux 2023 또는 Ubuntu 22.04
-  - [ ] `.pem` 키 백업 (1Password 또는 안전한 보관소) + 노트북 1Password에 별도 사본 — 분실 시 재발급 권한 없음 명시
-  - [ ] 노트북에서 SSH 접속 검증: `ssh -i <key>.pem ec2-user@<ip>`
-  - [ ] EC2에 `fail2ban` 설치 (`sudo dnf install fail2ban` 또는 `sudo apt install fail2ban`)
-  - [ ] `/etc/fail2ban/jail.local` 설정: `[sshd]` 섹션에 `enabled=true, maxretry=3, findtime=600, bantime=86400`
-  - [ ] `sudo systemctl enable --now fail2ban` 활성
+- [x] **Task 1. EC2 SSH 셋업** (AC: #4, #5, #10) — 콘솔 ClickOps + EC2 SSH 작업 — **2026-05-12 완료**
+  - [x] EC2 launch 검증 — Ubuntu 24.04 LTS, t3.xlarge `tracker-prod` 가동 중
+  - [x] `.pem` 키 백업 — 1Password 또는 안전한 보관소 보관 (분실 시 재발급 권한 없음)
+  - [x] 노트북에서 SSH 접속 검증: `ssh -i <key>.pem ubuntu@<ip>`
+  - [x] Docker + Compose v2 설치: `curl -fsSL https://get.docker.com | sudo sh` + `usermod -aG docker ubuntu` (deployment.md §2.3과 묶인 prereq, Task 5/7 선결 조건)
+  - [x] EC2에 `fail2ban` 설치 (`sudo apt install -y fail2ban`)
+  - [x] `/etc/fail2ban/jail.local` 설정: `[sshd]` 섹션 `enabled=true, maxretry=3, findtime=600, bantime=86400`
+  - [x] `sudo systemctl enable --now fail2ban` 활성
   - [~] ~~EC2 host fingerprint 추출~~ — **2026-05-11 commit `75e9ac5`로 제거** (학생 프로젝트 trade-off: 운영 단순화 우선)
 
-- [~] **Task 2. GitHub Secrets 등록** (AC: #5, #9) — GH 콘솔 ClickOps. **PIVOT: Environment "production" 불가** (byungju0 personal repo + collaborator 권한 제약으로 Environment 생성 불가) → **Repository secrets 우회**
-  - [ ] ~~Repo Settings → Environments → New environment "production" 생성~~ — **불가** (위 PIVOT 참조)
-  - [ ] Repo Settings → Secrets and variables → Actions → **Repository secrets**에 3개 등록 (2026-05-11 fingerprint 제거 반영):
-    - [ ] `EC2_SSH_KEY` — `.pem` 파일 내용 통째 (`-----BEGIN ... -----END ...`)
-    - [ ] `EC2_HOST` — EC2 public IP 또는 도메인
-    - [ ] `EC2_USER` — `ec2-user` (Amazon Linux) 또는 `ubuntu` (Ubuntu)
+- [x] **Task 2. GitHub Secrets 등록** (AC: #5, #9) — GH 콘솔 ClickOps. **PIVOT: Environment "production" 불가** (byungju0 personal repo + collaborator 권한 제약으로 Environment 생성 불가) → **Repository secrets 우회** — **2026-05-12 완료**
+  - [~] ~~Repo Settings → Environments → New environment "production" 생성~~ — **불가** (위 PIVOT 참조)
+  - [x] Repo Settings → Secrets and variables → Actions → **Repository secrets**에 3개 등록 (2026-05-11 fingerprint 제거 반영):
+    - [x] `EC2_SSH_KEY` — `.pem` 파일 내용 통째 (`-----BEGIN ... -----END ...`)
+    - [x] `EC2_HOST` — EC2 public IP 또는 도메인
+    - [x] `EC2_USER` — `ubuntu` (Ubuntu 24.04)
     - [~] ~~`EC2_HOST_FINGERPRINT`~~ — **2026-05-11 commit `75e9ac5`로 제거**
-  - [ ] ~~Required reviewers 1명 등록~~ — Environment 불가로 적용 불가
+  - [~] ~~Required reviewers 1명 등록~~ — Environment 불가로 적용 불가
 
 - [ ] **Task 3. Branch protection 설정** (AC: #8) — GH 콘솔 ClickOps
   - [ ] Repo Settings → Branches → Add rule (또는 기존 `main` 룰 편집)

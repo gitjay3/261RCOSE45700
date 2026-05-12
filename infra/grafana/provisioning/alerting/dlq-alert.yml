@@ -42,3 +42,40 @@ groups:
                   type: query
               refId: C
               type: classic_conditions
+      - uid: tracker-redis-queue-scrape-alert
+        title: "Redis 큐 메트릭 수집 실패"
+        condition: C
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis 큐 메트릭 수집 실패"
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: redis_queue_scrape_failure
+              refId: A
+              instant: true
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              refId: C
+              type: classic_conditions

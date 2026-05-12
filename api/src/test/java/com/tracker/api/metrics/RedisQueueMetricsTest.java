@@ -40,6 +40,7 @@ class RedisQueueMetricsTest {
         Gauge gauge = registry.find("redis.queue.size").tag("queue", "posts:queue").gauge();
         assertThat(gauge).isNotNull();
         assertThat(gauge.value()).isEqualTo(5.0);
+        assertThat(failureGauge().value()).isEqualTo(0.0);
     }
 
     @Test
@@ -58,5 +59,27 @@ class RedisQueueMetricsTest {
         Gauge gauge = registry.find("redis.queue.size").tag("queue", "posts:queue").gauge();
         assertThat(gauge).isNotNull();
         assertThat(gauge.value()).isEqualTo(0.0);
+        assertThat(failureGauge().value()).isEqualTo(1.0);
+    }
+
+    @Test
+    void failureGauge_recoversAfterSuccessfulScrape() {
+        when(listOps.size("posts:queue"))
+                .thenThrow(new RuntimeException("Redis connection failed"))
+                .thenReturn(2L);
+
+        Gauge queueGauge = registry.find("redis.queue.size").tag("queue", "posts:queue").gauge();
+        assertThat(queueGauge).isNotNull();
+        assertThat(queueGauge.value()).isEqualTo(0.0);
+        assertThat(failureGauge().value()).isEqualTo(1.0);
+
+        assertThat(queueGauge.value()).isEqualTo(2.0);
+        assertThat(failureGauge().value()).isEqualTo(0.0);
+    }
+
+    private Gauge failureGauge() {
+        Gauge gauge = registry.find("redis.queue.scrape.failure").gauge();
+        assertThat(gauge).isNotNull();
+        return gauge;
     }
 }

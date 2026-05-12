@@ -14,6 +14,11 @@ import {
 import { useCrawlTriggerMutation } from '@/api/detections';
 import { useShortcut } from '@/lib/shortcuts';
 
+interface ManualCrawlButtonProps {
+  /** Trigger 성공 직후 호출. NewDetectionsBadge 표시 시점 기록용. */
+  onTriggerSuccess?: () => void;
+}
+
 /**
  * Journey 2 (긴급 대응) — 수동 크롤링 트리거 + 확인 모달 + 진행 추적.
  *
@@ -22,7 +27,7 @@ import { useShortcut } from '@/lib/shortcuts';
  *   버튼 비활성화 + 스피너 → Toast "트리거 완료, 예상 3분" →
  *   60초 후 폴링 자동 갱신 (api/detections invalidate).
  */
-export function ManualCrawlButton() {
+export function ManualCrawlButton({ onTriggerSuccess }: ManualCrawlButtonProps = {}) {
   const [open, setOpen] = useState(false);
   const mutation = useCrawlTriggerMutation();
 
@@ -32,6 +37,7 @@ export function ManualCrawlButton() {
   const handleConfirm = async () => {
     try {
       const result = await mutation.mutateAsync();
+      onTriggerSuccess?.();
       toast.success('수동 크롤링 트리거 완료', {
         description: `예상 ${result.estimatedMinutes}분 소요. 완료 시 자동으로 알림됩니다.`,
         duration: 3000,

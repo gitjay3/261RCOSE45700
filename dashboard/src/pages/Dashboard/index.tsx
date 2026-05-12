@@ -3,56 +3,47 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { PieChart } from '@/components/charts/PieChart';
 import { BarChart } from '@/components/charts/BarChart';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { ChartCard } from '@/components/tracker/ChartCard';
 import { EmptyState } from '@/components/tracker/EmptyState';
 import { RecentAlertList } from '@/components/tracker/RecentAlertList';
-import { useStatsQuery } from '@/api/stats';
+import { useStatsSuspenseQuery } from '@/api/stats';
 import { getTypeLabel } from '@/components/tracker/labels';
 import { colorForType } from '@/components/charts/colors';
 import { PageContainer } from '@/layouts/PageContainer';
+import { formatRelativeTime } from '@/lib/time';
 
-const REVIEWED_FRACTION = 0.25; // mock — 백엔드 붙으면 stats에서 받음
 const NEXT_CRAWL_LABEL = '42분 후';
 const LAST_CRAWL_LABEL = '18분 전';
 
 export function DashboardPage() {
-  const { data, isLoading, error } = useStatsQuery();
-
-  if (error) throw error;
+  // dataUpdatedAt이 60s polling마다 갱신 → TanStack Query subscription이 자동 re-render
+  // 유발. ticker 불필요. 자정 롤오버도 다음 polling tick(<60s)에 자연 반영.
+  const { data, dataUpdatedAt } = useStatsSuspenseQuery();
 
   const typeData = useMemo(
     () =>
-      data?.typeDistribution.map((entry) => ({
+      data.typeDistribution.map((entry) => ({
         name: getTypeLabel(entry.type),
         value: entry.count,
-      })) ?? [],
-    [data?.typeDistribution],
+      })),
+    [data.typeDistribution],
   );
   const typeColors = useMemo(
-    () => data?.typeDistribution.map((entry) => colorForType(entry.type)) ?? [],
-    [data?.typeDistribution],
+    () => data.typeDistribution.map((entry) => colorForType(entry.type)),
+    [data.typeDistribution],
   );
   const siteData = useMemo(
     () =>
-      data?.siteDistribution.map((entry) => ({
+      data.siteDistribution.map((entry) => ({
         name: entry.site,
         value: entry.count,
-      })) ?? [],
-    [data?.siteDistribution],
+      })),
+    [data.siteDistribution],
   );
 
-  if (isLoading || !data) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center p-8">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
   const isEmpty = data.todayCount === 0;
-  const reviewed = Math.round(data.todayCount * REVIEWED_FRACTION);
-  const today = new Date().toLocaleString('ko-KR', {
+  // dataUpdatedAt 기반 — 60s ticker가 분 단위 re-render 책임. 자정 넘어도 자연 롤오버.
+  const today = new Date(dataUpdatedAt).toLocaleString('ko-KR', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -60,9 +51,11 @@ export function DashboardPage() {
     minute: '2-digit',
     hour12: false,
   });
+  const freshness = formatRelativeTime(dataUpdatedAt);
 
   return (
     <PageContainer>
+      <title>대시보드 · Tracker</title>
       <div style={{ marginBottom: 'var(--pad-page-head)' }}>
         <h1
           className="m-0 mb-1 font-semibold"
@@ -93,7 +86,7 @@ export function DashboardPage() {
           <Hero
             count={data.todayCount}
             delta={data.deltaFromYesterday}
-            reviewed={reviewed}
+            freshness={freshness}
           />
 
           <RecentAlertList />
@@ -129,15 +122,11 @@ export function DashboardPage() {
 interface HeroProps {
   count: number;
   delta: number;
-  reviewed: number;
+  freshness: string;
 }
 
-function Hero({ count, delta, reviewed }: HeroProps) {
-  const reviewPct = count > 0 ? Math.round((reviewed / count) * 100) : 0;
+function Hero({ count, delta, freshness }: HeroProps) {
   const deltaSign = delta > 0 ? '↑ +' : delta < 0 ? '↓ ' : '';
-  // mock — backend grouping 필드 합류 시 Detection 응답에서 받음
-  const dupCount = Math.floor(count * 0.3);
-  const uniqueCount = Math.max(0, count - dupCount);
 
   return (
     <section
@@ -149,7 +138,7 @@ function Hero({ count, delta, reviewed }: HeroProps) {
         gap: 'var(--gap-hero)',
       }}
     >
-      {/* 1. 시스템 상태 한 줄 */}
+      {/* 1. 시스템 상태 한 줄 — 데이터 freshness 포함 (FreshnessIndicator 복원) */}
       <div
         className="font-mono flex flex-wrap items-center gap-4 border-b text-xs"
         style={{
@@ -172,6 +161,13 @@ function Hero({ count, delta, reviewed }: HeroProps) {
         </span>
         <Sep />
         <span>
+          데이터 갱신{' '}
+          <span className="font-medium" style={{ color: 'var(--fg)' }}>
+            {freshness}
+          </span>
+        </span>
+        <Sep />
+        <span>
           마지막 크롤{' '}
           <span className="font-medium" style={{ color: 'var(--fg)' }}>
             {LAST_CRAWL_LABEL}
@@ -184,21 +180,14 @@ function Hero({ count, delta, reviewed }: HeroProps) {
             {NEXT_CRAWL_LABEL}
           </span>
         </span>
-        <Sep />
-        <span>
-          큐 <span className="font-medium" style={{ color: 'var(--fg)' }}>0</span>
-        </span>
       </div>
 
-      {/* 2. 카운트 + 진척도 + CTA */}
+      {/* 2. 카운트 + CTA */}
       <div
-        className="grid items-center"
-        style={{
-          gridTemplateColumns: 'auto 1fr auto',
-          gap: 'clamp(20px, 2.5vw, 40px)',
-        }}
+        className="flex flex-wrap items-center justify-between"
+        style={{ gap: 'clamp(20px, 2.5vw, 40px)' }}
       >
-        {/* 좌: 큰 숫자 */}
+        {/* 좌: 큰 숫자 + delta */}
         <div className="flex flex-col gap-1.5">
           <span
             className="text-xs font-medium uppercase"
@@ -239,66 +228,6 @@ function Hero({ count, delta, reviewed }: HeroProps) {
               </>
             )}
           </span>
-          {/* Alert correlation 힌트 — automation bias 완화 (Pattern E) */}
-          <span
-            className="font-mono mt-1.5 inline-flex items-baseline gap-2 self-start rounded-full border px-2.5 py-1 text-xs"
-            style={{
-              background: 'var(--bg-sunk)',
-              borderColor: 'var(--border-1)',
-              color: 'var(--fg-3)',
-            }}
-            title="유사 게시글 그룹화"
-          >
-            <span className="font-medium" style={{ color: 'var(--fg)' }}>
-              {uniqueCount}
-            </span>
-            <span>unique</span>
-            <span style={{ color: 'var(--fg-3)' }}>·</span>
-            <span className="font-medium" style={{ color: 'var(--fg)' }}>
-              {dupCount}
-            </span>
-            <span>중복</span>
-          </span>
-        </div>
-
-        {/* 중: 진척도 */}
-        <div className="flex min-w-0 flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-3">
-            <span
-              className="font-mono font-semibold tabular-nums"
-              style={{
-                fontSize: 'var(--text-xl)',
-                letterSpacing: 'var(--tracking-tight)',
-              }}
-            >
-              {reviewed}
-              <span style={{ color: 'var(--fg-3)', fontWeight: 400 }}>
-                {' '}/ {count}
-              </span>
-            </span>
-            <span
-              className="text-xs font-medium uppercase"
-              style={{ color: 'var(--fg-3)', letterSpacing: '0.08em' }}
-            >
-              검토됨
-            </span>
-          </div>
-          <div
-            className="relative h-2 overflow-hidden rounded"
-            style={{ background: 'var(--bg-sunk)' }}
-          >
-            <div
-              className="h-full rounded transition-all"
-              style={{ width: `${reviewPct}%`, background: 'var(--accent)' }}
-            />
-          </div>
-          <div
-            className="font-mono flex justify-between text-xs"
-            style={{ color: 'var(--fg-3)' }}
-          >
-            <span>{count - reviewed}건 검토 대기</span>
-            <span>{reviewPct}% 완료</span>
-          </div>
         </div>
 
         {/* 우: CTA */}

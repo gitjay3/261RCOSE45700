@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useDetectionsQuery } from '@/api/detections';
+import { useDetectionsSuspenseQuery } from '@/api/detections';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Kbd } from '@/components/ui/kbd';
 import {
   Table,
   TableBody,
@@ -28,6 +28,7 @@ import {
 } from '@/lib/detectionFilter';
 import { useShortcut } from '@/lib/shortcuts';
 import { KNOWN_SOURCES } from '@/lib/sources';
+import { cn } from '@/lib/utils';
 import type { DetectionFilter, DetectionType, Language } from '@/types/api';
 
 const PAGE_SIZE = 20;
@@ -48,11 +49,11 @@ export function DetectionListPage() {
     return { date, site, type, lang, since, page, size: PAGE_SIZE };
   }, [searchParams]);
 
-  const { data, isLoading, error } = useDetectionsQuery(filter);
-  if (error) throw error;
+  const { data } = useDetectionsSuspenseQuery(filter);
+  const [isPending, startTransition] = useTransition();
 
   const [focusedIdx, setFocusedIdx] = useState(0);
-  const [visited, setVisited] = useState<Set<number>>(new Set());
+  const [visited, setVisited] = useState<Set<number>>(() => new Set());
 
   // "previous state in render" — filter ref가 바뀌면 focus 리셋 (effect 회피).
   const [prevFilter, setPrevFilter] = useState(filter);
@@ -61,8 +62,8 @@ export function DetectionListPage() {
     setFocusedIdx(0);
   }
 
-  const items = data?.content ?? [];
-  const totalPages = data ? Math.ceil(data.totalElements / data.size) : 1;
+  const items = data.content;
+  const totalPages = Math.ceil(data.totalElements / data.size);
 
   const updateFilter = (next: Partial<DetectionFilter>, resetPage = true) => {
     const merged: DetectionFilter = {
@@ -71,11 +72,16 @@ export function DetectionListPage() {
       page: resetPage ? 0 : (next.page ?? filter.page),
       size: undefined,
     };
-    setSearchParams(detectionFilterToParams(merged));
+    // useTransition으로 wrap — 새 데이터 fetch 동안 이전 화면 유지 (placeholderData 대체).
+    startTransition(() => {
+      setSearchParams(detectionFilterToParams(merged));
+    });
   };
 
   const resetFilters = () => {
-    setSearchParams(new URLSearchParams());
+    startTransition(() => {
+      setSearchParams(new URLSearchParams());
+    });
   };
 
   const openDetail = (id: number) => {
@@ -103,6 +109,7 @@ export function DetectionListPage() {
 
   return (
     <PageContainer className="gap-4">
+      <title>탐지 목록 · Tracker</title>
       <header className="flex items-baseline justify-between">
         <h1
           className="text-foreground font-semibold tracking-tight"
@@ -110,13 +117,11 @@ export function DetectionListPage() {
         >
           탐지 목록
         </h1>
-        {data && (
-          <span className="text-muted-foreground text-xs">
-            {hasActiveFilter
-              ? `필터 적용: ${data.totalElements}건`
-              : `${data.totalElements}건`}
-          </span>
-        )}
+        <span className="text-muted-foreground text-xs">
+          {hasActiveFilter
+            ? `필터 적용: ${data.totalElements}건`
+            : `${data.totalElements}건`}
+        </span>
       </header>
 
       <FilterBar
@@ -126,13 +131,15 @@ export function DetectionListPage() {
         active={hasActiveFilter}
       />
 
-      {isLoading ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
+      <div
+        // useTransition pending 동안 살짝 dim — 이전 데이터가 보이지만 fetch 진행 중임 표시.
+        aria-busy={isPending || undefined}
+        className={cn(
+          'flex flex-col gap-4 transition-opacity',
+          isPending && 'opacity-60',
+        )}
+      >
+      {items.length === 0 ? (
         hasActiveFilter ? (
           <EmptyState
             variant="filter-empty"
@@ -188,12 +195,12 @@ export function DetectionListPage() {
           )}
 
           <p className="text-muted-foreground text-xs">
-            팁: <kbd className="bg-muted rounded px-1 font-mono">j</kbd>/
-            <kbd className="bg-muted rounded px-1 font-mono">k</kbd> 다음/이전 ·{' '}
-            <kbd className="bg-muted rounded px-1 font-mono">Enter</kbd> 상세
+            팁: <Kbd size="xs">j</Kbd>/<Kbd size="xs">k</Kbd> 다음/이전 ·{' '}
+            <Kbd size="xs">Enter</Kbd> 상세 · <Kbd size="xs">?</Kbd> 전체 단축키
           </p>
         </>
       )}
+      </div>
     </PageContainer>
   );
 }

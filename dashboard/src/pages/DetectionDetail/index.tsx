@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import { useDetectionQuery } from '@/api/detections';
 import { Button } from '@/components/ui/button';
+import { Kbd } from '@/components/ui/kbd';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BilingualPanel } from '@/components/tracker/BilingualPanel';
 import { ConfidenceBadge } from '@/components/tracker/ConfidenceBadge';
@@ -42,6 +43,7 @@ export function DetectionDetailPage() {
   if (isLoading || !data) {
     return (
       <PageContainer className="gap-4">
+        <title>탐지 상세 · Tracker</title>
         <Skeleton className="h-8 w-1/3" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-64 w-full" />
@@ -53,6 +55,7 @@ export function DetectionDetailPage() {
 
   return (
     <PageContainer className="gap-4">
+      <title>{`탐지 #${data.id} · Tracker`}</title>
       <div className="flex items-center justify-between">
         <Link
           to="/detections"
@@ -99,19 +102,15 @@ export function DetectionDetailPage() {
           <Button onClick={handleOpen} className="gap-1.5">
             <ExternalLink className="size-4" aria-hidden />
             원본 게시글 열기
-            <kbd className="bg-primary-foreground/15 ml-2 rounded px-1.5 py-0.5 font-mono text-xs">
-              o
-            </kbd>
+            <Kbd variant="inverse" className="ml-2">o</Kbd>
           </Button>
           <Button variant="outline" onClick={handleCopy} className="gap-1.5">
             <Copy className="size-4" aria-hidden />
             링크 복사
-            <kbd className="bg-muted ml-2 rounded px-1.5 py-0.5 font-mono text-xs">
-              c
-            </kbd>
+            <Kbd className="ml-2">c</Kbd>
           </Button>
           <span className="text-muted-foreground ml-auto text-xs font-mono">
-            <kbd className="bg-muted rounded px-1.5 py-0.5">esc</kbd> 목록 복귀
+            <Kbd>esc</Kbd> 목록 복귀
           </span>
         </div>
         <p className="text-muted-foreground border-t pt-3 text-xs leading-relaxed">

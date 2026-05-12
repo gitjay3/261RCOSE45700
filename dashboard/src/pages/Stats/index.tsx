@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
-import { useStatsQuery } from '@/api/stats';
+import { useStatsSuspenseQuery } from '@/api/stats';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart } from '@/components/charts/BarChart';
 import { LineChart } from '@/components/charts/LineChart';
 import { PieChart } from '@/components/charts/PieChart';
 import { ChartCard } from '@/components/tracker/ChartCard';
 import { EmptyState } from '@/components/tracker/EmptyState';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { colorForType } from '@/components/charts/colors';
 import { getLangLabel, getTypeLabel } from '@/components/tracker/labels';
 import { PageContainer } from '@/layouts/PageContainer';
@@ -14,60 +13,51 @@ import type { StatsPeriod } from '@/types/api';
 
 export function StatsPage() {
   const [period, setPeriod] = useState<StatsPeriod>('weekly');
-  const { data, isLoading, error } = useStatsQuery(period);
-  if (error) throw error;
+  const { data } = useStatsSuspenseQuery(period);
 
-  // hooks는 early return 위에 — 데이터 없으면 빈 배열로 떨어지게.
   const trendData = useMemo(
     () =>
-      data?.trend?.map((entry) => ({
+      data.trend?.map((entry) => ({
         // 'YYYY-MM-DD' → 'M/D'
         name: entry.date.slice(5).replace('-', '/'),
         value: entry.count,
       })) ?? [],
-    [data?.trend],
+    [data.trend],
   );
   const typeData = useMemo(
     () =>
-      data?.typeDistribution.map((entry) => ({
+      data.typeDistribution.map((entry) => ({
         name: getTypeLabel(entry.type),
         value: entry.count,
-      })) ?? [],
-    [data?.typeDistribution],
+      })),
+    [data.typeDistribution],
   );
   const typeColors = useMemo(
-    () => data?.typeDistribution.map((entry) => colorForType(entry.type)) ?? [],
-    [data?.typeDistribution],
+    () => data.typeDistribution.map((entry) => colorForType(entry.type)),
+    [data.typeDistribution],
   );
   const siteData = useMemo(
     () =>
-      data?.siteDistribution.map((entry) => ({
+      data.siteDistribution.map((entry) => ({
         name: entry.site,
         value: entry.count,
-      })) ?? [],
-    [data?.siteDistribution],
+      })),
+    [data.siteDistribution],
   );
   const langData = useMemo(
     () =>
-      data?.langDistribution.map((entry) => ({
+      data.langDistribution.map((entry) => ({
         name: getLangLabel(entry.lang),
         value: entry.count,
-      })) ?? [],
-    [data?.langDistribution],
+      })),
+    [data.langDistribution],
   );
-
-  if (isLoading || !data) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center p-8">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
 
   const trendEmpty = trendData.length === 0;
 
   return (
     <PageContainer className="gap-4">
+      <title>통계 · Tracker</title>
       <header className="flex items-baseline justify-between">
         <h1
           className="text-foreground font-semibold tracking-tight"

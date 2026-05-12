@@ -1,5 +1,5 @@
 import { useNavigate, Link } from 'react-router-dom';
-import { useDetectionsQuery } from '@/api/detections';
+import { useDetectionsSuspenseQuery } from '@/api/detections';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { TypeIcon } from './TypeIcon';
 import { getTypeLabel } from './labels';
@@ -12,10 +12,9 @@ const RECENT_LIMIT = 5;
 
 export function RecentAlertList() {
   const navigate = useNavigate();
-  const { data, isLoading, isError } = useDetectionsQuery({ size: RECENT_LIMIT });
-
-  const items = data?.content ?? [];
-  const total = data?.totalElements ?? 0;
+  const { data } = useDetectionsSuspenseQuery({ size: RECENT_LIMIT });
+  const items = data.content;
+  const total = data.totalElements;
 
   return (
     <section style={{ marginBottom: 'var(--pad-section)' }}>
@@ -24,7 +23,7 @@ export function RecentAlertList() {
           className="text-fg-3 text-xs font-semibold uppercase"
           style={{ letterSpacing: 'var(--tracking-wider)' }}
         >
-          Recent · High confidence
+          최근 탐지
         </span>
         <Link
           to="/detections"
@@ -38,15 +37,7 @@ export function RecentAlertList() {
         role="list"
         className="bg-bg-elev border-border-1 overflow-hidden rounded-md border"
       >
-        {isLoading ? (
-          <div className="text-fg-3 px-6 py-8 text-center text-sm">
-            불러오는 중…
-          </div>
-        ) : isError ? (
-          <div role="alert" className="text-crit px-6 py-8 text-center text-sm">
-            탐지 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
-          </div>
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <div className="text-fg-3 px-6 py-8 text-center text-sm">
             아직 탐지된 항목이 없습니다
           </div>

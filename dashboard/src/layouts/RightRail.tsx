@@ -8,7 +8,7 @@ export function RightRail() {
   return (
     <aside
       aria-label="시스템 활동 패널"
-      className="border-border-1 sticky top-0 flex h-screen flex-col self-start overflow-y-auto border-l"
+      className="border-border-1 sticky top-0 hidden h-screen flex-col self-start overflow-y-auto border-l lg:flex"
       style={{
         background: 'var(--bg-sunk)',
         padding: 'clamp(20px, 2vw, 36px) clamp(16px, 1.6vw, 28px)',

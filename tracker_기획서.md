@@ -571,6 +571,20 @@ LLM 기반 콘텐츠 분류 시스템의 실제 성능 벤치마크(OpenAI Moder
 - **EC2 접근 방식** → **SSH `.pem` only** (2026-05-06 Story 5-2 PIVOT). 학생 IAM이 SSM Session Manager / EC2 Instance Connect / IAM Role 생성 모두 차단하여 SSH `.pem` 키만 가용. 22번 인바운드 `0.0.0.0/0` + ed25519 + fail2ban 3 layer defense-in-depth로 안전화 (host fingerprint verification은 운영 단순화 trade-off로 미적용)
 - **S3 트래픽 라우팅** → IGW 경유 (VPC Gateway Endpoint는 학생 계정 라우트 테이블 수정 권한 불확실로 미생성, 동일 region 내라 비용 영향 미미)
 
+### 10.1.b 대시보드 모바일 지원 PIVOT (2026-05-13 기준)
+
+> 5.3 화면 흐름 + PRD 「반응형: 데스크톱 우선 (1280px 이상). 모바일 대응은 Growth 단계」 결정을 폐기하는 PIVOT. 외부 운영자의 모바일 긴급 조치(원본 URL 점프 + 수동 크롤링 트리거) 요구로 Growth 단계 항목을 MVP로 끌어옴 — Story 4.7 신설.
+
+- **breakpoint**: Tailwind `md` (768px). `< 768px` 모바일 분기, `>= 768px` 데스크톱 분기. JS는 `useIsMobile()` 훅(`window.matchMedia`).
+- **Sidebar**: `< lg` 햄버거 → vaul drawer 슬라이드. 라우트 전환 시 자동 닫힘.
+- **DetectionList**: `< md` 에서 `<table>` 숨김, `DetectionCard` 그리드. 행 클릭 = 상세 진입.
+- **FilterBar**: `< md` 에서 "필터" 버튼 → bottom Drawer(vaul) 로 4종 Select 패널 stack.
+- **차트**: `< md` 단일 컬럼 stack.
+- **단축키**: 데스크톱 전용. 모바일에서는 비활성.
+- **다크 테마**: `next-themes` + `data-theme` + FOUC 가드 인라인 스크립트(`index.html`). UX Spec 「MVP는 단일 라이트」 결정도 함께 폐기.
+- **PWA**: `vite-plugin-pwa` registerType=prompt — manifest + workbox 정적 자산(이미지/폰트)만 캐시, API 응답은 `navigateFallbackDenylist`로 차단. dev 에서는 MSW 우선.
+- **회귀 방지**: 데스크톱 키보드 단축키·테이블 뷰·5/5 페이지 동작 PASS 유지. Playwright `mobile.mobile.spec.ts` (Pixel 7) 3 시나리오 추가.
+
 ### 10.2 잔존 표기 불일치 (재확인·정리 필요)
 
 1. **중국 커뮤니티 사이트 목록**

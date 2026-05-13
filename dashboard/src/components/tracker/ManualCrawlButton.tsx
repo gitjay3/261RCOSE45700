@@ -12,26 +12,19 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useCrawlTriggerMutation } from '@/api/detections';
+import { Kbd } from '@/components/ui/kbd';
 import { useShortcut } from '@/lib/shortcuts';
 
 interface ManualCrawlButtonProps {
-  /** Trigger 성공 직후 호출. NewDetectionsBadge 표시 시점 기록용. */
+  /** Trigger 성공 직후 호출. */
   onTriggerSuccess?: () => void;
 }
 
-/**
- * Journey 2 (긴급 대응) — 수동 크롤링 트리거 + 확인 모달 + 진행 추적.
- *
- * Flow:
- *   클릭 / `g+t` 단축키 → Dialog 열림 → 확인 →
- *   버튼 비활성화 + 스피너 → Toast "트리거 완료, 예상 3분" →
- *   60초 후 폴링 자동 갱신 (api/detections invalidate).
- */
+/** Journey 2 (긴급 대응) 수동 크롤링 트리거 — 확인 Dialog + g+t 단축키. */
 export function ManualCrawlButton({ onTriggerSuccess }: ManualCrawlButtonProps = {}) {
   const [open, setOpen] = useState(false);
   const mutation = useCrawlTriggerMutation();
 
-  // g+t 단축키로 모달 열기
   useShortcut('g+t', () => setOpen(true));
 
   const handleConfirm = async () => {
@@ -63,13 +56,14 @@ export function ManualCrawlButton({ onTriggerSuccess }: ManualCrawlButtonProps =
         >
           <RefreshCw className="size-3.5" aria-hidden />
           <span>수동 크롤링</span>
-          <kbd
+          <Kbd
             aria-hidden
-            className="font-mono ml-0.5 rounded-[3px] px-1.5 py-px text-[10px] font-normal"
-            style={{ background: 'var(--bg-sunk)', color: 'var(--fg-3)' }}
+            variant="outline"
+            size="xs"
+            className="ml-0.5 hidden md:inline-flex"
           >
             g+t
-          </kbd>
+          </Kbd>
         </Button>
       </DialogTrigger>
       <DialogContent>

@@ -8,37 +8,31 @@ import {
 } from 'recharts';
 import { CHART_PALETTE_VARS } from './colors';
 import { chartTooltipProps } from './tooltip';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 interface PieChartProps {
   data: Array<{ name: string; value: number }>;
   /** Optional override for slice colors. Defaults to CHART_PALETTE_VARS. */
   colors?: readonly string[];
-  height?: number;
-  /** Show as donut (innerRadius > 0). Default true to match UX Spec mockup. */
-  donut?: boolean;
 }
 
 /**
- * Tracker PieChart — 도넛 스타일 + 우측 세로 legend (UX Spec HTML 시안 일치).
- * 슬라이스 색상은 var(--chart-1)~var(--chart-5) (UX Spec Step 8 chart palette).
+ * 모바일(< md)에서 우측 legend는 좁은 폭에 파이를 짓누르므로 하단 가로 legend로 전환.
  */
-export function PieChart({
-  data,
-  colors = CHART_PALETTE_VARS,
-  height = 260,
-  donut = true,
-}: PieChartProps) {
+export function PieChart({ data, colors = CHART_PALETTE_VARS }: PieChartProps) {
+  const isMobile = useIsMobile();
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ResponsiveContainer width="100%" height={isMobile ? 220 : 260}>
       <RechartsPieChart>
         <Pie
           data={data}
           dataKey="value"
           nameKey="name"
-          cx="40%"
-          cy="50%"
-          innerRadius={donut ? 50 : 0}
-          outerRadius={90}
+          cx={isMobile ? '50%' : '40%'}
+          cy={isMobile ? '42%' : '50%'}
+          innerRadius={isMobile ? 38 : 50}
+          outerRadius={isMobile ? 70 : 90}
           paddingAngle={data.length > 1 ? 1 : 0}
           stroke="var(--background)"
           strokeWidth={2}
@@ -49,13 +43,14 @@ export function PieChart({
         </Pie>
         <Tooltip {...chartTooltipProps} />
         <Legend
-          layout="vertical"
-          verticalAlign="middle"
-          align="right"
+          layout={isMobile ? 'horizontal' : 'vertical'}
+          verticalAlign={isMobile ? 'bottom' : 'middle'}
+          align={isMobile ? 'center' : 'right'}
           iconType="square"
           wrapperStyle={{
-            fontSize: 12,
-            paddingLeft: 16,
+            fontSize: isMobile ? 11 : 12,
+            paddingLeft: isMobile ? 0 : 16,
+            paddingTop: isMobile ? 8 : 0,
           }}
         />
       </RechartsPieChart>

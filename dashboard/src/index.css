@@ -259,6 +259,14 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* === Safe-area (iOS notch / Android navigation bar) — viewport-fit=cover 후 활성 === */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
 /* === Spacing/size 토큰 (Comfortable density 단일) — 컴포넌트가 참조 === */
 :root {
   --pad-hero: clamp(20px, 2vw, 32px);

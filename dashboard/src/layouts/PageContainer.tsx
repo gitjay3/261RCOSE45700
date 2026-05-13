@@ -11,7 +11,11 @@ export function PageContainer({ children, className }: PageContainerProps) {
   return (
     <div
       className={cn('mx-auto flex w-full max-w-[1300px] flex-col', className)}
-      style={{ padding: 'var(--pad-page)' }}
+      style={{
+        // 하단에 safe-area-bottom 추가 — iOS 홈 인디케이터 침범 회피.
+        padding: 'var(--pad-page)',
+        paddingBottom: 'calc(var(--pad-page) + var(--sab))',
+      }}
     >
       {children}
     </div>

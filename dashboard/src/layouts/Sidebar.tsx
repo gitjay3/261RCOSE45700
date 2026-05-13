@@ -39,7 +39,9 @@ export function Sidebar({ drawerOpen, onClose }: SidebarProps) {
         style={{
           background: 'var(--bg-sunk)',
           borderColor: 'var(--border-1)',
-          padding: 'clamp(16px, 1.5vw, 28px) clamp(10px, 0.8vw, 16px)',
+          // drawer 모드(< lg)에서 상단 노치 + 하단 홈 인디케이터 침범 회피.
+          // lg 이상에선 safe-area=0이라 영향 없음.
+          padding: 'calc(clamp(16px, 1.5vw, 28px) + var(--sat)) clamp(10px, 0.8vw, 16px) calc(clamp(16px, 1.5vw, 28px) + var(--sab))',
         }}
       >
         {/* 헤더 — 로고 + 닫기 (모바일만) */}

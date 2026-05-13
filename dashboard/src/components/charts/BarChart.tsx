@@ -9,49 +9,43 @@ import {
   YAxis,
 } from 'recharts';
 import { chartTooltipProps } from './tooltip';
-
-const truncateLabel = (name: string) =>
-  name.length > 18 ? name.slice(0, 17) + '…' : name;
+import { useIsMobile } from '@/lib/useIsMobile';
 
 interface BarChartProps {
   data: Array<{ name: string; value: number }>;
-  /** CSS color (CSS variable, hex, hsl, oklch). Defaults to --foreground token. */
-  color?: string;
-  height?: number;
 }
 
 /**
- * Tracker BarChart — 가로 레이아웃 + 얇은 막대 + 0.85 opacity.
- * UX Spec HTML 시안의 .bar-row 스타일에 가깝게 (label 좌측 / 막대 중앙 / 숫자 우측).
- *
- * 색상은 var(--foreground) 기본 (near-black). Direction C-Light 톤 유지하되
- * fillOpacity로 시각적 강도 완화 → "데이터 막대" 느낌.
+ * 모바일에선 YAxis 폭/라벨 길이를 축소해 좁은 화면에서 카테고리 라벨이 차트 영역을
+ * 침범하지 않게 한다.
  */
-export function BarChart({
-  data,
-  color = 'var(--foreground)',
-  height = 260,
-}: BarChartProps) {
+export function BarChart({ data }: BarChartProps) {
+  const isMobile = useIsMobile();
+  const yAxisWidth = isMobile ? 84 : 140;
+  const truncateAt = isMobile ? 10 : 18;
+  const truncateLabel = (name: string) =>
+    name.length > truncateAt ? name.slice(0, truncateAt - 1) + '…' : name;
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ResponsiveContainer width="100%" height={isMobile ? 200 : 260}>
       <RechartsBarChart
         data={data}
         layout="vertical"
-        margin={{ top: 8, right: 32, bottom: 8, left: 8 }}
+        margin={{ top: 8, right: isMobile ? 24 : 32, bottom: 8, left: 8 }}
       >
         <CartesianGrid horizontal={false} stroke="var(--border)" strokeDasharray="3 3" />
         <XAxis
           type="number"
           stroke="var(--muted-foreground)"
-          fontSize={11}
+          fontSize={isMobile ? 10 : 11}
           allowDecimals={false}
         />
         <YAxis
           dataKey="name"
           type="category"
           stroke="var(--muted-foreground)"
-          fontSize={12}
-          width={140}
+          fontSize={isMobile ? 10 : 12}
+          width={yAxisWidth}
           tickLine={false}
           axisLine={false}
           tickFormatter={truncateLabel}
@@ -59,16 +53,16 @@ export function BarChart({
         <Tooltip {...chartTooltipProps} />
         <Bar
           dataKey="value"
-          fill={color}
+          fill="var(--foreground)"
           fillOpacity={0.85}
           radius={[0, 4, 4, 0]}
-          barSize={14}
+          barSize={isMobile ? 12 : 14}
         >
           <LabelList
             dataKey="value"
             position="right"
             fill="var(--foreground)"
-            fontSize={12}
+            fontSize={isMobile ? 10 : 12}
             fontFamily="var(--font-mono)"
           />
         </Bar>

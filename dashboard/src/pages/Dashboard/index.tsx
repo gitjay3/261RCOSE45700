@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { PieChart } from '@/components/charts/PieChart';
@@ -7,9 +6,12 @@ import { ChartCard } from '@/components/tracker/ChartCard';
 import { EmptyState } from '@/components/tracker/EmptyState';
 import { RecentAlertList } from '@/components/tracker/RecentAlertList';
 import { useStatsSuspenseQuery } from '@/api/stats';
-import { getTypeLabel } from '@/components/tracker/labels';
-import { colorForType } from '@/components/charts/colors';
 import { PageContainer } from '@/layouts/PageContainer';
+import {
+  siteDistributionToSeries,
+  typeDistributionToColors,
+  typeDistributionToSeries,
+} from '@/lib/statsView';
 import { formatRelativeTime } from '@/lib/time';
 
 const NEXT_CRAWL_LABEL = '42분 후';
@@ -20,29 +22,11 @@ export function DashboardPage() {
   // 유발. ticker 불필요. 자정 롤오버도 다음 polling tick(<60s)에 자연 반영.
   const { data, dataUpdatedAt } = useStatsSuspenseQuery();
 
-  const typeData = useMemo(
-    () =>
-      data.typeDistribution.map((entry) => ({
-        name: getTypeLabel(entry.type),
-        value: entry.count,
-      })),
-    [data.typeDistribution],
-  );
-  const typeColors = useMemo(
-    () => data.typeDistribution.map((entry) => colorForType(entry.type)),
-    [data.typeDistribution],
-  );
-  const siteData = useMemo(
-    () =>
-      data.siteDistribution.map((entry) => ({
-        name: entry.site,
-        value: entry.count,
-      })),
-    [data.siteDistribution],
-  );
+  const typeData = typeDistributionToSeries(data.typeDistribution);
+  const typeColors = typeDistributionToColors(data.typeDistribution);
+  const siteData = siteDistributionToSeries(data.siteDistribution);
 
   const isEmpty = data.todayCount === 0;
-  // dataUpdatedAt 기반 — 60s ticker가 분 단위 re-render 책임. 자정 넘어도 자연 롤오버.
   const today = new Date(dataUpdatedAt).toLocaleString('ko-KR', {
     year: 'numeric',
     month: '2-digit',
@@ -138,7 +122,6 @@ function Hero({ count, delta, freshness }: HeroProps) {
         gap: 'var(--gap-hero)',
       }}
     >
-      {/* 1. 시스템 상태 한 줄 — 데이터 freshness 포함 (FreshnessIndicator 복원) */}
       <div
         className="font-mono flex flex-wrap items-center gap-4 border-b text-xs"
         style={{
@@ -182,12 +165,10 @@ function Hero({ count, delta, freshness }: HeroProps) {
         </span>
       </div>
 
-      {/* 2. 카운트 + CTA */}
       <div
         className="flex flex-wrap items-center justify-between"
         style={{ gap: 'clamp(20px, 2.5vw, 40px)' }}
       >
-        {/* 좌: 큰 숫자 + delta */}
         <div className="flex flex-col gap-1.5">
           <span
             className="text-xs font-medium uppercase"
@@ -230,11 +211,10 @@ function Hero({ count, delta, freshness }: HeroProps) {
           </span>
         </div>
 
-        {/* 우: CTA */}
         <Link
           to="/detections"
           aria-label={`탐지 목록 보러 가기 — ${count.toLocaleString('ko-KR')}건`}
-          className="group focus-visible:ring-ring/60 inline-flex items-center gap-2.5 whitespace-nowrap rounded-md text-sm font-semibold no-underline transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2"
+          className="group focus-visible:ring-ring/60 inline-flex w-full items-center justify-center gap-2.5 whitespace-nowrap rounded-md text-sm font-semibold no-underline transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 md:w-auto md:justify-start"
           style={{
             padding: '14px 22px',
             background: 'var(--accent)',

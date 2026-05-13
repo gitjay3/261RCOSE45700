@@ -30,7 +30,7 @@ export function RootLayout() {
   }
 
   return (
-    <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[clamp(240px,18vw,400px)_minmax(0,1fr)_clamp(240px,17vw,340px)]">
+    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[clamp(240px,18vw,400px)_minmax(0,1fr)_clamp(240px,17vw,340px)]">
       <Sidebar drawerOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <main className="flex min-w-0 flex-col">
         <Topbar onMenuClick={() => setDrawerOpen(true)} />

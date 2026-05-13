@@ -117,7 +117,7 @@ React Router v7 기반 4개 라우트와 메인 대시보드 화면이 백엔드
 | `components/common/ErrorBoundary.tsx`, `LoadingSpinner.tsx`, `RefreshIndicator.tsx` | 토스트 알림 컴포넌트 → Story 4.5 (수동 크롤링 트리거 결과 표시) |
 | MSW v2 `GET /stats` 핸들러 1개 | `GET /detections`, `GET /detections/{id}`, `POST /crawl/trigger` mock → Story 4.5 |
 | 보일러플레이트 카운터 데모 제거 (App.tsx, App.css, assets/) | 실제 백엔드 연동 → Story 4.1·4.3 dev 완료 후 통합 |
-| 1280px 데스크톱 레이아웃 | 모바일 반응형 → Growth 단계 (PRD L233) |
+| 1280px 데스크톱 레이아웃 | ~~모바일 반응형 → Growth 단계 (PRD L233)~~ → **Story 4.7 (2026-05-13) 에서 MVP 편입.** PRD L233 / UX Spec L1503·L1567 폐기 PIVOT |
 | 60초 폴링 + 진행 인디케이터 | 5분 이내 반영 E2E 검증 → Story 4.5 (`tests/performance/test_pipeline_latency.py`) |
 
 ### Project Context

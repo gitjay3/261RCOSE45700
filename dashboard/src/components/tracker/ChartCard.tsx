@@ -1,12 +1,10 @@
 import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 interface ChartCardProps {
   title: string;
   subtitle?: string;
-  loading?: boolean;
   empty?: boolean;
   emptyMessage?: string;
   children: ReactNode;
@@ -16,14 +14,13 @@ interface ChartCardProps {
 export function ChartCard({
   title,
   subtitle,
-  loading = false,
   empty = false,
   emptyMessage = '표시할 데이터가 없습니다',
   children,
   className,
 }: ChartCardProps) {
   return (
-    <Card className={cn('flex flex-col', className)}>
+    <Card className={cn('@container/chart flex flex-col', className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold">{title}</CardTitle>
         {subtitle && (
@@ -31,10 +28,8 @@ export function ChartCard({
         )}
       </CardHeader>
       <CardContent className="flex flex-1 items-center justify-center">
-        {loading ? (
-          <Skeleton className="h-[260px] w-full" />
-        ) : empty ? (
-          <div className="text-muted-foreground flex h-[260px] w-full items-center justify-center text-sm">
+        {empty ? (
+          <div className="text-muted-foreground flex h-[200px] w-full items-center justify-center text-sm @md/chart:h-[260px]">
             {emptyMessage}
           </div>
         ) : (

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useStatsSuspenseQuery } from '@/api/stats';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart } from '@/components/charts/BarChart';
@@ -6,52 +6,29 @@ import { LineChart } from '@/components/charts/LineChart';
 import { PieChart } from '@/components/charts/PieChart';
 import { ChartCard } from '@/components/tracker/ChartCard';
 import { EmptyState } from '@/components/tracker/EmptyState';
-import { colorForType } from '@/components/charts/colors';
-import { getLangLabel, getTypeLabel } from '@/components/tracker/labels';
 import { PageContainer } from '@/layouts/PageContainer';
+import {
+  langDistributionToSeries,
+  siteDistributionToSeries,
+  typeDistributionToColors,
+  typeDistributionToSeries,
+} from '@/lib/statsView';
 import type { StatsPeriod } from '@/types/api';
 
 export function StatsPage() {
   const [period, setPeriod] = useState<StatsPeriod>('weekly');
   const { data } = useStatsSuspenseQuery(period);
 
-  const trendData = useMemo(
-    () =>
-      data.trend?.map((entry) => ({
-        // 'YYYY-MM-DD' → 'M/D'
-        name: entry.date.slice(5).replace('-', '/'),
-        value: entry.count,
-      })) ?? [],
-    [data.trend],
-  );
-  const typeData = useMemo(
-    () =>
-      data.typeDistribution.map((entry) => ({
-        name: getTypeLabel(entry.type),
-        value: entry.count,
-      })),
-    [data.typeDistribution],
-  );
-  const typeColors = useMemo(
-    () => data.typeDistribution.map((entry) => colorForType(entry.type)),
-    [data.typeDistribution],
-  );
-  const siteData = useMemo(
-    () =>
-      data.siteDistribution.map((entry) => ({
-        name: entry.site,
-        value: entry.count,
-      })),
-    [data.siteDistribution],
-  );
-  const langData = useMemo(
-    () =>
-      data.langDistribution.map((entry) => ({
-        name: getLangLabel(entry.lang),
-        value: entry.count,
-      })),
-    [data.langDistribution],
-  );
+  // 'YYYY-MM-DD' → 'M/D' (trend X축 label)
+  const trendData =
+    data.trend?.map((entry) => ({
+      name: entry.date.slice(5).replace('-', '/'),
+      value: entry.count,
+    })) ?? [];
+  const typeData = typeDistributionToSeries(data.typeDistribution);
+  const typeColors = typeDistributionToColors(data.typeDistribution);
+  const siteData = siteDistributionToSeries(data.siteDistribution);
+  const langData = langDistributionToSeries(data.langDistribution);
 
   const trendEmpty = trendData.length === 0;
 

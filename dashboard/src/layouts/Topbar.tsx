@@ -49,8 +49,12 @@ export function Topbar({ onMenuClick }: TopbarProps) {
     <div
       className="flex items-center gap-2.5 border-b"
       style={{
-        height: 'var(--h-topbar)',
-        padding: '0 var(--pad-topbar-x)',
+        // iOS safe-area top — 노치/상태바 침범 회피. 데스크탑은 sat=0이라 영향 없음.
+        height: 'calc(var(--h-topbar) + var(--sat))',
+        paddingTop: 'var(--sat)',
+        paddingRight: 'var(--pad-topbar-x)',
+        paddingBottom: 0,
+        paddingLeft: 'var(--pad-topbar-x)',
         borderColor: 'var(--border-1)',
       }}
     >

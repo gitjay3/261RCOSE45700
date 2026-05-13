@@ -1,73 +1,88 @@
-# React + TypeScript + Vite
+# dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Tracker 운영자 대시보드 — React 19 SPA. 탐지 결과 조회·통계 시각화·수동 크롤링 트리거를 5분 SLA 안에 마무리하는 데 봉사한다.
 
-Currently, two official plugins are available:
+루트 README 의 [Epic 4 프론트엔드 섹션](../README.md#dashboard-epic-4-프론트엔드) 과 [`_bmad-output/planning-artifacts/ux-design-specification.md`](../_bmad-output/planning-artifacts/ux-design-specification.md) 가 단일 진실의 원천(SSoT). 본 README 는 dashboard 디렉토리에 들어온 개발자가 손에 잡힐 정보만 정리한다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 스택
 
-## React Compiler
+| 영역 | 선택 |
+|---|---|
+| 런타임/빌드 | Node.js 20.19+, Vite 8, React 19, TypeScript |
+| 라우팅 | React Router v7 (코드 스플릿 `lazy()` + route-level chunk) |
+| 서버 상태 | TanStack Query v5 (`useQuery({ refetchInterval: 60_000 })`) |
+| 디자인 시스템 | Tailwind v4 + shadcn/ui (style: new-york) + Radix Primitives |
+| 차트 | Recharts (`--chart-1`~`--chart-5` CSS 변수 주입) |
+| 폼·검증 | 없음 (필터는 URL query, 입력 폼 없음) |
+| 알림 | Sonner (toast) |
+| 아이콘 | lucide-react |
+| 테마 | `next-themes` + `data-theme` (FOUC 가드는 `index.html` 인라인 스크립트, 라이트/다크 2-tier 토큰) |
+| 모바일 | vaul drawer + `useIsMobile()` (Tailwind `md` 768px breakpoint, Story 4-7) |
+| PWA | `vite-plugin-pwa` registerType=prompt, runtime cache는 정적 자산만(API 차단) |
+| 단위 테스트 | Vitest(jsdom) + Testing Library + `@testing-library/jest-dom` |
+| Mock API | MSW v2 (`public/mockServiceWorker.js`, `VITE_API_BASE_URL` 미설정 시 활성) |
+| E2E | Playwright 1.60 (chromium 데스크톱 + Pixel 7 모바일) |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 명령
 
-## Expanding the ESLint configuration
+```bash
+npm install
+npm run dev          # Vite dev server (MSW 활성 — VITE_API_BASE_URL 미설정 시)
+npm run build        # tsc -b && vite build (manualChunks: recharts/radix/tanstack/date-fns)
+npm run preview      # 빌드 산출물 미리보기
+npm run lint         # eslint (@eslint-react + react-hooks + react-refresh)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+npm test             # Vitest run (CI 모드)
+npm run test:watch   # Vitest watch
+npm run test:coverage  # Vitest + v8 coverage
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+npx playwright install --with-deps  # 최초 1회
+npm run e2e          # 데스크톱 + 모바일 spec 모두 실행
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 환경 변수
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| 키 | 기본 | 설명 |
+|---|---|---|
+| `VITE_API_BASE_URL` | 미설정 | 실 API 엔드포인트. 미설정 시 MSW worker가 가로채 mock 응답 반환. 로컬 백엔드 통합 시 `http://localhost:8080/api`. 프로덕션은 nginx reverse-proxy 경로 `/api` |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 디렉토리 구조
+
 ```
+src/
+├── api/            # axios 클라이언트 + TanStack Query hooks (useDetectionsQuery, useStatsSuspenseQuery 등)
+├── components/
+│   ├── ui/         # shadcn primitives (button, card, dialog, drawer, select, table, tabs, sonner, skeleton, kbd)
+│   ├── charts/     # Recharts 래퍼 (BarChart, LineChart, PieChart, colors)
+│   └── tracker/    # 도메인 컴포넌트 (DetectionRow, DetectionCard, BilingualPanel, ManualCrawlButton, NewDetectionsBadge, ConfidenceBadge, TypeIcon, ChartCard, EmptyState, ShortcutsCheatsheet, RecentAlertList, labels)
+├── layouts/        # RootLayout / Sidebar(햄버거 drawer) / Topbar / PageContainer
+├── pages/          # Dashboard / DetectionList / DetectionDetail / Stats (route-level lazy)
+├── lib/            # detectionFilter / severity / statsView / time / shortcuts / sources / useIsMobile / utils
+├── mocks/          # MSW v2 handlers + dev fixtures
+├── main.tsx        # createRoot + ThemeProvider + QueryClientProvider + Router
+└── index.css       # Tailwind v4 entry + CSS variable tokens (light/dark)
+```
+
+## 키보드 단축키 (데스크톱)
+
+- `j` / `k` — 목록 행 다음/이전
+- `enter` — 상세 진입, `esc` — 목록 복귀
+- `o` — 출처 URL 새 탭, `c` — 링크 복사
+- `g + d` — 대시보드, `g + l` — 탐지 목록, `g + s` — 통계, `g + t` — 수동 트리거
+- `/` — 검색 focus, `?` — 단축키 cheatsheet
+
+모바일 < md 에서는 단축키 비활성, 햄버거 menu drawer + 카드 탭으로 대체.
+
+## 백엔드 통합 메모
+
+- API 응답은 camelCase (Jackson). Spring `ProblemDetail` (RFC 9457) 기반 에러를 `ErrorBoundary` 에서 사용자 메시지로 변환.
+- `X-Correlation-ID` 응답 헤더는 axios interceptor 가 sessionStorage 에 캐시 → 사용자가 신고 시 콘솔에서 식별 가능.
+- 60초 폴링은 `useQuery({ refetchInterval: 60_000 })` 기본값. 통계 / 목록 모두 동일.
+
+## Story 4-7 모바일 지원 (in-progress)
+
+- 진입 트리거: `useIsMobile()` (`window.matchMedia('(max-width: 767px)')`).
+- 사이드바: lg 이상 고정 / `< lg`에서 햄버거 버튼 → vaul drawer 슬라이드.
+- DetectionList: `< md`에서 `<table>` 숨김, `DetectionCard` 그리드로 교체. 행 클릭 = 상세 진입.
+- FilterBar: `< md`에서 bottom Drawer 로 전체 필터 패널 표시.
+- E2E: `e2e/mobile.mobile.spec.ts` — Pixel 7 viewport 3 시나리오.

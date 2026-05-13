@@ -3,7 +3,7 @@ import { useDetectionsSuspenseQuery } from '@/api/detections';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { TypeIcon } from './TypeIcon';
 import { getTypeLabel } from './labels';
-import { severityOf } from '@/lib/severity';
+import { SEVERITY_TINT_CLASSES, severityOf } from '@/lib/severity';
 import { formatRelativeTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import type { Detection } from '@/types/api';
@@ -68,42 +68,71 @@ function AlertRow({ detection, onClick }: { detection: Detection; onClick: () =>
       data-severity={severity}
       title={snippet}
       className={cn(
-        'group border-border-1 grid w-full cursor-pointer items-center border-t bg-transparent text-left transition-colors first:border-t-0 hover:bg-[var(--hover)]',
-        // color-mix tint는 라이트/다크 자동 swap
-        'data-[severity=high]:shadow-[inset_6px_0_0_var(--crit-bg)] data-[severity=high]:bg-[color-mix(in_oklch,var(--crit-bg)_8%,transparent)]',
-        'data-[severity=medium]:shadow-[inset_6px_0_0_var(--warn-bg)] data-[severity=medium]:bg-[color-mix(in_oklch,var(--warn-bg)_6%,transparent)]',
+        'group border-border-1 block w-full cursor-pointer border-t bg-transparent text-left transition-colors first:border-t-0 hover:bg-[var(--hover)]',
+        SEVERITY_TINT_CLASSES,
       )}
-      style={{
-        gridTemplateColumns: '52px 28px minmax(120px, 180px) minmax(0, 1fr) 90px',
-        gap: 'clamp(10px, 1vw, 18px)',
-        padding: 'var(--pad-alert-row-y) var(--pad-alert-row-x)',
-      }}
     >
-      <ConfidenceBadge score={detection.confidence} aria-hidden />
-      <TypeIcon type={detection.type} showLabel={false} />
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span
-          className="text-fg font-medium"
-          style={{ fontSize: 'var(--size-alert-type)' }}
-        >
-          {getTypeLabel(detection.type)}
-        </span>
+      {/* Mobile (< md) */}
+      <div className="flex flex-col gap-1.5 px-4 py-3 md:hidden">
+        <div className="flex items-center gap-2.5">
+          <ConfidenceBadge score={detection.confidence} aria-hidden />
+          <TypeIcon type={detection.type} />
+          <span
+            className="text-fg-3 font-mono ml-auto text-xs tabular-nums"
+            style={{ fontFeatureSettings: "'liga' off" }}
+          >
+            {time}
+          </span>
+        </div>
         <span
           className="text-fg-3 font-mono text-xs"
           style={{ fontFeatureSettings: "'liga' off" }}
         >
           {detection.siteName}
         </span>
+        <p
+          className="text-fg-2 line-clamp-2 text-sm leading-relaxed"
+          style={{ fontSize: 'var(--size-alert-snippet)' }}
+        >
+          {snippet}
+        </p>
       </div>
-      <span
-        className="text-fg-2 overflow-hidden text-ellipsis whitespace-nowrap"
-        style={{ fontSize: 'var(--size-alert-snippet)' }}
+
+      {/* Desktop (≥ md) */}
+      <div
+        className="hidden items-center md:grid"
+        style={{
+          gridTemplateColumns: '52px 28px minmax(120px, 180px) minmax(0, 1fr) 90px',
+          gap: 'clamp(10px, 1vw, 18px)',
+          padding: 'var(--pad-alert-row-y) var(--pad-alert-row-x)',
+        }}
       >
-        {snippet}
-      </span>
-      <span className="text-fg-3 font-mono text-right text-xs tabular-nums">
-        {time}
-      </span>
+        <ConfidenceBadge score={detection.confidence} aria-hidden />
+        <TypeIcon type={detection.type} showLabel={false} />
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span
+            className="text-fg font-medium"
+            style={{ fontSize: 'var(--size-alert-type)' }}
+          >
+            {getTypeLabel(detection.type)}
+          </span>
+          <span
+            className="text-fg-3 font-mono text-xs"
+            style={{ fontFeatureSettings: "'liga' off" }}
+          >
+            {detection.siteName}
+          </span>
+        </div>
+        <span
+          className="text-fg-2 overflow-hidden text-ellipsis whitespace-nowrap"
+          style={{ fontSize: 'var(--size-alert-snippet)' }}
+        >
+          {snippet}
+        </span>
+        <span className="text-fg-3 font-mono text-right text-xs tabular-nums">
+          {time}
+        </span>
+      </div>
     </button>
   );
 }

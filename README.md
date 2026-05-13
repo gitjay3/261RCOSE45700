@@ -134,6 +134,12 @@ cd api && ./gradlew build; cd ..
 # dashboard
 cd dashboard && npm run build; cd ..
 # 출력: ✓ built in <time>
+
+# dashboard 단위 테스트 (Vitest + RTL + MSW)
+cd dashboard && npm test; cd ..
+
+# dashboard e2e (Playwright — Pixel 7 모바일 viewport 포함)
+cd dashboard && npx playwright install --with-deps && npm run e2e; cd ..
 ```
 
 ## 서브시스템별 구현 현황
@@ -168,7 +174,7 @@ cd dashboard && npm run build; cd ..
 
 ### api (Epic 4 백엔드)
 
-**Status:** Story 4-1 / 4-2 done · Story 4-3 PR #27 진행 중
+**Status:** Story 4-1 / 4-2 / 4-3 done (2026-05-06 4-3 review → done, 24 tests PASS)
 
 | 항목 | 설명 |
 |------|------|
@@ -176,22 +182,25 @@ cd dashboard && npm run build; cd ..
 | `GET /api/detections` | 탐지 목록 조회 (페이지네이션 + 필터, `confidence >= 0.70` 자동 적용, `confidence DESC` 정렬) — Story 4-1 done |
 | `GET /api/detections/{id}` | 탐지 상세 조회 (RFC 9457 ProblemDetail + `errorCode: "DETECTION_NOT_FOUND"`) — Story 4-2 done |
 | `POST /api/crawl/trigger` | 수동 크롤링 트리거 (Redis pub/sub `crawl:trigger` publish) — Story 4-2 done |
-| `GET /api/stats` | 통계 (오늘 / 주간 / 월간 + 사이트·유형·언어 분포) — Story 4-3 backlog (PR #27) |
+| `GET /api/stats` | 통계 (오늘 / 주간 / 월간 + 사이트·유형·언어 분포, Redis DB3 캐싱 TTL 60s + fallback, JPQL 5종, 0건 날짜 zero-fill) — Story 4-3 done |
 | Swagger UI | `/swagger-ui.html` 에서 API 문서 확인 |
 | `Dockerfile` | Story 5.2 — multi-stage `eclipse-temurin:21-jdk-noble` builder → `21-jre-noble` runtime, `/actuator/health` curl 헬스체크 |
 
 ### dashboard (Epic 4 프론트엔드)
 
-**Status:** done (5/5 페이지) — 디자인 시스템 v10 overhaul (PR #9, 24 patch) 완료
+**Status:** 데스크톱 5/5 페이지 done (디자인 시스템 v10 overhaul PR #9 + Epic 4 frontend completion PR #36 + TanStack Query v5 / React 19 idioms 리팩터). **Story 4-7 모바일 지원 진행 중** ([`feat/dashboard-mobile-support`](https://github.com/byungju0/261RCOSE45700/tree/feat/dashboard-mobile-support) — 2026-05-13 PIVOT, UX Spec L1503/1567 모바일 out-of-scope 결정 폐기).
 
 | 페이지/기능 | 설명 |
 |------------|------|
 | Dashboard (`/`) | 탐지 현황 요약 + 차트 2종 |
-| Detection List (`/detections`) | 목록 + 필터 + 키보드 네비게이션 (j/k/enter/o/c/esc/g+t/g+d/g+l/g+s) |
+| Detection List (`/detections`) | 목록 + 필터 + 키보드 네비게이션 (j/k/enter/o/c/esc/g+t/g+d/g+l/g+s) · 모바일 < md에서 카드 뷰(`DetectionCard`) 전환 |
 | Detection Detail (`/detections/:id`) | 원문·번역문 이중 패널 (BilingualPanel) + 신뢰도 배지 |
-| Stats (`/stats`) | 주간/월간 추이 LineChart + 사이트별 BarChart + 유형별 PieChart |
-| 디자인 시스템 | Tailwind v4 + shadcn/ui + NC AI 브랜드 토큰 (WCAG AA 2-tier) |
-| MSW v2 Mock | 백엔드 미완성 엔드포인트 대체 (개발/테스트용) |
+| Stats (`/stats`) | 주간/월간 추이 LineChart + 사이트별 BarChart + 유형별·언어별 PieChart |
+| 디자인 시스템 | Tailwind v4 + shadcn/ui + NC AI 브랜드 토큰 (라이트/다크 2-tier, `next-themes` + FOUC 가드) |
+| 모바일 지원 | < 768px 햄버거 drawer(vaul) + FilterBar bottom Drawer + DetectionList 카드 뷰 (Story 4-7) |
+| PWA | `vite-plugin-pwa` registerType=prompt, manifest + workbox runtime caching (static asset only) |
+| 테스트 | Vitest(jsdom) 단위 + RTL + MSW v2 mock + Playwright e2e(데스크톱 + Pixel 7) |
+| MSW v2 Mock | 백엔드 미완성/오프라인 개발 대체 (`VITE_API_BASE_URL` 미설정 시 자동 활성) |
 | `Dockerfile` | Story 5.2 — multi-stage `node:20.19-alpine` builder → `nginx:1.27-alpine` runtime, `/healthz` 응답 |
 
 ## Redis DB 구성
@@ -225,7 +234,7 @@ cd dashboard && npm run build; cd ..
 | Epic 1 | 프로젝트 토대 및 인프라 | **완료** (회고 done) |
 | Epic 2 | 자동 크롤링 및 전처리 파이프라인 | **완료** |
 | Epic 3 | AI 기반 탐지 파이프라인 | 진행 중 (mockup, 3-4 / 3-5 예정) |
-| Epic 4 | 탐지 결과 조회 및 통계 대시보드 | 진행 중 (프론트엔드 5/5 done · 백엔드 4-1 / 4-2 done · 4-3 PR #27 진행) |
+| Epic 4 | 탐지 결과 조회 및 통계 대시보드 | 진행 중 (백엔드 4-1~4-3 done · 프론트엔드 데스크톱 4-4~4-6 done · **4-7 모바일 지원 in-progress**) |
 | Epic 5 | 운영·모니터링·프로덕션 배포 | 진행 중 (5-0 SPIKE done · 5-3 ClickOps PIVOT closed · **5-2 in-progress, [PR #28](https://github.com/byungju0/261RCOSE45700/pull/28)** · 5-1 / 5-4 예정) |
 
 자세한 스토리별 상태: [Sprint Status (Wiki)](https://github.com/byungju0/261RCOSE45700/wiki/Sprint-Status) 또는 [`sprint-status.yaml`](_bmad-output/implementation-artifacts/sprint-status.yaml)
@@ -233,6 +242,8 @@ cd dashboard && npm run build; cd ..
 > **Story 5.3 인프라 — 2026-05-06 ClickOps PIVOT.** 학생 IAM 자격증명 통로 0개(IAM Access Key + CloudShell + IAM Role 생성 모두 차단)로 Terraform 폐기, 콘솔 ClickOps로 전환. Terraform 코드는 git history(`b7e24d3`, `bd172d9`)에 보존 — 학생 계정 사용 기간 종료 후 개인 계정에서 1회 apply 로 동일 인프라 재현 가능.
 >
 > **Story 5.2 자동 배포 — 2026-05-07 SSH `.pem` PIVOT.** OIDC + IAM Role + Access Key + CodeDeploy 모두 봉인된 학생 IAM SCP 환경에서 GHA → GHCR push → `appleboy/ssh-action` 으로 EC2 SSH 직결 자동 배포 + 60초 healthcheck + 자동 롤백. 단일 EC2 t3.xlarge 16GB (5컨테이너 합반). 자세한 흐름은 [docs/deployment.md](docs/deployment.md).
+>
+> **Story 4-7 모바일 지원 — 2026-05-13 PIVOT.** PRD L233 / UX Spec L1503·L1567의 "모바일 out-of-scope, Growth 단계" 결정을 폐기. 외부 운영자가 모바일 환경에서도 긴급 조치(원본 URL 점프, 수동 크롤링 트리거)를 수행해야 한다는 운영 요구로 MVP 범위로 끌어옴. Tailwind `md` (768px) breakpoint를 모바일 분기로 채택, vaul drawer + DetectionCard 카드 뷰 + FilterBar bottom Drawer 도입. 자세한 사양은 [`_bmad-output/implementation-artifacts/4-7-dashboard-모바일-지원.md`](_bmad-output/implementation-artifacts/4-7-dashboard-모바일-지원.md).
 
 ## 문서
 

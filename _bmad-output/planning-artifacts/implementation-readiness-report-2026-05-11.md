@@ -22,6 +22,8 @@ reportType: post-implementation-delta
 **Project:** 20261R0136COSE45700
 **Type:** Phase 4-implementation 진행 중 시점 점검 (이전 2026-04-25 보고서 대비 delta + 현재 상태 검증)
 
+> ⚠️ **2026-05-13 PIVOT 메모.** 본 보고서 작성 후 Story 4-7(대시보드 모바일 지원) 신설로 Epic 4 done → in-progress 회귀. PRD L233 / UX Spec L1503·L1567 "모바일 out-of-scope" 결정 폐기. 사유: 외부 운영자의 모바일 긴급 조치 요구. Tailwind `md` 768px breakpoint, vaul drawer + DetectionCard + FilterBar bottom Drawer + 다크 테마 활성(`next-themes`) + PWA(`vite-plugin-pwa`). 자세한 사양은 [Story 4-7 파일](../implementation-artifacts/4-7-dashboard-모바일-지원.md). 본 보고서의 "Epic 4: done" 표기 + "Risks/Open Items 6건" 은 2026-05-11 시점 상태 기록으로 유지하되, 현재 상태는 [sprint-status.yaml](../implementation-artifacts/sprint-status.yaml) 이 SoT.
+
 ---
 
 ## Context

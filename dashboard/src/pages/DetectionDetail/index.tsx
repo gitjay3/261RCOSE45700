@@ -21,8 +21,23 @@ export function DetectionDetailPage() {
   const { data, isLoading, error } = useDetectionQuery(id);
   if (error) throw error;
 
+  // crawler가 받아온 외부 URL이라 백엔드를 trust anchor로 두지만, defense-in-depth로
+  // http(s) scheme만 통과시킴 (javascript:/data: 등 차단). regex 대신 WHATWG URL
+  // parser를 사용 — 선행 control char/whitespace 등의 우회 케이스가 자동 정규화됨.
+  // credential URL(`https://user:pass@evil.com`)도 phishing 벡터라 함께 차단.
+  const isSafeHttpUrl = (raw: string) => {
+    try {
+      const u = new URL(raw);
+      const schemeOk = u.protocol === 'https:' || u.protocol === 'http:';
+      const noCreds = u.username === '' && u.password === '';
+      return schemeOk && noCreds;
+    } catch {
+      return false;
+    }
+  };
+
   const handleOpen = () => {
-    if (!data) return;
+    if (!data || !isSafeHttpUrl(data.postUrl)) return;
     window.open(data.postUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -102,14 +117,14 @@ export function DetectionDetailPage() {
           <Button onClick={handleOpen} className="gap-1.5">
             <ExternalLink className="size-4" aria-hidden />
             원본 게시글 열기
-            <Kbd variant="inverse" className="ml-2">o</Kbd>
+            <Kbd variant="inverse" className="ml-2 hidden md:inline-flex">o</Kbd>
           </Button>
           <Button variant="outline" onClick={handleCopy} className="gap-1.5">
             <Copy className="size-4" aria-hidden />
             링크 복사
-            <Kbd className="ml-2">c</Kbd>
+            <Kbd className="ml-2 hidden md:inline-flex">c</Kbd>
           </Button>
-          <span className="text-muted-foreground ml-auto text-xs font-mono">
+          <span className="text-muted-foreground ml-auto hidden text-xs font-mono md:inline">
             <Kbd>esc</Kbd> 목록 복귀
           </span>
         </div>

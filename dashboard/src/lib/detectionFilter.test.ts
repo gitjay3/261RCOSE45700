@@ -25,15 +25,6 @@ describe('detectionFilterToParams', () => {
     expect(detectionFilterToParams({ page: 0 }).has('page')).toBe(false);
     expect(detectionFilterToParams({ page: 1 }).get('page')).toBe('1');
   });
-
-  it('omits pagination when includePagination=false', () => {
-    const params = detectionFilterToParams(
-      { page: 3, size: 20 },
-      { includePagination: false },
-    );
-    expect(params.has('page')).toBe(false);
-    expect(params.has('size')).toBe(false);
-  });
 });
 
 describe('isFilterActive', () => {

@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { TypeIcon } from './TypeIcon';
-import { severityOf } from '@/lib/severity';
+import { SEVERITY_TINT_CLASSES, severityOf } from '@/lib/severity';
 import { formatRelativeTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import type { Detection } from '@/types/api';
@@ -52,9 +52,7 @@ function DetectionRowImpl({
       }}
       className={cn(
         'cursor-pointer',
-        // color-mix tint는 라이트/다크 자동 swap
-        'data-[severity=high]:shadow-[inset_6px_0_0_var(--crit-bg)] data-[severity=high]:bg-[color-mix(in_oklch,var(--crit-bg)_8%,transparent)]',
-        'data-[severity=medium]:shadow-[inset_6px_0_0_var(--warn-bg)] data-[severity=medium]:bg-[color-mix(in_oklch,var(--warn-bg)_6%,transparent)]',
+        SEVERITY_TINT_CLASSES,
         // focused는 severity보다 우선
         'data-[focused]:bg-accent data-[focused]:ring-ring/40 data-[focused]:ring-2',
         // visited는 셀 내부에만 — 행 자체 opacity는 ring 대비를 깎음

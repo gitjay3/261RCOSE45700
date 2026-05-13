@@ -1,4 +1,4 @@
-import { queryOptions, useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { queryOptions, useSuspenseQuery } from '@tanstack/react-query';
 import { apiClient } from './client';
 import { POLLING_QUERY_OPTIONS } from './queryDefaults';
 import type { StatsPeriod, StatsResponse } from '@/types/api';
@@ -18,10 +18,6 @@ export const statsQueries = {
       ...POLLING_QUERY_OPTIONS,
     }),
 };
-
-export function useStatsQuery(period?: StatsPeriod) {
-  return useQuery(statsQueries.byPeriod(period));
-}
 
 export function useStatsSuspenseQuery(period?: StatsPeriod) {
   return useSuspenseQuery(statsQueries.byPeriod(period));

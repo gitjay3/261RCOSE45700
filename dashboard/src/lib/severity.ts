@@ -11,6 +11,14 @@ export const SEVERITY_LABEL: Record<Severity, string> = {
   low: '낮음',
 };
 
+/**
+ * `data-severity` attribute 기반 tint 클래스 — high/medium에 좌측 6px 칩 + 옅은 배경.
+ * color-mix는 oklch라 라이트/다크 자동 swap. DetectionRow / DetectionCard /
+ * RecentAlertList AlertRow에서 공유.
+ */
+export const SEVERITY_TINT_CLASSES =
+  'data-[severity=high]:shadow-[inset_6px_0_0_var(--crit-bg)] data-[severity=high]:bg-[color-mix(in_oklch,var(--crit-bg)_8%,transparent)] data-[severity=medium]:shadow-[inset_6px_0_0_var(--warn-bg)] data-[severity=medium]:bg-[color-mix(in_oklch,var(--warn-bg)_6%,transparent)]';
+
 export function severityOf(score: number): Severity {
   if (!Number.isFinite(score)) return 'low';
   const s = Math.max(0, Math.min(1, score));

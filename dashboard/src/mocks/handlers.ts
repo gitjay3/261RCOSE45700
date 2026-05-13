@@ -4,7 +4,7 @@ import { MOCK_DETECTIONS, buildStatsResponse, getDetectionById } from './data';
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
-// Story 4.5 — 수동 트리거 시점 기록. since=triggered 필터링용.
+// 수동 트리거 시점 기록 — since=triggered 필터링용.
 let lastTriggerAt: number | null = null;
 
 export const handlers = [

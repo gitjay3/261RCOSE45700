@@ -1,5 +1,24 @@
 # Deferred Work
 
+## Deferred from: Story 5-2 dev (2026-05-12 — USER 외부 종속성, Task 5 blocked)
+
+Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 종속성 4종이 손에 들어오기 전까지 Task 5 / 7 / 8 진행 불가. 첫 배포 자체가 시크릿 + 백엔드 컨테이너 startup 모두 의존:
+
+1. **VARCO API key** (`/opt/app/secrets/varco_api_key`) — Naver Cloud VARCO Translation/LLM API key 발급 필요. detection 컨테이너 사용. 누락 시 detection startup 실패 → healthcheck fail → 자동 롤백.
+2. **VARCO API base URL** (`VARCO_API_BASE_URL` in `/opt/app/.env`) — 팀에서 확정된 base URL 미수령. 누락 시 `https://varco.placeholder/v1` 같은 placeholder → DNS NXDOMAIN → translate/classify 100% fail → DLQ 폭증.
+3. **RDS endpoint + master password** — tracker-prod-db는 Available + `psql SELECT version()`은 통과했으나 `DB_HOST` (정확한 endpoint hostname) + `/opt/app/secrets/db_password` (master password)가 .env/시크릿 파일에 아직 미작성.
+4. **백엔드 api/detection 서비스 첫 배포 검증** (다른 팀원 담당 영역) — Spring Boot api + detection 컨테이너 build/GHCR push 후 EC2에서 startup 동작 검증 필요. Flyway V1~V4 migration 첫 실행 모니터링도 본 deferred 항목과 결합 (아래 Story 5-2 dev 2026-05-07 섹션 Flyway 호환성 참조).
+
+**진행 가능한 우회 작업 (외부 종속성 무관)**:
+- deploy.yml에 quality gate 3종 추가 (pre-deploy assertion + IMAGE_TAG fail loud + smoke test, +6 LOC) — 시크릿 무관 코드 변경
+- Task 6 [USER] dependabot 제거 commit — working tree 이미 제거, commit만 남음, 시크릿 무관
+
+**Blocked**: Task 5 / Task 7 (첫 배포) / Task 8 (자동 롤백 검증) 모두 시크릿 + 첫 배포 의존.
+
+**ADR**: 시크릿 관리 전략은 [docs/adr/0001-secret-management-strategy.md](../../docs/adr/0001-secret-management-strategy.md)에 옵션 A 채택 결정 기록 완료 (2026-05-12).
+
+---
+
 ## Deferred from: Story 5-2 dev (2026-05-07)
 
 - **Flyway 10 + PostgreSQL 18.3 호환성 검증** — Spring Boot 3.5 default Flyway 10.x는 PG 17까지 공식 지원. 학생 SCP가 RDS 엔진 16/17 노출 안 해 18.3 채택. V1~V4 migration이 표준 DDL이라 작동 가능성 높지만 첫 배포 시 Flyway 실행 로그 모니터링 필수. 실패 시 `api/build.gradle`에 `dependencies { implementation 'org.flywaydb:flyway-core:12.0.0' }` 식으로 Flyway 12.x 핀 추가 (5분 작업). [Story 5.2 4차 변경 노트 참조]

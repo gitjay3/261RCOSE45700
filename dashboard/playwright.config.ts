@@ -16,6 +16,13 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /.*\.mobile\.spec\.ts/,
+    },
+    {
+      name: 'mobile-chrome',
+      // Pixel 7 — Android Chrome 표준 viewport (~412×915)
+      use: { ...devices['Pixel 7'] },
+      testMatch: /.*\.mobile\.spec\.ts/,
     },
   ],
   webServer: {

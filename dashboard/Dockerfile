@@ -16,8 +16,10 @@ COPY dashboard/package.json dashboard/pnpm-lock.yaml dashboard/pnpm-workspace.ya
 # corepack은 packageManager 필드(pnpm@11.1.1)를 읽어 자동 활성.
 # package.json을 먼저 COPY해야 `corepack prepare --activate`가 현재 디렉토리에서
 # packageManager 필드를 찾을 수 있다. 그렇지 않으면 ERR_NO_PROJECT_FOUND.
-RUN corepack enable && corepack prepare --activate
-RUN pnpm install --frozen-lockfile
+# 단일 RUN — 동일한 cache invalidation 트리거(앞 COPY 변경)에 묶이므로 분리 무의미.
+RUN corepack enable \
+  && corepack prepare --activate \
+  && pnpm install --frozen-lockfile
 
 COPY dashboard/ ./
 # VITE_USE_MOCK=true 빌드 시 MSW worker가 dist/에 보존되고 main.tsx가 prod에서도 MSW 활성.

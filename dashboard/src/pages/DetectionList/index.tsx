@@ -1,5 +1,5 @@
-import { useMemo, useState, useTransition } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import { useDetectionsSuspenseQuery } from '@/api/detections';
 import { Button } from '@/components/ui/button';
@@ -33,10 +33,7 @@ import { DetectionRow } from '@/components/tracker/DetectionRow';
 import { EmptyState } from '@/components/tracker/EmptyState';
 import { LANG_OPTIONS, TYPE_OPTIONS } from '@/components/tracker/labels';
 import { PageContainer } from '@/layouts/PageContainer';
-import {
-  detectionFilterToParams,
-  isFilterActive,
-} from '@/lib/detectionFilter';
+import { useDetectionFilter } from '@/lib/useDetectionFilter';
 import { useShortcut } from '@/lib/shortcuts';
 import { KNOWN_SOURCES } from '@/lib/sources';
 import { cn } from '@/lib/utils';
@@ -46,22 +43,9 @@ const PAGE_SIZE = 20;
 
 export function DetectionListPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const filter: DetectionFilter = useMemo(() => {
-    const date = searchParams.get('date') ?? undefined;
-    const site = searchParams.get('site') ?? undefined;
-    const type =
-      (searchParams.get('type') as DetectionType | null) ?? undefined;
-    const lang = (searchParams.get('lang') as Language | null) ?? undefined;
-    const since =
-      (searchParams.get('since') as 'triggered' | null) ?? undefined;
-    const page = Number(searchParams.get('page') ?? '0');
-    return { date, site, type, lang, since, page, size: PAGE_SIZE };
-  }, [searchParams]);
-
+  const { filter, updateFilter, resetFilters, hasActiveFilter, isPending } =
+    useDetectionFilter(PAGE_SIZE);
   const { data } = useDetectionsSuspenseQuery(filter);
-  const [isPending, startTransition] = useTransition();
 
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [visited, setVisited] = useState<Set<number>>(() => new Set());
@@ -75,25 +59,6 @@ export function DetectionListPage() {
 
   const items = data.content;
   const totalPages = Math.ceil(data.totalElements / data.size);
-
-  const updateFilter = (next: Partial<DetectionFilter>, resetPage = true) => {
-    const merged: DetectionFilter = {
-      ...filter,
-      ...next,
-      page: resetPage ? 0 : (next.page ?? filter.page),
-      size: undefined,
-    };
-    // useTransition으로 wrap — 새 데이터 fetch 동안 이전 화면 유지 (placeholderData 대체).
-    startTransition(() => {
-      setSearchParams(detectionFilterToParams(merged));
-    });
-  };
-
-  const resetFilters = () => {
-    startTransition(() => {
-      setSearchParams(new URLSearchParams());
-    });
-  };
 
   const openDetail = (id: number) => {
     setVisited((prev) => {
@@ -114,8 +79,6 @@ export function DetectionListPage() {
     const item = items[focusedIdx];
     if (item) openDetail(item.id);
   });
-
-  const hasActiveFilter = isFilterActive(filter);
 
   return (
     <PageContainer className="gap-4">

@@ -1,0 +1,171 @@
+name: deploy-demo
+
+# Frontend-only 데모 배포 — dashboard만 GHCR 빌드/푸시 + EC2에 caddy reverse proxy.
+# VARCO API key 발급 전 임시. 운영 deploy.yml과 동일 EC2 호스트 공유 — 머지 충돌 없음.
+#
+# workflow_dispatch 전용 (자동 트리거 X) — 데모 토글성 작업이라 push로 안 묶음.
+
+on:
+  workflow_dispatch:
+
+# 데모 배포도 직렬 처리 — Caddy/dashboard 동시 up이 인증서 발급 중 충돌 회피.
+concurrency:
+  group: deploy-demo-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # lint-test gate — branch protection 우회(workflow_dispatch) 시에도 안전.
+  lint-test-dashboard:
+    uses: ./.github/workflows/dashboard.yml
+
+  build-push:
+    name: build-push (dashboard, mock)
+    runs-on: ubuntu-latest
+    needs: lint-test-dashboard
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      registry_path: ${{ steps.meta.outputs.registry_path }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compute image metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          REPO="$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')"
+          REG_PATH="ghcr.io/${OWNER}/${REPO}"
+          TAG="${{ github.sha }}"
+          echo "registry_path=${REG_PATH}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (dashboard, VITE_USE_MOCK=true)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dashboard/Dockerfile
+          push: true
+          # 데모 이미지는 별도 :demo-<sha> 태그 — 운영 :sha와 캐시/태그 충돌 회피.
+          tags: |
+            ${{ steps.meta.outputs.registry_path }}/dashboard:demo-${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.registry_path }}/dashboard:demo-latest
+          build-args: |
+            VITE_USE_MOCK=true
+          # 운영 :cache 태그와 분리 (mock 빌드 산출물이 운영 캐시 오염 안 하도록).
+          cache-from: type=registry,ref=${{ steps.meta.outputs.registry_path }}/dashboard:demo-cache
+          cache-to: type=registry,ref=${{ steps.meta.outputs.registry_path }}/dashboard:demo-cache,mode=max
+          provenance: false
+
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-push
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Upload compose.demo.yml + Caddyfile to EC2
+        # SHA-pinned for supply-chain integrity (action receives EC2 .pem).
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "infra/compose.demo.yml,infra/Caddyfile"
+          target: "/opt/app/"
+          # SCP가 디렉토리 구조 보존 → /opt/app/infra/* 로 떨어짐. strip_components로 보정.
+          strip_components: 1
+          overwrite: true
+
+      - name: Deploy demo + healthcheck
+        # SHA-pinned (EC2 .pem + GHCR token 노출 표면).
+        uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0  # v1.2.4
+        env:
+          IMAGE_TAG: demo-${{ needs.build-push.outputs.image_tag }}
+          REGISTRY_PATH: ${{ needs.build-push.outputs.registry_path }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          envs: IMAGE_TAG,REGISTRY_PATH,GHCR_USER,GHCR_TOKEN
+          script: |
+            set -euo pipefail
+
+            DOCKER="$(command -v docker)" || { echo "::error::docker not found"; exit 1; }
+            DCOMPOSE="$DOCKER compose"
+
+            # GHCR 자격증명이 ~/.docker/config.json에 영속되지 않도록 종료 시 logout.
+            cleanup() { "$DOCKER" logout ghcr.io >/dev/null 2>&1 || true; }
+            trap cleanup EXIT
+
+            cd /opt/app
+
+            if ! printf '%s' "$GHCR_TOKEN" | "$DOCKER" login ghcr.io -u "$GHCR_USER" --password-stdin; then
+              echo "::error::GHCR login failed"
+              exit 2
+            fi
+            unset GHCR_TOKEN
+
+            echo "deploying demo tag=${IMAGE_TAG}"
+            export IMAGE_TAG REGISTRY_PATH
+
+            # 일시적 GHCR 5xx 대비 3-회 재시도.
+            for i in 1 2 3; do
+              if $DCOMPOSE -f /opt/app/compose.demo.yml pull; then
+                break
+              fi
+              echo "::warning::compose pull attempt $i failed, retrying in 5s..."
+              sleep 5
+              [ "$i" = "3" ] && { echo "::error::compose pull failed 3x"; exit 3; }
+            done
+
+            $DCOMPOSE -f /opt/app/compose.demo.yml up -d --remove-orphans
+
+            # dashboard healthcheck(`wget /healthz`)는 nginx가 뜨면 즉시 healthy.
+            # caddy는 healthcheck 정의 없음 — 컨테이너 Running으로만 판정.
+            DEADLINE=$(( $(date +%s) + 120 ))
+            ALL_OK=0
+            while [ $(date +%s) -lt $DEADLINE ]; do
+              sleep 3
+              ALL_OK=1
+              # dashboard: health 상태 확인
+              CID=$($DCOMPOSE -f /opt/app/compose.demo.yml ps -q dashboard || true)
+              if [ -z "$CID" ]; then ALL_OK=0; else
+                STATUS=$("$DOCKER" inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CID" 2>/dev/null || echo unknown)
+                echo "  dashboard: ${STATUS}"
+                [ "$STATUS" = "healthy" ] || ALL_OK=0
+              fi
+              # caddy: Running 여부만
+              CID2=$($DCOMPOSE -f /opt/app/compose.demo.yml ps -q caddy || true)
+              if [ -z "$CID2" ]; then ALL_OK=0; else
+                RUN=$("$DOCKER" inspect --format '{{.State.Running}}' "$CID2" 2>/dev/null || echo false)
+                echo "  caddy:     running=${RUN}"
+                [ "$RUN" = "true" ] || ALL_OK=0
+              fi
+              if [ "$ALL_OK" = "1" ]; then break; fi
+            done
+
+            if [ "$ALL_OK" = "1" ]; then
+              echo "::notice::Demo deployed. Visit https://tracker.o-r.kr (Caddy may take 5-30s on first start to obtain Let's Encrypt cert.)"
+              exit 0
+            fi
+
+            echo "::error::Containers did not reach healthy within 120s. Check logs: docker logs tracker-dashboard / tracker-caddy"
+            exit 4

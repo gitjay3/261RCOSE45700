@@ -1,0 +1,26 @@
+# Demo HTTPS — Caddy 2가 첫 기동 시 Let's Encrypt에서 자동 인증서 발급(ACME HTTP-01),
+# 만료 30일 전부터 자동 갱신. /data 볼륨에 cert 영속화 — 컨테이너 재기동 시 재발급 없음.
+#
+# 사전 조건:
+#   1. DNS A 레코드 tracker.o-r.kr → EC2 public IP (전파 완료)
+#   2. EC2 보안그룹 인바운드 80, 443 = 0.0.0.0/0 (ACME challenge + 사용자 접속)
+
+tracker.o-r.kr {
+    # docker network `tracker-net` 안에서 dashboard 컨테이너의 :80으로 reverse proxy.
+    # caddy:2-alpine은 기본적으로 컨테이너 시작 시 upstream을 lazy resolve.
+    reverse_proxy dashboard:80
+
+    # 기본 보안 헤더 — HSTS, MIME sniffing 차단, clickjacking 방지.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+
+    # 기본 access log를 stdout으로 — `docker logs tracker-caddy`에서 바로 확인.
+    log {
+        output stdout
+        format console
+    }
+}

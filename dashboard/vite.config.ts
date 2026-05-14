@@ -11,6 +11,9 @@ import { VitePWA } from 'vite-plugin-pwa'
  * 자동으로 dist/에 복사. workbox `globIgnores`로 precache에서는 빠지지만 파일 자체는
  * 50KB로 dist/에 남는다 → production에서 dev-only worker가 공개 경로에 노출됨.
  * build closeBundle 훅에서 실제 파일을 제거해 dist/에 흔적이 안 남도록 한다.
+ *
+ * 단 VITE_USE_MOCK=true 빌드는 의도적으로 MSW를 prod에 포함하는 데모 모드 →
+ * worker 파일을 dist/에 보존해 클라이언트에서 MSW가 정상 등록되도록 한다.
  */
 const removeDevMswWorker = (): PluginOption => ({
   name: 'tracker:remove-dev-msw-worker',
@@ -20,6 +23,7 @@ const removeDevMswWorker = (): PluginOption => ({
   closeBundle: {
     order: 'pre',
     handler() {
+      if (process.env.VITE_USE_MOCK === 'true') return;
       try {
         unlinkSync(fileURLToPath(new URL('./dist/mockServiceWorker.js', import.meta.url)))
       } catch {

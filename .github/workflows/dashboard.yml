@@ -23,9 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # pnpm/action-setup: package.json#packageManager 필드(pnpm@11.1.1) 자동 활성.
+      # pnpm/action-setup: dashboard/package.json#packageManager 자동 감지를 지원하지만
+      # 액션은 repo 루트 기준으로 package.json을 찾는다(우리 package.json은 dashboard/
+      # 안에 있어 감지 실패 → ERR_NO_PNPM_VERSION). version 명시로 회피.
       # setup-node의 cache: 'pnpm'이 동작하려면 pnpm이 PATH에 있어야 하므로 먼저 실행.
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.1
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v6

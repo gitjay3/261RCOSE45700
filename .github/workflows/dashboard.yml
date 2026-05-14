@@ -23,10 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Node.js 20.19
+      - name: Set up Node.js 22
         uses: actions/setup-node@v6
         with:
-          node-version: '20.19'
+          # Node 22 LTS — @eslint-react/* (require >=22) EBADENGINE 경고 해소.
+          # Dockerfile builder도 node:22-alpine으로 통일.
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: dashboard/package-lock.json
 

@@ -3,7 +3,8 @@
 # Story 5.2: BuildKit multi-stage with registry cache mode=max.
 
 # ---------- builder ----------
-FROM node:20.19-alpine AS builder
+# Node 22 LTS — @eslint-react/* (require >=22) 호환. CI(dashboard.yml)도 22로 통일.
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 

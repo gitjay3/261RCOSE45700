@@ -149,17 +149,19 @@ npm install radix-ui class-variance-authority clsx tailwind-merge \
 npm install @fontsource-variable/jetbrains-mono
 npx shadcn@latest init   # style: new-york, base: zinc, CSS variables
 
-# 모바일 + PWA (Story 4.7 — 2026-05-13)
-npm install vaul
-npm install -D vite-plugin-pwa
+# 모바일 (Story 4.7 — 2026-05-13)
+pnpm add vaul
+# PWA(vite-plugin-pwa)는 같은 PR에서 도입했다가 frontend-only 데모 경로(PR #42) 합류로 운영상 의미 잃어
+# 2026-05-14 commit 2526ac4에서 제거됨. 본 라인은 historical record로 남김.
+# pnpm add -D vite-plugin-pwa   # (제거됨)
 
 # 테스트
-npm install -D vitest @vitest/coverage-v8 jsdom \
+pnpm add -D vitest @vitest/coverage-v8 jsdom \
     @testing-library/react @testing-library/jest-dom @testing-library/user-event \
     msw @playwright/test
 ```
 
-> **참고:** 위 명령은 2026-05-13 시점의 최종 의존성 상태를 기록. 실제 도입은 Story 1.1(스타터) → 4.4.1(디자인 시스템) → 4.7(모바일/PWA) 순으로 점진적으로 누적됨. 단일 SoT는 `dashboard/package.json` + `dashboard/README.md`.
+> **참고:** 위 명령은 2026-05-18 시점의 최종 의존성 상태를 기록. 실제 도입은 Story 1.1(스타터) → 4.4.1(디자인 시스템) → 4.7(모바일) 순으로 점진적으로 누적됐고, 2026-05-14에 npm → pnpm 11.1.1 마이그레이션 + Node 20 → Node 22 LTS 정렬 + PWA 인프라 제거가 같이 들어왔다. 단일 SoT는 `dashboard/package.json` + `dashboard/README.md`.
 
 ### 스타터가 확정하는 아키텍처 결정
 
@@ -168,7 +170,7 @@ npm install -D vitest @vitest/coverage-v8 jsdom \
 | Python 런타임 | 3.11+ |
 | Java 런타임 | Java 21 LTS (Virtual Threads 지원) |
 | Spring Boot | 3.5.0 (Spring Framework 6.2.x, Hibernate 6.6.x, Tomcat 10.1.x) |
-| Frontend 빌드 | Vite 8.0.10 (Node.js 20.19+, @vitejs/plugin-react v6) |
+| Frontend 빌드 | Vite 8.0.x (Node.js 22 LTS, @vitejs/plugin-react v6, pnpm 11.1.1) |
 | API 문서화 | springdoc-openapi (Swagger UI 자동 생성) |
 | React 서버 상태 | TanStack Query |
 | 차트 라이브러리 | Recharts |
@@ -194,7 +196,8 @@ npm install -D vitest @vitest/coverage-v8 jsdom \
 - 서버 상태: TanStack Query v5 (`useQuery` / `useSuspenseQuery`), 60초 폴링
 - 모바일 지원: Tailwind `md` 768px breakpoint (Story 4.7 — 2026-05-13 PIVOT, PRD/UX Spec out-of-scope 결정 폐기). DetectionList 카드 뷰 + FilterBar bottom Drawer + Sidebar 햄버거 → vaul drawer
 - 색 모드: 라이트/다크 2-tier (`next-themes` + `data-theme` + `index.html` FOUC 가드, 2026-05-13 활성화). 차트 팔레트도 양쪽 정의
-- PWA: `vite-plugin-pwa` registerType=prompt — manifest + workbox 정적 자산(이미지/폰트)만 캐시, API 응답은 `navigateFallbackDenylist: [/^\/api/]`로 차단. dev에서는 MSW worker가 우선, prod build에서만 PWA SW 활성
+- PWA: **제거됨** (2026-05-14 commit `2526ac4`) — Story 4.7에서 `vite-plugin-pwa` registerType=prompt + workbox 정적 자산 캐시로 도입했으나, 같은 EC2 호스트에서 운영 `deploy.yml`과 데모 `deploy-demo.yml`(PR #42, frontend-only `VITE_USE_MOCK=true` 빌드)이 공존하는 토폴로지가 들어오면서 SW 캐싱 정책이 데모/운영 토글링과 충돌. 학생 프로젝트 운영 범위에서 설치성·홈스크린 가치가 비용을 정당화하지 못해 폐기
+- Frontend-only 데모 배포: `infra/compose.demo.yml` (dashboard + Caddy 2컨테이너) + `infra/Caddyfile` (Let's Encrypt ACME HTTP-01 자동 발급, `tracker.o-r.kr`) + `.github/workflows/deploy-demo.yml` (`workflow_dispatch` 전용). dashboard는 `VITE_USE_MOCK=true`로 빌드되어 prod 번들에 MSW worker 보존 — VARCO API 키 발급 전·RDS 셋업 전 화면 데모용 (PR #42, 2026-05-14)
 - 인프라 운영 모델: **콘솔 ClickOps** (2026-05-06 PIVOT — 학생 IAM 자격증명 통로 0개로 IaC 폐기, Story 5.3 결과 문서 참조). Terraform 코드는 git history(`b7e24d3`, `bd172d9`)에 보존
 - EC2 인스턴스 사이징: **단일 EC2 t3.xlarge** (4vCPU/16GB, x86_64) — 2026-05-09 3차 PIVOT (sprint-status.yaml 참조). 학생 IAM SCP가 cross-SG ingress(redis 6379 source = crawler-sg) 차단으로 2대 분리 폐기 → 학생 SCP 허용 인스턴스 중 RAM 가장 큰 t3.xlarge로 단일 EC2 회귀. 비용 ~월 18만원(환율 1452원/USD, budget 30만원의 70%). compose.prod.yml mem_limit 합 ~7GB / 16GB. **이전 사양 (t3.medium ×3, r6g.large 등)은 git history에 historical record로 보존**
 - RDS: **PostgreSQL 18.3 / db.t4g.micro** Single-AZ + automated backup 7일 (2026-05-11 사용자 콘솔 launch 확인 — RDS Graviton(arm64)은 EC2 SCP와 별개로 학생 계정에서 가용. 이전 "db.t4g.micro arm64 미가용" 기록은 1차 PIVOT 시 잘못된 가정 정정. PG 18.3은 학생 SCP가 16/17 노출 안 해 18.3-R1로 강제됨 — 4차 PIVOT 2026-05-09). Flyway 10 + PG 18.3 호환성은 첫 배포 시 실행 로그로 검증 (deferred-work 첫 항목)
@@ -789,7 +792,7 @@ dashboard/src/api/detections.ts (TanStack Query 60초 폴링)
 
 ### Coherence Validation ✅
 
-모든 기술 선택이 상호 호환됩니다. Python 3.11+/Java 21/Node.js 20.19+ 런타임, Spring Boot 3.5.0/Vite 8 프레임워크, Redis 단일 인스턴스 DB 논리 분리, Jackson camelCase ↔ Python snake_case 자동 변환이 일관되게 작동합니다.
+모든 기술 선택이 상호 호환됩니다. Python 3.11+/Java 21/Node.js 22 LTS(+ pnpm 11.1.1 via corepack) 런타임, Spring Boot 3.5.0/Vite 8 프레임워크, Redis 단일 인스턴스 DB 논리 분리, Jackson camelCase ↔ Python snake_case 자동 변환이 일관되게 작동합니다.
 
 ### Requirements Coverage Validation ✅
 

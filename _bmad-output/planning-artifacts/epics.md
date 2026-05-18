@@ -654,7 +654,7 @@ Tracker 대시보드를 모바일 (< 768px) 환경에서도 사용할 수 있기
 **And** 키보드 단축키(j/k/enter/o/c/esc/g+t/g+d/g+l/g+s)는 데스크톱 전용으로 유지하며, 모바일에서는 비활성화된다 (혹은 무해)  
 **And** Playwright e2e `e2e/mobile.mobile.spec.ts`에 Pixel 7 viewport 시나리오 3건이 포함된다 (햄버거 drawer / DetectionList 카드 / FilterBar bottom Drawer)  
 **And** 다크 테마는 `next-themes` + `data-theme` 토글로 활성화되며, FOUC 가드를 위한 동기 스크립트가 `index.html`에 포함된다  
-**And** vite-plugin-pwa 가 도입되어 manifest + workbox 정적 자산 캐시(이미지/폰트만)를 제공한다 — API 응답은 캐시 제외  
+**And** ~~vite-plugin-pwa 가 도입되어 manifest + workbox 정적 자산 캐시(이미지/폰트만)를 제공한다 — API 응답은 캐시 제외~~ (**2026-05-14 폐기** — commit `2526ac4`, frontend-only 데모 경로 도입으로 SW 캐싱 정책 충돌. 학생 프로젝트 운영 범위에서 설치성 가치가 비용을 정당화 못함)  
 **And** Story 4.5의 키보드 네비게이션·데스크톱 레이아웃 회귀가 발생하지 않는다 (기존 e2e PASS 유지)
 
 ---

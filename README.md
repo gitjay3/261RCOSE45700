@@ -77,7 +77,7 @@ flowchart LR
 
 - **Python 3.11+** (검증: 3.11, 3.12, 3.13)
 - **Java 21 LTS** (Gradle Foojay Toolchain Resolver가 자동 다운로드 가능)
-- **Node.js 20.19+** (LTS 권장: 20, 22)
+- **Node.js 22 LTS 권장** (>= 16.9 필수 — corepack이 `packageManager: pnpm@11.1.1` 자동 활성)
 - **Docker + Docker Compose** (로컬 Redis/PostgreSQL 환경)
 
 > Java 21이 로컬에 없어도 `./gradlew build` 첫 실행 시 Foojay 리졸버가 자동으로 다운로드합니다.
@@ -198,10 +198,10 @@ cd dashboard && pnpm exec playwright install --with-deps && pnpm e2e; cd ..
 | Stats (`/stats`) | 주간/월간 추이 LineChart + 사이트별 BarChart + 유형별·언어별 PieChart |
 | 디자인 시스템 | Tailwind v4 + shadcn/ui + NC AI 브랜드 토큰 (라이트/다크 2-tier, `next-themes` + FOUC 가드) |
 | 모바일 지원 | < 768px 햄버거 drawer(vaul) + FilterBar bottom Drawer + DetectionList 카드 뷰 (Story 4-7) |
-| PWA | `vite-plugin-pwa` registerType=prompt, manifest + workbox runtime caching (static asset only) |
 | 테스트 | Vitest(jsdom) 단위 + RTL + MSW v2 mock + Playwright e2e(데스크톱 + Pixel 7) |
-| MSW v2 Mock | 백엔드 미완성/오프라인 개발 대체 (`VITE_API_BASE_URL` 미설정 시 자동 활성) |
-| `Dockerfile` | Story 5.2 — multi-stage `node:20.19-alpine` builder → `nginx:1.27-alpine` runtime, `/healthz` 응답 |
+| MSW v2 Mock | dev 항상 활성. prod 빌드는 `VITE_USE_MOCK=true`일 때만 번들 포함 (frontend-only 데모용, `infra/compose.demo.yml`) |
+| `Dockerfile` | Story 5.2 — multi-stage `node:22-alpine` builder (pnpm 11.1.1 via corepack) → `nginx:1.27-alpine` runtime, `/healthz` + `/api` reverse_proxy |
+| 데모 배포 | `deploy-demo.yml` (`workflow_dispatch`) — `VITE_USE_MOCK=true` 빌드 → GHCR `:demo-*` → EC2 Caddy + dashboard 2컨테이너 (`tracker.o-r.kr`, Let's Encrypt 자동 발급) |
 
 ## Redis DB 구성
 
@@ -218,12 +218,16 @@ cd dashboard && pnpm exec playwright install --with-deps && pnpm e2e; cd ..
 
 | 파일 | 트리거 | 내용 |
 |------|--------|------|
-| `crawler.yml` | push/PR (`crawler/**`) + `workflow_call:` | pytest 단위 테스트, flake8 |
-| `detection.yml` | push/PR (`detection/**`) + `workflow_call:` | pytest 단위 테스트, flake8 |
+| `_python-service.yml` | `workflow_call:` only | crawler/detection lint-test 공통 정의 (`service:` 입력으로 분기) |
+| `crawler.yml` | push/PR (`crawler/**`) + `workflow_call:` | `_python-service.yml` thin wrapper (`service: crawler`) |
+| `detection.yml` | push/PR (`detection/**`) + `workflow_call:` | `_python-service.yml` thin wrapper (`service: detection`) |
 | `api.yml` | push/PR (`api/**`) + `workflow_call:` | Gradle build + JUnit 테스트 |
-| `dashboard.yml` | push/PR (`dashboard/**`) + `workflow_call:` | npm build + lint |
+| `dashboard.yml` | push/PR (`dashboard/**`) + `workflow_call:` | pnpm install + ESLint + `tsc -b && vite build` (Node 22 LTS, pnpm 11.1.1) |
 | **`ci.yml`** | PR + push:main (no path filter) | 4 reusable lint-test 호출 + `aggregator` 잡 (`ci / aggregator` strict required check) |
 | **`deploy.yml`** | push:main + workflow_dispatch | BuildKit cache mode=max → GHCR push (`:sha` + `:latest`) → `appleboy/ssh-action` → EC2 SSH 배포 + 60s healthcheck + 자동 롤백 |
+| **`deploy-demo.yml`** | workflow_dispatch only | dashboard만 `VITE_USE_MOCK=true`로 빌드 → GHCR `:demo-*` 태그 → EC2에 Caddy + dashboard 2컨테이너 (Let's Encrypt 자동 발급, `tracker.o-r.kr`) |
+
+> 액션 버전은 Node 20 deprecation(2026-06) 대응으로 일괄 업그레이드: `actions/checkout@v6`, `setup-python@v6`, `setup-node@v6`, `pnpm/action-setup@v6`, `docker/setup-buildx-action@v4`, `docker/login-action@v4`, `docker/build-push-action@v7`.
 
 자세한 사양은 [CI/CD Pipeline (Wiki)](https://github.com/byungju0/261RCOSE45700/wiki/CI-CD-Pipeline) 또는 [docs/deployment.md](docs/deployment.md) (운영 절차) 참조.
 

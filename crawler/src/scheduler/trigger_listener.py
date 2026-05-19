@@ -6,7 +6,8 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 import redis.asyncio as aioredis
-from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from shared.config.redis_config import REDIS_CHANNEL_CRAWL_TRIGGER, REDIS_MQ_DB
 from shared.correlation_id import generate

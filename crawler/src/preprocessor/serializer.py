@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from shared.models.crawl_event import CrawlEvent
-
 from crawler.src.crawl4ai_crawler import CrawlResult
 from crawler.src.sites.registry import SiteConfig
+from shared.models.crawl_event import CrawlEvent
 
 
 def to_crawl_event(

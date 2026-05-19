@@ -16,7 +16,13 @@ from crawler.src.sites.registry import SITES
 from crawler.src.storage import StorageResult
 from shared.models.crawl_event import CrawlEvent
 
-_KEYWORD_TEXT = "매크로 판매합니다 텔레그램 문의"
+# validator 는 inven 마커(EXP / 인벤쪽지) + 50자 이상을 요구.
+# 후속 langdetect 가 'ko' 로 잡히도록 한국어 비중 충분히 유지.
+_KEYWORD_TEXT = (
+    "# 게시글 제목 EXP 1234 / 2000 인벤쪽지 보내기 "
+    "안녕하세요 오늘 게임 사냥터 추천 게시글입니다. 본문 본문 본문 "
+    "이 정도면 검증과 언어 감지 둘 다 통과할 만한 한국어 텍스트가 됩니다."
+)
 _TEST_URL = "https://www.inven.co.kr/board/maple/2298/123"
 _TEST_URL2 = "https://www.inven.co.kr/board/maple/2298/456"
 
@@ -199,6 +205,105 @@ async def test_pipeline_event_json_roundtrip():
     assert event.language in {"ko", "zh-CN", "zh-TW"}
     assert isinstance(event.image_urls, list)
     assert event.s3_text_path == ""
+
+
+async def test_pipeline_passes_title_keywords_to_url_extractor():
+    """site.title_keywords 가 _fetch_post_urls 로 전달되는지."""
+    from dataclasses import replace
+    custom_site = replace(
+        SITES["inven_maple"],
+        title_keywords=["天堂", "Lineage", "리니지"],
+    )
+
+    pipeline, _, _ = _make_pipeline(crawl_result=_make_crawl_result(_KEYWORD_TEXT))
+
+    with patch(
+        "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
+        return_value={"inven_maple": custom_site},
+    ), patch(
+        "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
+        return_value=[_TEST_URL],
+    ) as mock_fpu:
+        await pipeline.run()
+
+    assert mock_fpu.call_args.kwargs["title_keywords"] == ["天堂", "Lineage", "리니지"]
+
+
+async def test_pipeline_skips_already_seen_url_before_fetch():
+    """UrlDedupChecker.has_seen 이 True 면 fetch 자체를 안 함."""
+    from crawler.src.preprocessor.url_dedup_checker import UrlDedupChecker
+
+    mock_url_dedup = MagicMock(spec=UrlDedupChecker)
+    mock_url_dedup.has_seen.return_value = True   # 이미 본 URL 시뮬
+
+    pipeline, _, _ = _make_pipeline(crawl_result=_make_crawl_result(_KEYWORD_TEXT))
+    pipeline._url_dedup = mock_url_dedup
+    mock_crawler = pipeline._crawler
+
+    with _isolated_sites(), patch(
+        "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
+        return_value=[_TEST_URL],
+    ):
+        stats = await pipeline.run()
+
+    # fetch 호출이 한 번도 없어야 한다 (URL 이 이미 처리됨).
+    mock_crawler.fetch.assert_not_called()
+    assert stats.skipped_seen_url == 1
+    assert stats.attempted == 0     # has_seen=True 면 attempted 도 증가 안 함
+
+
+async def test_pipeline_marks_seen_url_after_successful_enqueue():
+    """성공 enqueue 후 UrlDedupChecker.mark_seen 호출 — 다음 run 재처리 방지."""
+    from crawler.src.preprocessor.url_dedup_checker import UrlDedupChecker
+
+    mock_url_dedup = MagicMock(spec=UrlDedupChecker)
+    mock_url_dedup.has_seen.return_value = False
+
+    pipeline, _, _ = _make_pipeline(crawl_result=_make_crawl_result(_KEYWORD_TEXT))
+    pipeline._url_dedup = mock_url_dedup
+
+    with _isolated_sites(), patch(
+        "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
+        return_value=[_TEST_URL],
+    ):
+        await pipeline.run()
+
+    mock_url_dedup.mark_seen.assert_called_once()
+    assert mock_url_dedup.mark_seen.call_args.args[0] == _TEST_URL
+
+
+async def test_pipeline_passes_site_options_to_crawler_fetch():
+    """site.cookies / wait_for / headers / page_timeout / proxy 가 crawler.fetch 로 전달되는지."""
+    custom_site = SITES["inven_maple"]
+    from dataclasses import replace
+    custom_site = replace(
+        custom_site,
+        cookies=[{"name": "session", "value": "abc"}],
+        wait_for="css:.foo",
+        headers={"Accept-Language": "ko"},
+        page_timeout=33_000,
+        proxy={"server": "http://p.example:8080"},
+    )
+
+    pipeline, _, _ = _make_pipeline(crawl_result=_make_crawl_result(_KEYWORD_TEXT))
+    mock_crawler = pipeline._crawler  # AsyncMock from helper
+
+    with patch(
+        "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
+        return_value={"inven_maple": custom_site},
+    ), patch(
+        "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
+        return_value=[_TEST_URL],
+    ):
+        await pipeline.run()
+
+    mock_crawler.fetch.assert_called_once()
+    kwargs = mock_crawler.fetch.call_args.kwargs
+    assert kwargs["cookies"] == [{"name": "session", "value": "abc"}]
+    assert kwargs["wait_for"] == "css:.foo"
+    assert kwargs["headers"] == {"Accept-Language": "ko"}
+    assert kwargs["page_timeout"] == 33_000
+    assert kwargs["proxy"] == {"server": "http://p.example:8080"}
 
 
 async def test_pipeline_dedup_mark_seen_called_after_enqueue():

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from crawler.src.crawl4ai_crawler import Crawl4AICrawler, CrawlResult
 from shared.exceptions.base_exception import CrawlerException
@@ -169,5 +170,98 @@ class TestCrawl4AICrawlerFetch:
             crawler = Crawl4AICrawler(output_dir=str(tmp_path))
             result = await crawler.fetch(self._URL, correlation_id=self._CID, download_images=False)
             assert result.downloaded_images == []
+        finally:
+            patcher.stop()
+
+
+class TestCrawl4AICrawlerSiteOptions:
+    """PTT/Dcard/Tieba 차단 해제용 사이트별 fetch 옵션 전파 검증."""
+
+    _URL = "https://www.ptt.cc/bbs/C_Chat/M.123.html"
+    _CID = "test-opts-001"
+
+    async def test_fetch_passes_cookies_to_arun(self, tmp_path):
+        mock_result = _make_mock_result()
+        patcher, MockCrawler = _patch_crawler(mock_result)
+        try:
+            crawler = Crawl4AICrawler(output_dir=str(tmp_path))
+            cookies = [{"name": "over18", "value": "1", "domain": ".ptt.cc", "path": "/"}]
+            await crawler.fetch(
+                self._URL,
+                correlation_id=self._CID,
+                download_images=False,
+                cookies=cookies,
+            )
+            mock_instance = MockCrawler.return_value.__aenter__.return_value
+            assert mock_instance.arun.call_args.kwargs.get("cookies") == cookies
+        finally:
+            patcher.stop()
+
+    async def test_fetch_omits_cookies_kwarg_when_none(self, tmp_path):
+        mock_result = _make_mock_result()
+        patcher, MockCrawler = _patch_crawler(mock_result)
+        try:
+            crawler = Crawl4AICrawler(output_dir=str(tmp_path))
+            await crawler.fetch(self._URL, correlation_id=self._CID, download_images=False)
+            mock_instance = MockCrawler.return_value.__aenter__.return_value
+            # cookies 미지정 시 arun(cookies=...) 키 자체가 없어야 한다 (crawl4ai 기본 동작 위임).
+            assert "cookies" not in mock_instance.arun.call_args.kwargs
+        finally:
+            patcher.stop()
+
+    async def test_fetch_passes_wait_for_into_run_config(self, tmp_path):
+        mock_result = _make_mock_result()
+        patcher, MockCrawler = _patch_crawler(mock_result)
+        try:
+            crawler = Crawl4AICrawler(output_dir=str(tmp_path))
+            await crawler.fetch(
+                self._URL,
+                correlation_id=self._CID,
+                download_images=False,
+                wait_for="css:article",
+            )
+            mock_instance = MockCrawler.return_value.__aenter__.return_value
+            run_config = mock_instance.arun.call_args.kwargs["config"]
+            assert run_config.wait_for == "css:article"
+        finally:
+            patcher.stop()
+
+    async def test_fetch_overrides_page_timeout(self, tmp_path):
+        mock_result = _make_mock_result()
+        patcher, MockCrawler = _patch_crawler(mock_result)
+        try:
+            crawler = Crawl4AICrawler(output_dir=str(tmp_path))
+            await crawler.fetch(
+                self._URL,
+                correlation_id=self._CID,
+                download_images=False,
+                page_timeout=45_000,
+            )
+            mock_instance = MockCrawler.return_value.__aenter__.return_value
+            run_config = mock_instance.arun.call_args.kwargs["config"]
+            assert run_config.page_timeout == 45_000
+        finally:
+            patcher.stop()
+
+    async def test_fetch_proxy_builds_per_call_browser_config(self, tmp_path):
+        mock_result = _make_mock_result()
+        patcher, MockCrawler = _patch_crawler(mock_result)
+        try:
+            crawler = Crawl4AICrawler(output_dir=str(tmp_path))
+            proxy = {"server": "http://proxy.example.com:8080"}
+            await crawler.fetch(
+                self._URL,
+                correlation_id=self._CID,
+                download_images=False,
+                proxy=proxy,
+            )
+            # AsyncWebCrawler 가 per-call 으로 다시 호출되며 새 BrowserConfig 가 주입됐는지.
+            # crawl4ai 는 dict 를 ProxyConfig 객체로 감싸므로 server 속성을 통해 비교.
+            ctor_kwargs = MockCrawler.call_args.kwargs
+            browser_cfg = ctor_kwargs.get("config")
+            assert browser_cfg is not None
+            proxy_cfg = getattr(browser_cfg, "proxy_config", None)
+            assert proxy_cfg is not None
+            assert getattr(proxy_cfg, "server", None) == proxy["server"]
         finally:
             patcher.stop()

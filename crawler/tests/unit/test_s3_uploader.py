@@ -8,11 +8,10 @@ from unittest.mock import MagicMock, patch
 import botocore.exceptions
 import pytest
 
+from crawler.src.crawl4ai_crawler import CrawlResult
 from crawler.src.s3_uploader import S3Uploader
 from crawler.src.storage import PostStorage, StorageResult
-from crawler.src.crawl4ai_crawler import CrawlResult
 from shared.models.crawl_event import CrawlEvent
-
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -401,8 +400,8 @@ class TestUploadImagesEdgeCases:
 
 class TestPostStorageValidation:
     def test_post_id_with_slash_raises(self, tmp_path):
-        from crawler.src.storage import PostStorage
         from crawler.src.crawl4ai_crawler import CrawlResult
+        from crawler.src.storage import PostStorage
         with patch.dict(os.environ, {"ENABLE_S3_UPLOAD": "false"}):
             storage = PostStorage(base_dir=str(tmp_path))
             with pytest.raises(ValueError, match="post_id"):
@@ -418,8 +417,8 @@ class TestPostStorageValidation:
                 )
 
     def test_post_id_empty_raises(self, tmp_path):
-        from crawler.src.storage import PostStorage
         from crawler.src.crawl4ai_crawler import CrawlResult
+        from crawler.src.storage import PostStorage
         with patch.dict(os.environ, {"ENABLE_S3_UPLOAD": "false"}):
             storage = PostStorage(base_dir=str(tmp_path))
             with pytest.raises(ValueError, match="post_id"):
@@ -465,8 +464,8 @@ class TestEnableS3UploadTruthyVariants:
 class TestImageMetadataAlignment:
     def test_metadata_aligns_via_filename_index_after_partial_failure(self, tmp_path):
         """일부 다운로드 실패 시 zip 정렬 대신 img_NNN 인덱스로 정확히 매핑."""
-        from crawler.src.storage import PostStorage
         from crawler.src.crawl4ai_crawler import CrawlResult
+        from crawler.src.storage import PostStorage
 
         # 3개 이미지 메타, 다운로드는 0번/2번만 성공 (1번 실패)
         downloaded_dir = tmp_path / "dl"

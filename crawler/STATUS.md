@@ -1,0 +1,318 @@
+# Crawler — Project Status
+
+> NC 게임(리니지/아이온/BNS/TL 등) 사설서버·매크로·핵 탐지를 위한 한·중·대만권 게시판 크롤링 인프라.
+> 이 문서는 현재 코드의 **상태·기능·운영 다이얼·남은 작업** 을 한 페이지로 정리합니다.
+
+마지막 갱신: 2026-05-19
+
+---
+
+## 1. 한눈에
+
+- **안정 보드**: 11곳 (인벤 2 + PTT Lineage + Bahamut NC 8)
+- **NC 사용자 글 회수량**: 약 **37 real / run** (`MAX_POSTS_PER_BOARD=10`, `CRAWL_INTERVAL_MINUTES=60` 기준)
+- **인프라**: URL 중복 차단, 본문 SHA256 dedup, 공지·인증벽·캡차 자동 분류, inter-site delay
+- **테스트**: 142 unit/integration passed, ruff clean
+- **enrichment(LLM/VLM)**: 별도 서비스로 분리 예정 (이 리포 범위 밖)
+
+---
+
+## 2. 아키텍처
+
+```
+                    ┌────────────────────────────────────┐
+                    │   SiteConfig (사이트별 설정)         │
+                    │   ─────────────────────              │
+                    │   board_urls, post_url_pattern      │
+                    │   css_selector, image_filter        │
+                    │   cookies / wait_for / headers      │
+                    │   js_code / delay_before_return     │
+                    │   scan_full_page / virtual_scroll   │
+                    │   simulate_user / user_agent_mode   │
+                    │   title_keywords (NC 키워드 사전필터)│
+                    │   proxy                              │
+                    └────────────────┬───────────────────┘
+                                     │
+                                     ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ ① 게시판 listing → 게시글 URL N건                            │
+   │    _fetch_post_urls(...)                                     │
+   │    title_keywords 매칭 안 되면 즉시 drop (fetch 비용 절감)   │
+   └────────────────────────────────┬────────────────────────────┘
+                                    │
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ ② Cross-run URL 중복 확인 — UrlDedupChecker.has_seen(url)    │
+   │    Redis ZSET "posts:seen_urls", TTL 7일                     │
+   │    이미 본 URL → skipped_seen_url (fetch 안 함)              │
+   └────────────────────────────────┬────────────────────────────┘
+                                    │
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ ③ Crawl4AICrawler.fetch(url, site_options)                  │
+   │    crawl4ai (Playwright + stealth) → CrawlResult             │
+   └────────────────────────────────┬────────────────────────────┘
+                                    │
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ ④ content_validator.validate(site_id, markdown, url)         │
+   │    kind ∈ {real, sticky, auth_wall, captcha, empty,          │
+   │             short, error, unknown}                           │
+   │    real 만 ⑤로 진행                                          │
+   └────────────────────────────────┬────────────────────────────┘
+                                    │
+                                    ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ ⑤ DedupChecker (본문 SHA256) → 중복이면 skip                 │
+   │ ⑥ language_detector (langdetect)                             │
+   │ ⑦ PostStorage (disk + 옵션 S3)                               │
+   │ ⑧ to_crawl_event → CrawlEvent JSON                          │
+   │ ⑨ RedisPublisher.enqueue("posts:queue")                      │
+   │ ⑩ DedupChecker.mark_seen + UrlDedupChecker.mark_seen         │
+   └────────────────────────────────┬────────────────────────────┘
+                                    │
+                                    ▼
+                          [Detection / Enrichment 서비스]
+                          (별도 — DeepSeek + OpenAI VLM)
+```
+
+각 사이트 사이 `INTER_SITE_DELAY_SECONDS` (±25% jitter) 휴식, 같은 사이트의 보드 사이 `INTER_BOARD_DELAY_SECONDS` 휴식 → anti-bot rate limit 회피.
+
+---
+
+## 3. 사이트별 현황
+
+### 🟢 안정 작동 (NC 데이터 흐름)
+
+| site_id | 지역 | 보드 | NC real/run | 비고 |
+|---|---|---|---|---|
+| `inven_maple` | KR | inven /board/maple/2298 | 5/5 | 비교군 (NEXON, NC 아님) |
+| `inven_lineage_classic` | KR | inven /board/lineageclassic/6482 | 5/5 | NC |
+| `ptt` | TW | ptt /bbs/Lineage/ | 5/5 | over18 폼 js_code 자동 클릭 |
+| `bahamut_lineage` | TW | bsn=842 | 3/5 | 天堂Lineage |
+| `bahamut_lineage_m` | TW | bsn=25908 | 3/5 | 天堂M |
+| `bahamut_lineage_w` | TW | bsn=71905 | 3/5 | 天堂W |
+| `bahamut_lineage_classic` | TW | bsn=84452 | 4/5 | 天堂經典版 |
+| `bahamut_aion` | TW | bsn=9856 | 3/5 | 永恆紀元 |
+| `bahamut_aion2` | TW | bsn=82913 | 3/5 | AION2 |
+| `bahamut_bns` | TW | bsn=12980 | 4/5 | 劍靈 |
+| `bahamut_tl` | TW | bsn=33317 | 4/5 | 王權與自由 (TL) |
+
+### 🟡 도달은 되나 NC 글 없음
+
+| site_id | 지역 | 진단 | 처방 |
+|---|---|---|---|
+| `dcard` | TW | listing 도달, 1페이지에 NC 글 0건 (title_keywords로 10건 거름) | 페이지네이션 또는 검색 URL 전환 |
+| `ptt_mobile_game` | TW | 동일 — Mobile-game 보드 1페이지에 NC 글 없음 | 동일 |
+
+### 🔴 차단·실패
+
+| site_id | 지역 | 원인 | 비고 |
+|---|---|---|---|
+| `dcard_online` | TW | `wait_for=css:article` 타임아웃 — /f/online 구조 다름 | 셀렉터 재조정 필요 |
+| `52pojie` | CN | 0/5 — Windows 크랙 사이트라 NC 게임과 무관 | NC 타겟에선 우선순위 ↓ |
+| `tieba` | CN | HTTP 403 anti-bot | 중국 본토 IP 필요 |
+| `nga` | CN | HTTP 403 anti-bot | 중국 본토 IP 필요 |
+
+### ⚫ 미구현 (검색엔진형 — 별도 추상화 필요)
+
+`SiteConfig` 는 board → post URL 의 1-hop 게시판형. 검색엔진형은 query → 결과 → 외부 링크의 2-hop이라 `SearchEngineConfig` 신설 필요.
+
+타겟: github, reddit, bing, baidu, sogou, duckduckgo_cn, bilibili, facebook (via Bing)
+
+---
+
+## 4. 핵심 인프라
+
+### `SiteConfig` (`crawler/src/sites/registry.py`)
+
+게시판 한 곳을 정의하는 dataclass. 모든 사이트별 동작은 이 필드로 표현됨.
+
+| 필드 | 용도 |
+|---|---|
+| `board_urls`, `post_url_pattern` | listing URL + 게시글 URL 정규식 |
+| `css_selector`, `image_filter`, `post_id_extractor` | 추출 |
+| `cookies`, `headers`, `proxy` | 접근 옵션 |
+| `wait_for`, `page_timeout`, `delay_before_return_html` | 렌더 대기 |
+| `js_code`, `c4a_script` | 페이지 인터랙션 (PTT over18 자동 클릭 등) |
+| `scan_full_page`, `scroll_delay`, `virtual_scroll_config`, `wait_until` | 동적 페이지 |
+| `simulate_user`, `user_agent_mode` | anti-bot 흉내 |
+| `exclude_social_media_links`, `exclude_external_links` | 링크 노이즈 제거 |
+| `title_keywords` | **혼합 보드에서 NC 키워드 사전 필터** |
+| `enabled`, `note` | 메타 |
+
+### Validator (`crawler/src/preprocessor/content_validator.py`)
+
+본문 → `PostValidation(is_real_user_post, kind, reason)`.
+
+| kind | 의미 | enqueue 여부 |
+|---|---|---|
+| `real` | 진짜 사용자 글 | ✅ |
+| `sticky` | 공지/导航/공식 행사 | ❌ |
+| `auth_wall` | 로그인/연령 인증 인터스티셜 | ❌ |
+| `captcha` | Cloudflare/캡차 챌린지 | ❌ |
+| `empty` | 본문 0자 | ❌ |
+| `short` | 본문 50자 미만 (Bahamut 200자) | ❌ |
+| `error` | 4xx/5xx 페이지 | ❌ |
+| `unknown` | 사이트 마커 미발견 (보수적 스킵) | ❌ |
+
+**Prefix dispatch**: `bahamut_*` / `ptt_*` / `dcard_*` / `inven_*` family 가 자동으로 같은 validator 사용 → 새 보드 추가 시 등록 코드 0.
+
+### UrlDedupChecker (`crawler/src/preprocessor/url_dedup_checker.py`)
+
+Redis ZSET 기반 cross-run URL 중복 차단. **fetch 자체를 막아** 대역폭/시간 절감.
+- `has_seen(url)` / `mark_seen(url)`
+- `cleanup_older_than(age_seconds)` — 주기적 청소
+- 기본 TTL: 7일
+
+### DedupChecker (`crawler/src/preprocessor/dedup_checker.py`)
+
+본문 SHA256 dedup. URL 은 달라도 본문이 같으면 (재발행/스크랩) 중복 처리.
+
+---
+
+## 5. 운영 다이얼 (환경변수)
+
+| 변수 | 기본 | 의미 |
+|---|---|---|
+| `SERVICE_NAME` | `crawler` | 로그용 |
+| `LOG_LEVEL` | `DEBUG` | INFO/WARNING 등 |
+| `MAX_POSTS_PER_BOARD` | `10` | 보드 listing 당 최대 시도 raw 후보 수 |
+| `CRAWL_INTERVAL_MINUTES` | `60` | APScheduler 주기 |
+| `INTER_SITE_DELAY_SECONDS` | `15` | 사이트 전환 휴식 (±25% jitter) |
+| `INTER_BOARD_DELAY_SECONDS` | `3` | 보드 전환 휴식 (±25% jitter) |
+| `REDIS_URL` | `redis://localhost:6379` | Redis endpoint |
+| `ENABLE_S3_UPLOAD` | (unset=off) | true/1/yes → S3 미러 업로드 |
+| `S3_BUCKET_NAME` | (none) | ENABLE_S3_UPLOAD=true 시 필수 |
+| `AWS_REGION` | (none) | 옵션 |
+| `SMOKE_INTER_SITE_DELAY` | `12` | smoke 스크립트의 사이트 간 휴식 |
+
+### 운영 시나리오 (참고)
+
+| 모드 | `MAX_POSTS_PER_BOARD` | `CRAWL_INTERVAL_MINUTES` | 예상 결과 |
+|---|---|---|---|
+| 현재(균형) | 10 | 60 | 시간당 ~40 real |
+| 고빈도 | 5 | 30 | 30분당 ~20 real (더 fresh) |
+| 저부하 | 5 | 120 | 2시간당 ~20 real |
+| 최대 수확 | 20 | 60 | 시간당 ~70 real (anti-bot 위험↑) |
+
+UrlDedupChecker 덕분에 인터벌 단축해도 같은 URL 재fetch 안 함.
+
+---
+
+## 6. 폴더 구조
+
+```
+crawler_test/
+├── pyproject.toml          # uv 의존성 + pytest + ruff 설정
+├── uv.lock                 # 잠금 파일
+├── .gitignore
+├── README.md               # 빠른 시작·실행 방법
+├── STATUS.md               # ← 이 문서
+├── crawler/
+│   ├── src/
+│   │   ├── crawl4ai_crawler.py     # crawl4ai 래퍼 (BrowserConfig + 옵션)
+│   │   ├── s3_uploader.py           # S3 업로드 (boto3, IAM 역할)
+│   │   ├── storage.py               # PostStorage (disk + S3)
+│   │   ├── preprocessor/
+│   │   │   ├── content_validator.py  # 사용자 글 vs 공지·차단 판별
+│   │   │   ├── dedup_checker.py      # 본문 SHA256 dedup
+│   │   │   ├── language_detector.py  # langdetect 래퍼
+│   │   │   ├── url_dedup_checker.py  # cross-run URL dedup
+│   │   │   └── serializer.py         # CrawlResult → CrawlEvent
+│   │   ├── queue/
+│   │   │   └── redis_publisher.py    # posts:queue LPUSH
+│   │   ├── scheduler/
+│   │   │   ├── crawl_scheduler.py    # CrawlPipeline + APScheduler
+│   │   │   └── trigger_listener.py   # Redis pub/sub 수동 트리거
+│   │   └── sites/
+│   │       └── registry.py           # SITES dict + SiteConfig + 헬퍼
+│   └── tests/
+│       ├── conftest.py
+│       ├── unit/                     # 6개 모듈, ~100건
+│       └── integration/              # 파이프라인 E2E
+├── shared/                          # crawler 공용
+│   ├── correlation_id.py
+│   ├── structured_logger.py
+│   ├── config/redis_config.py
+│   ├── exceptions/base_exception.py
+│   └── models/crawl_event.py
+└── scripts/
+    └── smoke_each_site.py            # 실 사이트 smoke 테스트 (수동 실행)
+```
+
+---
+
+## 7. 실행 / 테스트 / smoke
+
+```bash
+cd crawler_test
+
+# 의존성 동기화 (.venv + uv.lock)
+uv sync
+
+# 전체 테스트 (mock 기반, 인터넷 불필요)
+uv run pytest -q                    # 142 passed
+
+# ruff 린트
+uv run ruff check crawler/ shared/ scripts/
+
+# 실 사이트 smoke (전체 — tieba/nga 자동 제외)
+uv run python scripts/smoke_each_site.py
+
+# 특정 사이트만
+uv run python scripts/smoke_each_site.py bahamut_tl
+
+# 운영 (Redis 필요)
+REDIS_URL=redis://localhost:6379 \
+MAX_POSTS_PER_BOARD=10 \
+CRAWL_INTERVAL_MINUTES=60 \
+uv run python -m crawler.src.scheduler.crawl_scheduler
+```
+
+---
+
+## 8. 이번 사이클까지 마친 주요 작업
+
+1. **레지스트리 NC 재타겟** — Bahamut 단일 `bahamut`(원신) → NC 8개 게임 site_id 로 분리
+2. **PTT** — C_Chat 보드에서 NC Lineage 보드로 교체 + over18 폼 js_code 자동 통과
+3. **`title_keywords`** — 혼합 보드(Dcard /f/game, PTT Mobile-game)의 listing 단계 사전 필터
+4. **`UrlDedupChecker`** — Redis ZSET 기반 cross-run URL 중복 차단 (Tier 1)
+5. **`content_validator`** — 8-kind 분류 + prefix dispatch (`bahamut_*` 등)
+6. **Bahamut validator** — chrome 마커 의존 제거, **길이 기반** 으로 전환 (셀렉터 결과 호환)
+7. **Inter-site / inter-board delay** — 환경변수 + ±25% jitter (Bahamut rate limit 해결)
+8. **모던 crawl4ai 옵션** 11개 SiteConfig 필드 노출 (scan_full_page, virtual_scroll_config, simulate_user, user_agent_mode, c4a_script 등)
+9. **Smoke retry-once** — 일시 anti-bot 회복
+10. **인프라 정리** — .gitignore, ruff 설정, __pycache__ 청소
+
+---
+
+## 9. Known Issues / Limitations
+
+| 항목 | 영향 | 대응 |
+|---|---|---|
+| Tieba/NGA HTTP 403 (한국 IP) | NC 중국권 데이터 불가 | 중국 residential 프록시 인프라 필요 |
+| Dcard /f/online wait_for 타임아웃 | 1개 보드 작동 안 함 | 셀렉터 재조정 |
+| Dcard /f/game · PTT Mobile-game 1페이지에 NC 글 0 | 시간당 0~2건 누락 가능 | 페이지네이션 또는 Dcard 자체 deprioritize |
+| 52pojie NC 무관 | NC 타겟엔 무용 | NC 외 외掛 일반 데이터 필요 시 유지, NC 전용엔 제외 |
+| 검색엔진형 (github/reddit/bing/baidu/...) 미구현 | 광범위 recall 못 함 | `SearchEngineConfig` 추상화 신설 |
+| LLM/VLM enrichment 미구현 | 분류·요약·VLM caption 안 됨 | 별도 worker 서비스 신설 (Option A — post-crawl) |
+
+---
+
+## 10. Roadmap (우선순위)
+
+1. **검색엔진형 추상화 + github** — 가장 쉬운 검색엔진. 추상화 검증용
+2. **dcard_online wait_for 수정** + **ptt_mobile_game 페이지네이션** — 작은 fix
+3. **enrichment 서비스 신설** — DeepSeek(text) + OpenAI(VLM), 별도 폴더 `enrichment_test/`
+4. **검색엔진형 확장** — reddit, bing, duckduckgo_cn
+5. **프록시 풀 통합** — 중국 IP 확보 후 nga/tieba/baidu/sogou 가동
+6. **per-board `last_seen_post_id`** (Tier 2 dedup) — 페이지네이션 효율 ↑
+
+---
+
+## 11. 참고
+
+- crawl4ai 공식 문서: <https://docs.crawl4ai.com/>
+- LLM extraction strategy: `LLMExtractionStrategy` (현재 미사용, enrichment 분리 결정)
+- 본 리포의 디자인 원칙: **크롤은 빠르고 단순하게, 분류·요약은 enrichment 단계로 분리**

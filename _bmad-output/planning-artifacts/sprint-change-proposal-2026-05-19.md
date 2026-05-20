@@ -196,3 +196,71 @@ Epic 2 (자동 크롤링 및 전처리 파이프라인) 의 기존 구현 (`craw
 - **Step 4 (This document):** Generated 2026-05-19
 - **Step 5 (Approval & Routing):** Pending user approval
 - **Step 6 (Completion):** Pending
+
+---
+
+## Review Findings
+
+> 3-layer adversarial code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) on PR #46.
+> Date: 2026-05-20. Diff: 126 files / +2871 / -1623 / 5,667 diff lines.
+
+### Decision-needed (1)
+
+- [x] [Review][Decision] **tieba/nga `enabled=False` vs PRD P3 트랙 불일치** — **해결 (2026-05-20):** Option C 채택. registry `enabled=False` 유지, PRD §데이터 소스 표를 `P3 (disabled)` 로 격하 + 2026-05-20 Bright Data PoC 실패 사유 명시. 트랙 B 메모도 동기화. — PRD/architecture 문서는 tieba/nga를 P3(proxy 선결) 트랙으로 active 명시하나, registry.py에서는 `enabled=False`로 비활성화. Story 5-1 미스파이어 리스너 제거(아래 Critical-2)와 함께 PIVOT 의도 명확화 필요. **Option A:** 두 사이트를 PRD에서도 "disabled until proxy 검증"으로 격하 / **Option B:** registry `enabled=True`로 복귀 + content_validator로 차단 페이지 식별만 강화 / **Option C:** 현 상태 유지 + PRD에 "Bright Data PoC 실패로 일시 disabled (2026-05-20)" 메모만 추가. [`crawler/src/sites/registry.py:4424, 4456`, `_bmad-output/planning-artifacts/prd.md:333-335`]
+
+### Patch (Critical / High — 즉시 수정 권장)
+
+- [x] [Review][Patch][Critical] **ptt/52pojie/bahamut/nga 모든 포스트가 `_validate_id` ValueError로 silently fail** — **fixed (2026-05-20):** 4개 사이트(ptt, ptt_mobile_game, 52pojie, bahamut_*, nga)에 site별 `post_id_extractor` 추가. PTT: `M\.(\d+)` / 52pojie: `thread-A_B_C` / Bahamut: `bsn<N>_snA<N>` / NGA: tid 추출. 7개 사이트 모두 `_SAFE_ID_RE` 통과 실증, crawler 143 tests PASS. — 4개 사이트에 `post_id_extractor=` override가 없어 기본 lambda(`url.rstrip("/").split("/")[-1]`)가 `M.1700000000.A.ABC.html` / `thread-1234567-1-1.html` / `C.php?bsn=842&snA=12345` / `read.php?tid=12345`를 반환. `storage._SAFE_ID_RE = ^[A-Za-z0-9_\-]+$`에서 거부 → `CrawlPipeline.run`의 broad except에 잡혀 모든 포스트가 `failed`로 계수. 142 unit tests PASS는 storage가 mock되었거나 실제 사이트 통합 테스트가 안 돌아서 본 경로를 못 탔기 때문. **즉시 fix:** 사이트별 `post_id_extractor` lambda 추가 (PTT: regex `M\.(\d+)` / 52pojie: `thread-(\d+)-` / Bahamut: `bsn=(\d+).+snA=(\d+)` → 조합 / NGA: `tid=(\d+)`) [`crawler/src/sites/registry.py:215-371`, `crawler/src/storage.py:22, 35-39, 80-81`]
+
+- [x] [Review][Patch][Critical] **Story 5-1 `EVENT_JOB_MISSED` 미스파이어 리스너 silently 제거** — **fixed (2026-05-20):** `crawl_scheduler.py` 에 `from apscheduler.events import EVENT_JOB_MISSED` import + `_on_job_missed` 핸들러 (job_id + scheduled_run_time 구조화 로그) + `setup_schedule` 마지막에 `add_listener(self._on_job_missed, EVENT_JOB_MISSED)` 호출 복원. Story 5-1 의 운영 가시성 contract 회복. crawler 143 tests PASS. — Story 5-1(done)의 운영 가시성 contract(`misfire 발생 시 구조화 로그`)가 PIVOT에서 임포트·핸들러·`add_listener` 호출 모두 삭제됨. Sprint Change Proposal Impact Analysis에는 언급 없음. **Fix:** `_on_job_missed` 핸들러 + `add_listener(EVENT_JOB_MISSED)` 복원, 또는 Sprint Change Proposal에 contract regression 명시 + sprint-status에서 Story 5-1 status 갱신. [`crawler/src/scheduler/crawl_scheduler.py` (제거된 라인), `_bmad-output/implementation-artifacts/5-1-prometheus-메트릭-수집-및-grafana-대시보드-구성.md:321-327`]
+
+- [ ] [Review][Patch][High] **`fit_markdown` 빈 문자열 시 정상 크롤이 silently drop** — `crawl4ai_crawler.py:227-231`에서 `md`가 str일 때(MarkdownGenerationResult 아닐 때) `fit_md=""` / `raw_md=str(md)`로 설정. scheduler `crawl_scheduler.py:274`의 `if not (result.fit_markdown or "").strip():` 가드는 `raw_markdown`이 있어도 무조건 skipped_empty. CrawlResult에 정의된 `effective_markdown` property(line 32)를 사용해야 함. **Fix:** scheduler `274` 라인을 `result.effective_markdown`로 교체 + 이후 validator/dedup 호출도 동일하게 통일. [`crawler/src/crawl4ai_crawler.py:225-231`, `crawler/src/scheduler/crawl_scheduler.py:274,284,301`]
+
+- [ ] [Review][Patch][High] **`output/_tmp` 공유 디렉터리에서 이미지 파일명 충돌** — `Crawl4AICrawler`가 단일 인스턴스로 `output_dir="output/_tmp"`를 공유, `dest = dest_dir / f"img_{i:03d}{ext}"`가 사이트·포스트 간 재사용됨. 현재는 순차 실행이라 부분 우회되나, 두 번째 포스트의 storage가 첫 포스트의 잔여 파일을 본인 디렉터리에 옮겨 cross-post 이미지 오염 가능. **Fix:** `output_dir/<correlation_id>/`로 분리하거나 fetch당 임시 디렉터리 생성. [`crawler/src/crawl4ai_crawler.py:241, 290`, `crawler/src/scheduler/crawl_scheduler.py` _output_dir 초기화]
+
+- [ ] [Review][Patch][High] **Bahamut sticky 정렬 깨짐: `_url_sort_key`가 querystring ID 미인식** — `findall(r"/(\d+)", url)` 정규식이 Bahamut `C.php?bsn=842&snA=12345`에 매치 안 됨 → 모든 URL이 sort_key=0으로 떨어져 sticky 포스트가 최신 포스트 위치에 섞임. **Fix:** sort_key 함수를 querystring fallback(예: `(?:\?|&)(?:tid|snA)=(\d+)` 추가)으로 확장. [`crawler/src/scheduler/crawl_scheduler.py:151-153`]
+
+- [ ] [Review][Patch][High] **`_validate_id` 실패가 "기타 전송 실패"와 한 통계에 묶임** — 위 Critical-1과 결합 시 운영 알람·메트릭으로 "사이트 X 100% 실패"를 식별 불가. 일시 timeout과 영구 schema 실패가 같은 `failed` 카운터 사용. **Fix:** `_validate_id` ValueError를 별도 카운터(`stats.skipped_invalid_id`)로 분리 + WARN 로그에 사이트별 집계. [`crawler/src/scheduler/crawl_scheduler.py:325-332`, `crawler/src/storage.py:35-39`]
+
+- [ ] [Review][Patch][High] **`UrlDedupChecker.cleanup_older_than` 호출 지점 없음 — ZSET 무한 증가** — 7일 TTL이 docstring·architecture에 약속되어 있으나 어떤 스케줄러도 cleanup을 호출하지 않음. **Fix:** APScheduler에 일일 cleanup job(`age_seconds=7*86400`) 등록. [`crawler/src/preprocessor/url_dedup_checker.py:67-77`, `crawler/src/scheduler/crawl_scheduler.py:382`]
+
+- [ ] [Review][Patch][High] **tieba 홈페이지 redirect 탐지 임계값 500자가 nav/footer 포함 시 통과** — `content_validator.py:233`에서 `len(markdown) < 500` 만 검사 → 긴 nav가 있는 홈페이지가 통과 후 `回复/楼主/来自/签到` 매칭에 의해 `real`로 분류. **Fix:** URL 패턴 검사(`tieba.baidu.com/$` 또는 `tieba.baidu.com/f`)로 short-circuit. [`crawler/src/preprocessor/content_validator.py:233`]
+
+- [ ] [Review][Patch][Medium] **`test_language_detector.py` / `test_serializer.py` 부재 (Story 2-3 미해결 review patch)** — Story 2-3 미해결 deferred 항목. PIVOT이 `serializer.to_crawl_event`에 `s3_text_path/s3_image_paths` kwarg를 추가했으나 dedicated 테스트 없음. **Fix:** 두 모듈에 unit test 추가 (language: `_LANG_MAP` 정규화 + seed 고정 / serializer: 모든 CrawlEvent 필드 매핑). [`_bmad-output/implementation-artifacts/2-3-콘텐츠-전처리-파이프라인-구현.md:156-157`]
+
+- [ ] [Review][Patch][Medium] **`content_validator` PREFIX dispatcher가 `startswith`로 over-match** — `("ptt", validate_ptt)`가 `"pttsearch"` 같은 미래 site_id를 의도치 않게 잡음. **Fix:** PREFIX 매칭을 `site_id == prefix or site_id.startswith(prefix + "_")`로 제한. [`crawler/src/preprocessor/content_validator.py:3532-3540`]
+
+- [ ] [Review][Patch][Medium] **`_brightdata_cn_proxy()`가 import-time 평가 — 환경변수 변경 무효** — 모듈 로드 시점에 한 번만 호출되어 freeze. 운영 중 secret rotation·대시보드 변경이 반영 안 됨. **Fix:** SiteConfig에 `proxy: Callable[[], dict | None] | dict | None`로 받고 fetch 시점에 평가. [`crawler/src/sites/registry.py:25-39, 334, 362`]
+
+- [ ] [Review][Patch][Medium] **트리거 재진입 silently 폐기 — 대시보드 "trigger now" 무반응** — 진행 중 run이 있으면 `_run_locked`가 trigger를 단순 폐기. 사용자는 수동 트리거가 작동했다고 오해. **Fix:** 한 개의 pending trigger를 큐잉(boolean flag)하거나 응답 로그를 caller에게 노출. [`crawler/src/scheduler/crawl_scheduler.py:389-398`]
+
+- [ ] [Review][Patch][Medium] **Bahamut/52pojie sticky 마커가 인용 본문 첫 800-1200자 안에 있으면 false positive** — 사용자가 공지/이벤트 텍스트를 본인 글 상단에 copy-paste하면 sticky로 오인식. **Fix:** sticky 판별 시 site별 selector(예: `.fixed-thread`) 검사 또는 본문 헤더와의 위치 관계 확인. [`crawler/src/preprocessor/content_validator.py:176-179, 192-208`]
+
+- [ ] [Review][Patch][Low] **환경변수 `INTER_SITE_DELAY_SECONDS` / `MAX_POSTS_PER_BOARD` 파싱 try/except 없음** — 잘못된 값(`"15s"`, 빈 문자열) 시 import-time ValueError로 컨테이너 부팅 실패. **Fix:** try/except + 기본값 fallback + WARN 로그. [`crawler/src/scheduler/crawl_scheduler.py:30, 32, 34`]
+
+- [ ] [Review][Patch][Low] **`bahamut_image_filter` 가 substring `"i.imgur.com"` 매칭 — `evil.com/i.imgur.com.thing.jpg` 통과** — 보안 영향은 낮지만 URL parsing 일관성 결여. **Fix:** `urllib.parse.urlparse(src).netloc == "i.imgur.com"`로 변경. [`crawler/src/sites/registry.py:4170-4173`]
+
+- [ ] [Review][Patch][Low] **smoke_each_site.py가 폐기된 `crawler_test/` 경로 docstring 참조** — PIVOT으로 `crawler_test/`→`crawler/` 이름 변경 후 잔재. **Fix:** docstring 갱신. [`crawler/scripts/smoke_each_site.py:2577,2592`]
+
+### Defer (사전 존재 이슈 / 본 PIVOT과 무관)
+
+- [x] [Review][Defer] **`dedup_checker` whitespace-only difference로 해시 변동** — 본 PIVOT 도입 이전 동작. 별도 정규화 스토리에서 처리. [`crawler/src/preprocessor/dedup_checker.py:22-23`]
+- [x] [Review][Defer] **trigger_listener reconnect storm (5s fixed)** — 본 PIVOT 외 안정화 항목. exponential backoff + jitter 별도 처리. [`crawler/src/scheduler/trigger_listener.py:66-71`]
+- [x] [Review][Defer] **`urllib`로 image extension 결정 (Content-Type 무시)** — 본 PIVOT 외 storage 정밀도 항목. [`crawler/src/crawl4ai_crawler.py:289`]
+- [x] [Review][Defer] **PTT/Dcard validator marker 조정 (False positive 가능성)** — 운영 데이터 수집 후 튜닝. [`crawler/src/preprocessor/content_validator.py:126-148`]
+
+### Dismissed (10건)
+
+스펙·맥락 일치하지 않거나 false positive로 판정 — `mark_seen` skip 경로(의도된 동작 ✓), `bahamut_image_filter` keyword 중복(영향 없음), pubsub `decode_responses` 가정(현 컨피그 일관), `output_dir` symlink loop(운영 외 경계 케이스), `_NC_GAME_KEYWORDS` 중복 항목(no-op), `headers=_TW_HEADERS` 공유 dict(아무도 mutate 안 함), `_url_dedup` decode_responses(현 컨피그 일관), `_run_lock` HA 가정(단일 인스턴스 명시), `language` 빈 문자열(downstream 처리 책임), `exclude_social_media_links` 기본값 차이(pipeline에서 SiteConfig가 source of truth).
+
+### Summary
+
+| Severity | Patch | Decision | Defer | Dismiss |
+|---|---|---|---|---|
+| Critical | 2 | 0 | 0 | - |
+| High | 6 | 1 (Bahamut sticky 정렬 등 포함) | 0 | - |
+| Medium | 5 | 0 | 1 | - |
+| Low | 4 | 0 | 3 | - |
+| **합계** | **17** | **1** | **4** | **10** |
+
+**주요 위험:** Critical-1(`post_id_extractor` 미설정)은 운영 배포 시 4개 사이트(ptt/52pojie/bahamut/nga)의 모든 포스트가 silently fail. 142 PASS는 storage layer integration이 충분히 못 돌았기 때문으로 추정. PR 머지 전 반드시 fix 권장.

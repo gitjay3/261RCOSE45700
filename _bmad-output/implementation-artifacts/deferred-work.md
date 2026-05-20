@@ -194,3 +194,10 @@ Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 
 ## Deferred from: code review of 5-1-prometheus-메트릭-수집-및-grafana-대시보드-구성 (2026-05-12)
 
 - **APScheduler max_instances skip 관측 부재** [crawler/src/scheduler/crawl_scheduler.py:229] — Story 5.1은 `EVENT_JOB_MISSED` 기반 misfire 로깅을 추가했지만, 긴 크롤 실행으로 `max_instances=1` 제한에 걸리는 skip은 별도 이벤트(`EVENT_JOB_MAX_INSTANCES`) 경로라 이번 리스너로는 잡히지 않을 수 있다. 기존 스케줄러 동작의 운영 가시성 개선 항목으로 후속 모니터링 스토리에서 검토.
+
+## Deferred from: code review of sprint-change-proposal-2026-05-19 / PR #46 (2026-05-20)
+
+- **dedup_checker whitespace-only difference로 해시 변동** [crawler/src/preprocessor/dedup_checker.py:22-23] — `sha256(text.encode())` 는 trailing newline 차이도 다른 해시로 본다. crawl4ai 재크롤 시 markdown 표현이 미세하게 달라지면 dedup 누락. 별도 정규화 스토리에서 `text.strip()` 또는 whitespace collapse 적용.
+- **trigger_listener reconnect storm (5s fixed back-off)** [crawler/src/scheduler/trigger_listener.py:66-71] — 네트워크 partition 시 5초 고정 backoff로 로그 spam. exponential backoff + jitter는 별도 stability 항목.
+- **이미지 확장자 결정에 Content-Type 미사용** [crawler/src/crawl4ai_crawler.py:289] — URL `?` 앞 path suffix 만으로 결정하여 extensionless CDN URL은 `.jpg` 기본값. Content-Type 기반 보정은 별도 storage 정밀도 항목.
+- **PTT/Dcard validator marker 튜닝 (False positive 가능성)** [crawler/src/preprocessor/content_validator.py:126-148] — 4-header 부분 일치 / `## #` 본문 매칭이 quoted text 에서 오탐 가능. 운영 데이터 수집 후 정량화하여 튜닝.

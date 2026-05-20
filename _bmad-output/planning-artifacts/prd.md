@@ -94,8 +94,8 @@ Tracker는 NC AI 게임 보안 담당자를 위한 자동화된 불법 프로그
 | P1 | **Dcard** | 대만 | 2 보드 (game / online — 모두 혼합) | React SPA, `title_keywords=_NC_GAME_KEYWORDS` 필터 |
 | P2 | **인벤 (메이플)** | 한국 | 1 보드 | NEXON 비교군 — 운영 valid 검증용 |
 | P3 | **52pojie** | 중국 | 1 보드 | Cloudflare 보호, stealth + zh-CN UA 통과. 프록시 옵션 |
-| P3 (proxy 선결) | **tieba** | 중국 | 2 보드 (游戏外挂 / 手游辅助) | **중국 residential proxy 필수** — 한국 IP HTTP 403 |
-| P3 (proxy 선결) | **NGA** | 중국 | 1 보드 (fid=489) | **중국 residential proxy 필수** — 한국 IP HTTP 403 |
+| P3 (disabled) | **tieba** | 중국 | 2 보드 (游戏外挂 / 手游辅助) | **Bright Data CN PoC 실패 (2026-05-20)** — proxy 라우팅·중국 IP 발급은 정상이나 Baidu anti-bot 이 stealth Chromium까지 HTTP 403. 추가로 민감 키워드 검색은 중국 본토 휴대폰·실명 인증 계정 필수 → 대체 proxy/우회 경로 검토 전까지 `registry.enabled=False` |
+| P3 (disabled) | **NGA** | 중국 | 1 보드 (fid=489) | **Bright Data CN PoC 실패 (2026-05-20)** — `ERR_TUNNEL_CONNECTION_FAILED` (NGA 가 proxy 패턴 자체 차단 추정). ngaPassportUid 쿠키 필수 + 계정 가입에 중국 본토 휴대폰·실명 인증 → 대체 proxy 검토 전까지 `registry.enabled=False` |
 
 #### 검색엔진형 (Stories 2-8~2-12, Epic 3 완료 후 착수 — backlog)
 
@@ -113,7 +113,7 @@ Tracker는 NC AI 게임 보안 담당자를 위한 자동화된 불법 프로그
 #### 진행 트랙
 
 1. **트랙 A (즉시 운영 가능)**: P0~P1 게시판형 (Bahamut + 인벤 + PTT + Dcard) — 외부 contract 호환 검증 완료, 142 PASS
-2. **트랙 B (proxy 선결 필요)**: P3 게시판형 (tieba, NGA, 52pojie 일부) + P3 검색엔진형 (baidu, sogou, bilibili) — **중국 residential proxy 인프라 트랙** 완료 후 활성화
+2. **트랙 B (proxy 선결 필요)**: P3 게시판형 (tieba·NGA `registry.enabled=False` — 2026-05-20 Bright Data PoC 실패 후 대체 proxy/우회 검토, 52pojie 일부) + P3 검색엔진형 (baidu, sogou, bilibili) — **중국 residential proxy 인프라 트랙** 완료 후 활성화
 3. **트랙 C (Epic 3 완료 후)**: P0~P2 검색엔진형 (github, reddit, bing, duckduckgo_cn, facebook) — `SearchEngineConfig` 추상화 신설 (Story 2-8) 부터 시작
 4. **트랙 D (Known issues — 단발 fix)**: `dcard_online` `wait_for=css:article` 타임아웃, `ptt_mobile_game`·`dcard /f/game` 페이지네이션 또는 deprioritize
 

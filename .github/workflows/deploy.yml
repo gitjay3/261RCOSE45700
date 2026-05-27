@@ -4,10 +4,8 @@ name: deploy
 # OIDC / IAM Role / CodeDeploy 모두 봉인된 학생 계정 제약 하에서의 PIVOT 사양.
 
 on:
-  # 자동 배포 트리거 임시 비활성 — 운영 셋업(.env/secrets/RDS) 검증 전까지는
-  # workflow_dispatch로만 수동 트리거. 운영 준비 완료 시 push 블록 주석 해제.
-  # push:
-  #   branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       rollback_to:

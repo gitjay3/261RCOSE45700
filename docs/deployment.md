@@ -203,7 +203,10 @@ sudo chown root:root /opt/app/secrets
 echo -n "<openai-api-key>" | sudo tee /opt/app/secrets/openai_api_key >/dev/null
 echo -n "<rds-password>"   | sudo tee /opt/app/secrets/db_password    >/dev/null
 sudo chmod 600 /opt/app/secrets/*
-sudo chown root:root /opt/app/secrets/*
+# detection(UID 1001)이 openai_api_key를 읽어야 하므로 소유자를 1001로 설정.
+# api(Spring Boot)는 root로 실행되므로 db_password는 root:root 유지.
+sudo chown 1001:1001 /opt/app/secrets/openai_api_key
+sudo chown root:root /opt/app/secrets/db_password
 
 # 비-시크릿 환경 (chmod 600 권장)
 sudo tee /opt/app/.env <<'EOF'
@@ -255,7 +258,7 @@ sudo chmod 600 /opt/app/.env
 >
 > ⚠️ **위 env 템플릿 누락 시 첫 배포 실패 패턴**:
 > - `REDIS_URL` 누락 → crawler/detection가 `redis://localhost:6379` default로 떨어져 docker network 내부 redis 접속 실패. healthcheck 실패 → 자동 롤백.
-> - `/opt/app/secrets/openai_api_key` 누락 → detection이 startup에서 `OPENAI_API_KEY` 미설정으로 실패. healthcheck 실패 → 자동 롤백.
+> - `/opt/app/secrets/openai_api_key` 누락 또는 소유자가 root:root → detection(UID 1001)이 secret-shim에서 읽지 못해 `OPENAI_API_KEY` 미설정으로 실패. healthcheck 실패 → 자동 롤백. (`sudo chown 1001:1001 /opt/app/secrets/openai_api_key` 필수)
 > - `DB_HOST_PORT` 누락은 default `:5432`로 rescue됨 (subtle bug, 표준 포트만 안전).
 
 ### 2.7 기존 EC2 VARCO → OpenAI 전환

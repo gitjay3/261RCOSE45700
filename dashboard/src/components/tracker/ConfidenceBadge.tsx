@@ -5,12 +5,15 @@ import {
   SEVERITY_LABEL,
   formatScore,
   severityOf,
+  severityOfDetection,
   type Severity,
 } from '@/lib/severity';
 
 interface ConfidenceBadgeProps extends HTMLAttributes<HTMLSpanElement> {
   /** Confidence score 0~1 from LLM detection */
   score: number;
+  /** isIllegal=false(T4)이면 항상 low로 표시. 미전달 시 score만으로 판단. */
+  isIllegal?: boolean;
 }
 
 const LEVEL_CHIP: Record<Severity, string> = {
@@ -27,10 +30,14 @@ const LEVEL_ICON = {
 
 export function ConfidenceBadge({
   score,
+  isIllegal,
   className,
   ...rest
 }: ConfidenceBadgeProps) {
-  const level = severityOf(score);
+  const level =
+    isIllegal !== undefined
+      ? severityOfDetection({ confidence: score, isIllegal })
+      : severityOf(score);
   const Icon = LEVEL_ICON[level];
   const numText = formatScore(score);
   const ariaScore = Number.isFinite(score)

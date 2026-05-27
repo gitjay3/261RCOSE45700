@@ -27,6 +27,12 @@ export function severityOf(score: number): Severity {
   return 'low';
 }
 
+/** isIllegal=false(T4 기타)이면 confidence와 무관하게 low — 합법 게시글에 경고 배지 방지. */
+export function severityOfDetection(d: { confidence: number; isIllegal: boolean }): Severity {
+  if (!d.isIllegal) return 'low';
+  return severityOf(d.confidence);
+}
+
 /** 0.95 → ".95" — 44px 칩 너비에 맞춤. 1.00은 0.99로 캡(폭 보호). NaN은 "—". */
 export function formatScore(score: number): string {
   if (!Number.isFinite(score)) return '—';

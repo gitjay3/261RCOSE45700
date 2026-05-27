@@ -17,7 +17,6 @@ from detection.src.retry.retry_handler import RetryExhaustedError, RetryHandler
 from shared.config.redis_config import (
     REDIS_KEY_POSTS_DLQ,
     REDIS_KEY_POSTS_PROCESSING,
-    REDIS_KEY_POSTS_QUEUE,
 )
 from shared.models.crawl_event import CrawlEvent
 
@@ -51,7 +50,9 @@ def rate_limit_redis() -> fakeredis.FakeRedis:
     return fakeredis.FakeRedis(decode_responses=True)
 
 
-def _build_pipeline(llm_mode: str, mq_redis, rate_limit_redis, repository=None) -> tuple[DetectionPipeline, RetryHandler]:
+def _build_pipeline(
+    llm_mode: str, mq_redis, rate_limit_redis, repository=None,
+) -> tuple[DetectionPipeline, RetryHandler]:
     from detection.src.rate_limit.token_bucket import TokenBucket
     llm = LLMMock(mode=llm_mode)
     bucket = TokenBucket(rate_limit_redis, capacity=100, refill_per_sec=100)

@@ -107,7 +107,11 @@ def test_save_is_idempotent_on_same_model_version(clean_db) -> None:
     # detections에는 1 row만.
     with clean_db.connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM detections WHERE post_id IN (SELECT id FROM posts WHERE post_id_at_source=%s)", (event.post_id,))
+            cur.execute(
+                "SELECT COUNT(*) FROM detections "
+                "WHERE post_id IN (SELECT id FROM posts WHERE post_id_at_source=%s)",
+                (event.post_id,),
+            )
             assert cur.fetchone()[0] == 1
 
 

@@ -12,18 +12,12 @@ class ClassificationResult:
     reason: str
 
 
+# NOTE: Story 3-2 (VARCO Translation) deprecated by Sprint Change Proposal 2026-05-27.
+# `translate()` 메서드 제거됨. classify() 경로는 Story 3-3에서 OpenAI 멀티모달로 재작성 예정.
+
+
 @runtime_checkable
 class VarcoInterface(Protocol):
-    def translate(self, text: str) -> str:
-        """텍스트를 한국어로 번역.
-
-        Raises:
-            RateLimitError: VARCO API quota 초과 (호출자가 retry_after 후 1회 자동 재시도).
-            TimeoutError: HTTP 호출 타임아웃 (RetryHandler retryable).
-            ConnectionError / httpx.HTTPError: 네트워크/HTTP 오류 (RetryHandler retryable).
-        """
-        ...
-
     def classify(self, text: str) -> ClassificationResult:
         """텍스트의 불법 여부와 유형을 분류.
 

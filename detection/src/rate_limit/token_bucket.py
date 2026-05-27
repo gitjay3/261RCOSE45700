@@ -5,7 +5,7 @@ import time
 
 import redis
 
-from shared.config.redis_config import REDIS_KEY_VARCO_RATE_LIMIT_TRANSLATE
+from shared.config.redis_config import REDIS_KEY_VARCO_RATE_LIMIT_CLASSIFY
 from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "detection")
@@ -58,7 +58,7 @@ class TokenBucket:
     def __init__(
         self,
         redis_client: redis.Redis,
-        key: str = REDIS_KEY_VARCO_RATE_LIMIT_TRANSLATE,
+        key: str = REDIS_KEY_VARCO_RATE_LIMIT_CLASSIFY,
         capacity: int | None = None,
         refill_per_sec: float | None = None,
     ) -> None:

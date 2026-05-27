@@ -9,7 +9,7 @@ from detection.src.rate_limit.token_bucket import (
     RateLimitTimeoutError,
     TokenBucket,
 )
-from shared.config.redis_config import REDIS_KEY_VARCO_RATE_LIMIT_TRANSLATE
+from shared.config.redis_config import REDIS_KEY_VARCO_RATE_LIMIT_CLASSIFY
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def fake_redis() -> fakeredis.FakeRedis:
 def test_first_acquire_initializes_bucket(fake_redis: fakeredis.FakeRedis) -> None:
     bucket = TokenBucket(fake_redis, capacity=5, refill_per_sec=1)
     bucket.acquire()
-    tokens = float(fake_redis.hget(REDIS_KEY_VARCO_RATE_LIMIT_TRANSLATE, "tokens"))
+    tokens = float(fake_redis.hget(REDIS_KEY_VARCO_RATE_LIMIT_CLASSIFY, "tokens"))
     assert tokens == 4.0
 
 
@@ -28,7 +28,7 @@ def test_acquire_decrements_existing_bucket(fake_redis: fakeredis.FakeRedis) -> 
     bucket = TokenBucket(fake_redis, capacity=2, refill_per_sec=0.001)
     bucket.acquire()
     bucket.acquire()
-    tokens = float(fake_redis.hget(REDIS_KEY_VARCO_RATE_LIMIT_TRANSLATE, "tokens"))
+    tokens = float(fake_redis.hget(REDIS_KEY_VARCO_RATE_LIMIT_CLASSIFY, "tokens"))
     assert tokens < 1
 
 

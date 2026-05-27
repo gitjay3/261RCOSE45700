@@ -158,13 +158,20 @@ jobs:
         # fingerprint 검증 생략 — 학생 프로젝트 trade-off: MITM 방어/EC2 host key 변경
         # 감지를 포기하는 대신 운영 단순화. EC2 교체 시점에 EC2_HOST secret 갱신만으로
         # 동작하도록 의도. (deferred-work에 host fingerprint sanity check 항목 닫음)
+        #
+        # appleboy/scp-action 의 `target` 은 항상 디렉터리로 해석됨 (공식 README).
+        # `target: /opt/app/compose.prod.yml` 로 두면 그 경로를 디렉터리로 만들고
+        # source 파일을 그 안에 저장 → `docker compose -f /opt/app/compose.prod.yml`
+        # 가 "is a directory" 로 실패. `target: /opt/app/` + `strip_components: 1`
+        # 로 infra/ prefix 벗기고 단일 파일로 저장.
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "infra/compose.prod.yml"
-          target: "/opt/app/compose.prod.yml"
+          target: "/opt/app/"
+          strip_components: 1
           overwrite: true
 
       - name: Deploy + healthcheck + auto-rollback

@@ -31,7 +31,9 @@ def test_record_accumulates_cost_under_cap(fake_redis: fakeredis.FakeRedis) -> N
     assert cap.cumulative_usd() == pytest.approx(0.0075, rel=1e-3)
 
 
-def test_check_and_hold_sleeps_when_cap_reached(fake_redis: fakeredis.FakeRedis, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_and_hold_sleeps_when_cap_reached(
+    fake_redis: fakeredis.FakeRedis, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Cap을 거의 가득 채워서 직후 check가 hold loop에 진입하도록.
     cap = CostCap(fake_redis)
     # 1회 호출로 $5 초과 — gpt-4o 기준 output 500k 토큰 ≈ $5.

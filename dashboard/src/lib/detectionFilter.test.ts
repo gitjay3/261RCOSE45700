@@ -10,12 +10,12 @@ describe('detectionFilterToParams', () => {
     const params = detectionFilterToParams({
       date: '2026-05-12',
       site: 'tailstar',
-      type: '핵_배포',
+      type: '핵_치트',
       lang: 'zh-CN',
     });
     expect(params.get('date')).toBe('2026-05-12');
     expect(params.get('site')).toBe('tailstar');
-    expect(params.get('type')).toBe('핵_배포');
+    expect(params.get('type')).toBe('핵_치트');
     expect(params.get('lang')).toBe('zh-CN');
   });
 
@@ -34,7 +34,7 @@ describe('isFilterActive', () => {
   it('returns true when any filter field is set', () => {
     expect(isFilterActive({ date: '2026-05-12' })).toBe(true);
     expect(isFilterActive({ site: 'tailstar' })).toBe(true);
-    expect(isFilterActive({ type: '핵_배포' })).toBe(true);
+    expect(isFilterActive({ type: '핵_치트' })).toBe(true);
     expect(isFilterActive({ lang: 'ko' })).toBe(true);
   });
 });

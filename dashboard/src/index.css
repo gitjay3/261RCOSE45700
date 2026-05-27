@@ -159,6 +159,9 @@
   --c4: var(--brand-green);
   --c5: var(--brand-orange);
   --c6: oklch(0.48 0.07 35);
+  --c7: oklch(0.55 0.14 15);
+  --c8: oklch(0.68 0.14 80);
+  --c9: oklch(0.52 0.12 280);
 
   /* Action — Primary CTA */
   --accent: var(--brand-cyan-deep);
@@ -218,6 +221,10 @@
   --chart-3: var(--c3);
   --chart-4: var(--c4);
   --chart-5: var(--c5);
+  --chart-6: var(--c6);
+  --chart-7: var(--c7);
+  --chart-8: var(--c8);
+  --chart-9: var(--c9);
 
   --confidence-high: var(--crit);
   --confidence-medium: var(--warn);
@@ -275,6 +282,9 @@
   --c4: var(--brand-green);
   --c5: var(--brand-orange);
   --c6: oklch(0.70 0.05 35);
+  --c7: oklch(0.72 0.15 15);
+  --c8: oklch(0.78 0.14 80);
+  --c9: oklch(0.68 0.11 280);
 
   --accent: var(--brand-cyan);
   --accent-soft-bg: oklch(0.28 0.04 215);
@@ -311,6 +321,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

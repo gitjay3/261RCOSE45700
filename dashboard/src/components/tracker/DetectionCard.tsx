@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { TypeIcon } from './TypeIcon';
-import { SEVERITY_TINT_CLASSES, severityOf } from '@/lib/severity';
+import { SEVERITY_TINT_CLASSES, severityOfDetection } from '@/lib/severity';
 import { formatRelativeTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import type { Detection } from '@/types/api';
@@ -17,7 +17,7 @@ interface DetectionCardProps {
  * 데스크탑은 `<DetectionRow>` (TableRow 기반) 사용.
  */
 export function DetectionCard({ detection, visited = false, onSelect }: DetectionCardProps) {
-  const severity = severityOf(detection.confidence);
+  const severity = severityOfDetection(detection);
   const time = formatRelativeTime(detection.detectedAt);
   const snippet = detection.translatedText ?? detection.rawText;
 
@@ -38,7 +38,7 @@ export function DetectionCard({ detection, visited = false, onSelect }: Detectio
     >
       <div className="flex flex-col gap-1.5 px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <ConfidenceBadge score={detection.confidence} aria-hidden />
+          <ConfidenceBadge score={detection.confidence} isIllegal={detection.isIllegal} aria-hidden />
           <TypeIcon type={detection.type} />
           <ChevronRight
             className="text-muted-foreground ml-auto size-4 shrink-0"

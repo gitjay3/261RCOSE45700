@@ -6,14 +6,18 @@ import type { DetectionType } from '@/types/api';
  */
 const TYPE_TO_CHART_VAR: Record<DetectionType, string> = {
   매크로_판매: '--chart-1',
-  핵_배포: '--chart-2',
+  핵_치트: '--chart-2',
   계정_거래: '--chart-3',
   리세마라: '--chart-4',
   기타: '--chart-5',
+  사설서버: '--chart-6',
+  불법프로그램_배포: '--chart-7',
+  현금화: '--chart-8',
+  광고_도배: '--chart-9',
 };
 
 export function colorForType(type: DetectionType): string {
-  return `var(${TYPE_TO_CHART_VAR[type]})`;
+  return `var(${TYPE_TO_CHART_VAR[type] ?? '--chart-5'})`;
 }
 
 export const CHART_PALETTE_VARS = [
@@ -22,4 +26,8 @@ export const CHART_PALETTE_VARS = [
   'var(--chart-3)',
   'var(--chart-4)',
   'var(--chart-5)',
+  'var(--chart-6)',
+  'var(--chart-7)',
+  'var(--chart-8)',
+  'var(--chart-9)',
 ] as const;

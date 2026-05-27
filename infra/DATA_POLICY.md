@@ -13,8 +13,8 @@
 |---|---|---|
 | 게시글 원본 HTML | 외부 사이트 (taobao, tailstar 등) | S3 `tracker-archive-{env}-*` (SSE-S3, 비공개) |
 | 게시글 메타데이터 | 크롤러 추출 결과 | RDS `posts` 테이블 |
-| 번역 결과 (한국어) | VARCO Translation API | RDS `translations` 테이블 |
-| 탐지 결과 (불법 여부 + confidence + 근거) | VARCO LLM 분류 결과 | RDS `detections` 테이블 |
+| 번역 결과 (한국어) | OpenAI 멀티모달 LLM 응답 | RDS `detections.translated_text` 컬럼 |
+| 탐지 결과 (불법 여부 + confidence + 근거) | OpenAI 멀티모달 LLM 분류 결과 | RDS `detections` 테이블 |
 | 시스템 로그 | 애플리케이션 로그 | CloudWatch Logs (애플리케이션 측 send) |
 | 감사 로그 (AWS API 호출 이력) | 학교 organization CloudTrail | 학교 관리 (학생 계정 자체 trail 미생성) |
 
@@ -61,7 +61,7 @@
 ## 6. 접근 통제 (PIVOT 적용)
 
 - **EC2 → S3**: IGW 경유 (Default VPC 사용). VPC Gateway Endpoint는 학생 계정 라우트 테이블 수정 권한 불확실로 미생성 (deferred-work). Crawler IAM Role의 `s3:PutObject` 권한이 archive 버킷 ARN 한정.
-- **EC2 → 시크릿 파일**: `/opt/app/secrets/varco_api_key`, `/opt/app/secrets/db_password`가 chmod 600 + owner root:root. Docker `secrets:` 키워드로 컨테이너 내부 `/run/secrets/<name>` tmpfs read-only mount, `infra/docker-secret-shim.sh`가 대문자 env로 변환. EC2에 SSH 접근 가능한 운영자(`.pem` 키 보유자)만 읽을 수 있음.
+- **EC2 → 시크릿 파일**: `/opt/app/secrets/openai_api_key`, `/opt/app/secrets/db_password`가 chmod 600 + owner root:root. Docker `secrets:` 키워드로 컨테이너 내부 `/run/secrets/<name>` tmpfs read-only mount, `infra/docker-secret-shim.sh`가 대문자 env로 변환. EC2에 SSH 접근 가능한 운영자(`.pem` 키 보유자)만 읽을 수 있음.
 - **EC2 운영 접근**: **SSH `.pem` only** (2026-05-06 PIVOT). 단일 `.pem` 키페어 (관리자 접속 + GHA 자동 배포 공용). 22번 인바운드 `0.0.0.0/0` + defense-in-depth (ed25519 + password auth 비활성 + fail2ban). 학생 IAM이 SSM Session Manager·EC2 Instance Connect·IAM Role 생성 모두 차단으로 SSM 통로 불가.
 - **RDS 네트워크 (PIVOT)**: 학생 계정 SCP가 `publicly_accessible=true` 강제. **Default VPC 안에서 SG inbound 5432 source = {api-sg} ID만 허용**으로 인터넷 라우팅을 SG 단계에서 차단 (3차 PIVOT 단일 EC2로 회귀하면서 detection-sg 분리 불필요). 추가로 `rds.force_ssl=1`로 평문 접속 거절. 실효 보안은 `publicly_accessible=false` + SG와 동등.
 - **GitHub Actions → AWS**: **AWS API 직접 호출 통로 0개** (2026-05-06 PIVOT — OIDC + IAM Role 봉인, Access Key 발급 차단). 실 흐름: GHA → GHCR push (`GITHUB_TOKEN`) → SSH (`.pem` GH Secret) → EC2 내 `docker pull` + `docker compose`. AWS 자원 변경은 콘솔 ClickOps만 가능.

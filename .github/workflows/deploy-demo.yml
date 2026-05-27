@@ -1,7 +1,7 @@
 name: deploy-demo
 
 # Frontend-only 데모 배포 — dashboard만 GHCR 빌드/푸시 + EC2에 caddy reverse proxy.
-# VARCO API key 발급 전 임시. 운영 deploy.yml과 동일 EC2 호스트 공유 — 머지 충돌 없음.
+# OpenAI/RDS 운영 셋업 전 임시. 운영 deploy.yml과 동일 EC2 호스트 공유 — 머지 충돌 없음.
 #
 # workflow_dispatch 전용 (자동 트리거 X) — 데모 토글성 작업이라 push로 안 묶음.
 

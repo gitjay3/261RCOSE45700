@@ -1,7 +1,7 @@
 """LLM Protocol — Story 3-3 (2026-05-27 PIVOT).
 
-VARCO 2단 파이프라인을 폐기하고 OpenAI 멀티모달 LLM 단일 호출로 교체.
-구 `VarcoInterface` / `ClassificationResult`는 본 모듈로 이전됨.
+OpenAI 멀티모달 LLM 단일 호출 계약.
+구 분류 계약은 본 모듈로 이전됨.
 """
 
 from __future__ import annotations

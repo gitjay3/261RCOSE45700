@@ -114,7 +114,7 @@ Validator는 prefix dispatch — `my_new_*` 같은 family 추가 시 `content_va
 - [ ] dcard_online `wait_for` 셀렉터 수정
 - [ ] ptt_mobile_game / dcard 페이지네이션
 - [ ] 검색엔진형 추상화 (`SearchEngineConfig`) + github 첫 도전
-- [ ] enrichment 서비스 신설 (DeepSeek + OpenAI VLM)
+- [ ] detection 서비스 연동 smoke 확대 (OpenAI 멀티모달 LLM)
 - [ ] 중국 IP 프록시 인프라 (nga/tieba/baidu/sogou)
 
 자세한 로드맵은 [STATUS.md §10](./STATUS.md#10-roadmap-우선순위) 참조.

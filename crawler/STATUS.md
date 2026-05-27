@@ -13,7 +13,7 @@
 - **NC 사용자 글 회수량**: 약 **37 real / run** (`MAX_POSTS_PER_BOARD=10`, `CRAWL_INTERVAL_MINUTES=60` 기준)
 - **인프라**: URL 중복 차단, 본문 SHA256 dedup, 공지·인증벽·캡차 자동 분류, inter-site delay
 - **테스트**: 142 unit/integration passed, ruff clean
-- **enrichment(LLM/VLM)**: 별도 서비스로 분리 예정 (이 리포 범위 밖)
+- **detection(LLM)**: 별도 서비스에서 OpenAI 멀티모달 LLM 분류와 RDS 저장 처리
 
 ---
 
@@ -72,8 +72,8 @@
    └────────────────────────────────┬────────────────────────────┘
                                     │
                                     ▼
-                          [Detection / Enrichment 서비스]
-                          (별도 — DeepSeek + OpenAI VLM)
+                          [Detection 서비스]
+                          (별도 — OpenAI 멀티모달 LLM + RDS 저장)
 ```
 
 각 사이트 사이 `INTER_SITE_DELAY_SECONDS` (±25% jitter) 휴식, 같은 사이트의 보드 사이 `INTER_BOARD_DELAY_SECONDS` 휴식 → anti-bot rate limit 회피.
@@ -296,7 +296,7 @@ uv run python -m crawler.src.scheduler.crawl_scheduler
 | Dcard /f/game · PTT Mobile-game 1페이지에 NC 글 0 | 시간당 0~2건 누락 가능 | 페이지네이션 또는 Dcard 자체 deprioritize |
 | 52pojie NC 무관 | NC 타겟엔 무용 | NC 외 외掛 일반 데이터 필요 시 유지, NC 전용엔 제외 |
 | 검색엔진형 (github/reddit/bing/baidu/...) 미구현 | 광범위 recall 못 함 | `SearchEngineConfig` 추상화 신설 |
-| LLM/VLM enrichment 미구현 | 분류·요약·VLM caption 안 됨 | 별도 worker 서비스 신설 (Option A — post-crawl) |
+| crawler→detection 운영 smoke 부족 | 수집 후 분류·저장까지의 실운영 검증이 약함 | Redis queue 기반 end-to-end smoke 확대 |
 
 ---
 
@@ -304,7 +304,7 @@ uv run python -m crawler.src.scheduler.crawl_scheduler
 
 1. **검색엔진형 추상화 + github** — 가장 쉬운 검색엔진. 추상화 검증용
 2. **dcard_online wait_for 수정** + **ptt_mobile_game 페이지네이션** — 작은 fix
-3. **enrichment 서비스 신설** — DeepSeek(text) + OpenAI(VLM), 별도 폴더 `enrichment_test/`
+3. **crawler→detection end-to-end smoke** — Redis queue 입력부터 OpenAI 분류, RDS 저장까지 검증
 4. **검색엔진형 확장** — reddit, bing, duckduckgo_cn
 5. **프록시 풀 통합** — 중국 IP 확보 후 nga/tieba/baidu/sogou 가동
 6. **per-board `last_seen_post_id`** (Tier 2 dedup) — 페이지네이션 효율 ↑
@@ -314,5 +314,5 @@ uv run python -m crawler.src.scheduler.crawl_scheduler
 ## 11. 참고
 
 - crawl4ai 공식 문서: <https://docs.crawl4ai.com/>
-- LLM extraction strategy: `LLMExtractionStrategy` (현재 미사용, enrichment 분리 결정)
-- 본 리포의 디자인 원칙: **크롤은 빠르고 단순하게, 분류·요약은 enrichment 단계로 분리**
+- LLM extraction strategy: `LLMExtractionStrategy` (현재 미사용, detection 서비스가 분류 담당)
+- 본 리포의 디자인 원칙: **크롤은 빠르고 단순하게, 분류·저장은 detection 서비스로 분리**

@@ -13,7 +13,7 @@
 #
 # 사전 요구사항:
 #   1. /opt/app/                          (chmod 755, owner ubuntu)
-#   2. /opt/app/secrets/varco_api_key     (chmod 600, root:root)
+#   2. /opt/app/secrets/openai_api_key    (chmod 600, root:root)
 #   3. /opt/app/secrets/db_password       (chmod 600, root:root)
 #   4. /opt/app/.env                      (chmod 600) — REDIS_HOST=redis (compose 내부)
 #
@@ -61,9 +61,6 @@ services:
     env_file: /opt/app/.env
     environment:
       SERVICE_NAME: crawler
-    secrets:
-      - varco_api_key
-      - db_password
     networks:
       - tracker-net
     depends_on:
@@ -81,7 +78,7 @@ services:
     environment:
       SERVICE_NAME: detection
     secrets:
-      - varco_api_key
+      - openai_api_key
       - db_password
     networks:
       - tracker-net
@@ -171,8 +168,8 @@ services:
     mem_limit: 128m
 
 secrets:
-  varco_api_key:
-    file: /opt/app/secrets/varco_api_key
+  openai_api_key:
+    file: /opt/app/secrets/openai_api_key
   db_password:
     file: /opt/app/secrets/db_password
 

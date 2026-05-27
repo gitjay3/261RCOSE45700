@@ -23,7 +23,7 @@ RUN corepack enable \
 
 COPY dashboard/ ./
 # VITE_USE_MOCK=true 빌드 시 MSW worker가 dist/에 보존되고 main.tsx가 prod에서도 MSW 활성.
-# 백엔드(VARCO/RDS) 셋업 전 frontend-only 데모용 (compose.demo.yml + deploy-demo.yml).
+# 백엔드(OpenAI/RDS) 셋업 전 frontend-only 데모용 (compose.demo.yml + deploy-demo.yml).
 ARG VITE_USE_MOCK=false
 ENV VITE_USE_MOCK=$VITE_USE_MOCK
 # `pnpm build` = `tsc -b && vite build` (typecheck + bundle).

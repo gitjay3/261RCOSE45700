@@ -1,6 +1,6 @@
 # Demo 배포 — frontend(MSW mock) + HTTPS reverse proxy(Caddy). 백엔드 컨테이너 없음.
 #
-# 사용 시점: VARCO API key 발급 전, RDS 연결 검증 전 — 화면 데모용 임시 구성.
+# 사용 시점: OpenAI/RDS 연결 검증 전 — 화면 데모용 임시 구성.
 # 운영 셋업 완료되면 compose.prod.yml로 회귀하고 이 파일은 보존만 (재사용 가능).
 #
 # 사전 요구사항:

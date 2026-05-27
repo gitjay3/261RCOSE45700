@@ -1,4 +1,4 @@
-"""TokenBucket — Redis Lua atomic acquire (Story 3-3 — varco → llm key rename)."""
+"""TokenBucket — Redis Lua atomic acquire for LLM rate limiting."""
 
 from __future__ import annotations
 

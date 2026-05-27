@@ -1,6 +1,6 @@
 """LLM Classifier — LLMInterface 위임 + 응답 스키마 방어적 검증 (Story 3-3, 2026-05-27 PIVOT).
 
-VARCO 2단 파이프라인의 `LLMClassifier`를 OpenAI 멀티모달 단일 호출 의미론으로 재작성.
+OpenAI 멀티모달 단일 호출 의미론으로 분류 결과를 검증.
 type enum(9종) + confidence 범위(0~1) 검증은 `LLMClient`가 이미 수행하지만 본 클래스에서
 한 번 더 가드 — 다중 worker / mock 객체 / 향후 backend 교체 대비.
 """

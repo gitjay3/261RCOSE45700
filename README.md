@@ -18,7 +18,7 @@
 
 </div>
 
-크롤러가 8개 사이트를 1시간 주기로 돌고, VARCO Translation·LLM 파이프라인이 중국어·번체를 한국어로 번역해 불법 여부를 분류합니다. 신뢰도 0.70 이상 후보만 React 대시보드에 노출하며, 담당자는 원문·번역·근거를 한 화면에서 보고 원본 URL로 점프해 신고를 진행합니다. 크롤링부터 대시보드 반영까지의 SLA는 5분입니다.
+크롤러가 8개 사이트를 1시간 주기로 돌고, OpenAI 멀티모달 LLM 파이프라인이 다국어 게시글을 번역·분류해 불법 여부를 기록합니다. 신뢰도 0.70 이상 후보만 React 대시보드에 노출하며, 담당자는 원문·번역·근거를 한 화면에서 보고 원본 URL로 점프해 신고를 진행합니다. 크롤링부터 대시보드 반영까지의 SLA는 5분입니다.
 
 <br>
 
@@ -38,17 +38,17 @@
 ### 백엔드 · 최병주 ([@byungju0](https://github.com/byungju0))
 
 - PRD · Epics & Stories 작성 ([#2](https://github.com/byungju0/261RCOSE45700/pull/2), [#3](https://github.com/byungju0/261RCOSE45700/pull/3))
-- 로컬 개발 환경 docker-compose + Flyway 초기 스키마 (V1~V4) + VARCO Mock 서버 ([#11](https://github.com/byungju0/261RCOSE45700/pull/11), [#12](https://github.com/byungju0/261RCOSE45700/pull/12))
+- 로컬 개발 환경 docker-compose + Flyway 초기 스키마 (V1~V5) + PostgreSQL/Redis 통합 기반 ([#11](https://github.com/byungju0/261RCOSE45700/pull/11), [#12](https://github.com/byungju0/261RCOSE45700/pull/12))
 - Spring Boot 3.5 REST API: 탐지 목록 + 상세 + 수동 크롤링 트리거 + 통계 (RFC 9457 ProblemDetail, X-Correlation-ID, Redis DB3 캐시) ([#17](https://github.com/byungju0/261RCOSE45700/pull/17), [#20](https://github.com/byungju0/261RCOSE45700/pull/20), [#27](https://github.com/byungju0/261RCOSE45700/pull/27))
 - Story 5-1 Prometheus + Grafana 모니터링: RedisQueueMetrics 커스텀, DLQ 알림, APScheduler misfire 로깅 ([#38](https://github.com/byungju0/261RCOSE45700/pull/38))
 - Epic 1 · Epic 4 전체 회고 ([#15](https://github.com/byungju0/261RCOSE45700/pull/15), [#29](https://github.com/byungju0/261RCOSE45700/pull/29))
 
 ### 크롤링 · AI · 일드매 ([@erdmee](https://github.com/erdmee))
 
-- Day 1 공유 인터페이스 계약 (`correlation_id`, `CrawlEvent`, `VarcoInterface`, Redis 키 상수) + 구조화 로깅 ([#6](https://github.com/byungju0/261RCOSE45700/pull/6))
+- Day 1 공유 인터페이스 계약 (`correlation_id`, `CrawlEvent`, LLM 인터페이스, Redis 키 상수) + 구조화 로깅 ([#6](https://github.com/byungju0/261RCOSE45700/pull/6))
 - Cloudflare 우회 가능성 SPIKE: Playwright + `playwright-stealth` 채택 결정 ([#8](https://github.com/byungju0/261RCOSE45700/pull/8))
 - crawl4ai 기반 크롤러 + 8개 SiteConfig 등록 + APScheduler 자동/수동 트리거 + S3 원본 아카이브 ([#14](https://github.com/byungju0/261RCOSE45700/pull/14))
-- Epic 3 탐지 파이프라인 mockup: Redis BRPOPLPUSH 컨슈머 + Watchdog + VARCO Translation/LLM + 토큰 버킷 + RetryHandler + DLQ ([#16](https://github.com/byungju0/261RCOSE45700/pull/16))
+- Epic 3 탐지 파이프라인: Redis BRPOPLPUSH 컨슈머 + Watchdog + OpenAI 멀티모달 LLM + 토큰 버킷 + RetryHandler + DLQ + RDS 저장 ([#16](https://github.com/byungju0/261RCOSE45700/pull/16), [#47](https://github.com/byungju0/261RCOSE45700/pull/47))
 
 <br>
 
@@ -66,7 +66,7 @@
 
 ![Crawling](https://skillicons.dev/icons?i=python)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=for-the-badge&logo=playwright&logoColor=white)
-![VARCO](https://img.shields.io/badge/NC%20AI%20VARCO-1A1A1A?style=for-the-badge)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
 
 ### Infrastructure
 
@@ -106,10 +106,10 @@ cd dashboard && corepack enable && pnpm install && cd ..
 
 ```
 crawler/      Python · crawl4ai 크롤링 + APScheduler + S3 아카이브
-detection/    Python · Redis 컨슈머 + VARCO Translation/LLM + 토큰 버킷 + DLQ
+detection/    Python · Redis 컨슈머 + OpenAI 멀티모달 LLM + 토큰 버킷 + DLQ + RDS 저장
 api/          Java Spring Boot 3.5 · REST 4종 + Flyway
 dashboard/    React 19 + Vite 8 · TanStack Query v5 · MSW v2 mock
-shared/       Python 공유 모듈 (correlation_id, CrawlEvent, VarcoInterface)
+shared/       Python 공유 모듈 (correlation_id, CrawlEvent, LLM 인터페이스)
 infra/        docker-compose + Caddy + Grafana/Prometheus
 docs/         ADR + 배포 runbook
 _bmad-output/ PRD · architecture · UX spec · 스토리 · 회고
@@ -138,7 +138,7 @@ cd dashboard && pnpm exec playwright install --with-deps && pnpm e2e
 
 ## 배포
 
-main 브랜치 머지가 GitHub Actions `deploy.yml`을 트리거합니다. GHCR에 이미지를 빌드해 push하고, EC2에 SSH로 직결해서 `docker compose pull` + 60초 healthcheck + 자동 롤백까지 한 번에 처리합니다. VARCO/RDS 셋업이 끝나기 전 화면만 시연할 때는 `deploy-demo.yml`을 `workflow_dispatch`로 수동 트리거하면 dashboard만 mock 빌드로 띄울 수 있습니다 (`tracker.o-r.kr`, Let's Encrypt 자동 발급).
+main 브랜치 머지가 GitHub Actions `deploy.yml`을 트리거합니다. GHCR에 이미지를 빌드해 push하고, EC2에 SSH로 직결해서 `docker compose pull` + 60초 healthcheck + 자동 롤백까지 한 번에 처리합니다. OpenAI/RDS 셋업이 끝나기 전 화면만 시연할 때는 `deploy-demo.yml`을 `workflow_dispatch`로 수동 트리거하면 dashboard만 mock 빌드로 띄울 수 있습니다 (`tracker.o-r.kr`, Let's Encrypt 자동 발급).
 
 자세한 사양은 [CI/CD Pipeline](https://github.com/byungju0/261RCOSE45700/wiki/CI-CD-Pipeline), 운영 절차는 [docs/deployment.md](docs/deployment.md), 시크릿 결정은 [ADR 0001](docs/adr/0001-secret-management-strategy.md)에 있습니다.
 
@@ -146,6 +146,6 @@ main 브랜치 머지가 GitHub Actions `deploy.yml`을 트리거합니다. GHCR
 
 ## 프로젝트 상태
 
-5개 Epic 중 1, 2는 완료, 3·4·5는 진행 중입니다. 데스크톱 대시보드와 모바일 지원이 머지됐고, 운영 자동 배포 파이프라인도 들어왔습니다. VARCO 실 API 명세가 확정되면 detection이 mockup에서 실 호출로 전환됩니다.
+5개 Epic 중 1, 2는 완료, 3·4·5는 진행 중입니다. 데스크톱 대시보드와 모바일 지원이 머지됐고, 운영 자동 배포 파이프라인도 들어왔습니다. detection은 OpenAI 멀티모달 LLM 분류와 RDS 저장 흐름으로 전환됐습니다.
 
 스토리 단위 현황은 [Sprint Status](https://github.com/byungju0/261RCOSE45700/wiki/Sprint-Status), 원본 SoT는 [`sprint-status.yaml`](_bmad-output/implementation-artifacts/sprint-status.yaml)에 있습니다.

@@ -72,11 +72,11 @@ main 머지 1회당 reusable workflow 4종이 두 번 실행되는 비용이 있
   ```yaml
   - name: Run integration test
     env:
-      VARCO_API_KEY: ${{ secrets.VARCO_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     run: pytest tests/integration
   ```
 
-- GitHub UI → Settings → Secrets and variables → Actions에서 `VARCO_API_KEY` 등록.
+- GitHub UI → Settings → Secrets and variables → Actions에서 `OPENAI_API_KEY` 등록.
 
 ## 검증 방법
 

@@ -9,7 +9,7 @@ import {
 } from '@/lib/severity';
 
 interface ConfidenceBadgeProps extends HTMLAttributes<HTMLSpanElement> {
-  /** Confidence score 0~1 from VARCO LLM detection */
+  /** Confidence score 0~1 from LLM detection */
   score: number;
 }
 

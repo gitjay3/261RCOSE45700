@@ -219,11 +219,11 @@ jobs:
 
             cd /opt/app
 
-            # 누락 시 컨테이너가 placeholder default(VARCO DNS / REDIS localhost)로
+            # 누락 시 컨테이너가 placeholder default(OpenAI key / Redis localhost)로
             # startup → healthcheck fail → 자동 롤백. 비싼 pull/up 전에 차단.
             REQUIRED_FILES=(
               /opt/app/.env
-              /opt/app/secrets/varco_api_key
+              /opt/app/secrets/openai_api_key
               /opt/app/secrets/db_password
               /opt/app/compose.prod.yml
             )

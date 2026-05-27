@@ -1,7 +1,7 @@
 """LLM Mock — OpenAI 멀티모달 응답 시뮬레이터 (Story 3-3, 2026-05-27 PIVOT).
 
-기존 `VarcoMock`의 mode 4종(clean/illegal/timeout/rate_limited)을 유지하되,
-응답 스키마는 SPIKE 3.0 `CLASSIFICATION_SCHEMA`에 맞춰 `LLMResponse`로 교체.
+mode 4종(clean/illegal/timeout/rate_limited)을 제공하고,
+응답 스키마는 SPIKE 3.0 `CLASSIFICATION_SCHEMA`에 맞춰 `LLMResponse`를 사용.
 통합 테스트에서 외부 OpenAI 호출 0건 보장.
 """
 

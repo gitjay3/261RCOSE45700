@@ -31,7 +31,7 @@ CREATE TABLE post_images (
     created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- detections: VARCO AI 탐지 결과
+-- detections: AI 탐지 결과
 CREATE TABLE detections (
     id            BIGSERIAL PRIMARY KEY,
     post_id       BIGINT        NOT NULL REFERENCES posts(id),

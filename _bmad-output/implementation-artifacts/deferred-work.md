@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: Epic 2 ops polish (spec-epic-2-ops-polish, 2026-05-27)
+
+본 polish 묶음에서 의도적으로 out-of-scope 처리한 2건. Stories 2-8 (SearchEngineConfig) 또는 신규 Story 2-13 등에서 흡수 권장.
+
+- **Dcard `/_api/forums/{slug}/posts` JSON endpoint 직결** — 이번 fix 는 `wait_for` 제거 + 3초 delay 로 보수적 처리. Dcard 공식 JSON endpoint 가 존재 (예: `https://www.dcard.tw/_api/forums/online/posts?before=&limit=&popular=`). 직결 시 (1) 브라우저 우회 자체 불필요 (2) 페이지네이션 trivial (3) anti-bot 부담 감소. 단 현 `SiteConfig` 는 `listing → post URL pattern matching` 1-hop 모델이라 JSON endpoint 흐름을 우겨넣으면 추상화 더러워짐. Story 2-8 (SearchEngineConfig) 작업 시 같은 family 로 묶거나 Story 2-13 (Dcard JSON adapter) 신설 검토.
+- **`UndetectedAdapter` 옵션 슬롯 (`SiteConfig.use_undetected`)** — 2026 기준 `BrowserConfig(enable_stealth=True)` 만으로 Cloudflare 통과 효과 미미 (puppeteer-stealth deprecated 2025-02, playwright-stealth 비슷). 현재 52pojie 가 통과되는 건 사이트가 약한 룰만 돌려서일 가능성. Cloudflare 강화 시 `crawl4ai.UndetectedAdapter` + `AsyncPlaywrightCrawlerStrategy` 조합으로 fallback 옵션 슬롯 추가 필요. Story 2-8 BrowserConfig 추상화 설계 시 같이 흡수 권장 (검색엔진형이 anti-bot 더 강함).
+- **APScheduler 잡 함수 예외 핸들링 부재** — `_cleanup_url_dedup_job` / `_run_locked` 둘 다 예외 발생 시 APScheduler 가 로그만 남기고 다음 발화 대기 (기본 동작). 단 redis connection refused 같은 영구 오류 시 매 발화마다 같은 예외 반복 → 알람 없음. Story 5-1 Prometheus/Grafana 통합 시 잡 실패 카운터 + 알람 룰 추가 권장.
+
+---
+
 ## Deferred from: Story 5-2 dev (2026-05-12 — USER 외부 종속성, Task 5 blocked)
 
 Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 종속성 4종이 손에 들어오기 전까지 Task 5 / 7 / 8 진행 불가. 첫 배포 자체가 시크릿 + 백엔드 컨테이너 startup 모두 의존:
@@ -194,3 +204,24 @@ Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 
 ## Deferred from: code review of 5-1-prometheus-메트릭-수집-및-grafana-대시보드-구성 (2026-05-12)
 
 - **APScheduler max_instances skip 관측 부재** [crawler/src/scheduler/crawl_scheduler.py:229] — Story 5.1은 `EVENT_JOB_MISSED` 기반 misfire 로깅을 추가했지만, 긴 크롤 실행으로 `max_instances=1` 제한에 걸리는 skip은 별도 이벤트(`EVENT_JOB_MAX_INSTANCES`) 경로라 이번 리스너로는 잡히지 않을 수 있다. 기존 스케줄러 동작의 운영 가시성 개선 항목으로 후속 모니터링 스토리에서 검토.
+
+## Deferred from: code review of sprint-change-proposal-2026-05-19 / PR #46 (2026-05-20)
+
+- **dedup_checker whitespace-only difference로 해시 변동** [crawler/src/preprocessor/dedup_checker.py:22-23] — `sha256(text.encode())` 는 trailing newline 차이도 다른 해시로 본다. crawl4ai 재크롤 시 markdown 표현이 미세하게 달라지면 dedup 누락. 별도 정규화 스토리에서 `text.strip()` 또는 whitespace collapse 적용.
+- **trigger_listener reconnect storm (5s fixed back-off)** [crawler/src/scheduler/trigger_listener.py:66-71] — 네트워크 partition 시 5초 고정 backoff로 로그 spam. exponential backoff + jitter는 별도 stability 항목.
+- **이미지 확장자 결정에 Content-Type 미사용** [crawler/src/crawl4ai_crawler.py:289] — URL `?` 앞 path suffix 만으로 결정하여 extensionless CDN URL은 `.jpg` 기본값. Content-Type 기반 보정은 별도 storage 정밀도 항목.
+- **PTT/Dcard validator marker 튜닝 (False positive 가능성)** [crawler/src/preprocessor/content_validator.py:126-148] — 4-header 부분 일치 / `## #` 본문 매칭이 quoted text 에서 오탐 가능. 운영 데이터 수집 후 정량화하여 튜닝.
+
+## Deferred from: 3-layer adversarial review of spec-3-2-cleanup-varco-translation (2026-05-27)
+
+본 cleanup PR은 deletion 범위에 충실. 아래 항목은 Story 3-3 또는 별도 cleanup pass로 이월.
+
+- **`VarcoMock.translate()` dead method + mock_response_rate_limited.json / timeout.json 고아 fixture** [detection/src/mocks/varco_mock.py, tests/fixtures/varco/] — Story 3-3에서 `llm_mock.py` 전면 대체 시 함께 정리.
+- **README.md doc drift — Translator 마케팅 문구 잔존** [README.md L21,51,109,141,149] — Story 3-3 머지 후 일괄 doc cleanup pass.
+- **architecture.md L702 `varco.py # Protocol class: translate/classify/analyze` 잔존** [_bmad-output/planning-artifacts/architecture.md:702] — Story 3-3에서 shared/interfaces/llm.py로 rename 시 갱신.
+- **`varco_client.py::__init__` 와 `classify()` 의 VARCO_CLASSIFY_TIMEOUT_SEC 이중 읽기** [detection/src/pipeline/varco_client.py:23,31] — pre-existing 코드 패턴. Story 3-3에서 varco_client.py 전체가 llm_client.py로 대체되며 자연 해소.
+- **infra/compose.prod.yml + deploy.yml의 `varco_api_key` Docker secret mount 잔존** [infra/compose.prod.yml:65,84,139, .github/workflows/deploy.yml:219] — Story 3-3에서 OpenAI secret으로 교체 시 함께 정리.
+- **detection/tests/integration/ 디렉터리 사실상 비어있음 (consumer→pipeline→retry→DLQ 통합 커버리지 0)** — Story 3-3 AC에 `test_llm_pipeline.py` 신설 명시되어 있음. 진행 시 자연 복구.
+- **stale Redis 키 `varco:rate_limit:translate` 운영 정리 (production migration)** — 본 PR은 feature 브랜치 단계라 운영 영향 없음. 운영 배포 전 stale 키 삭제 1회 필요 시 Story 3-3 또는 5-2 deploy 단계에 포함.
+- **DetectionPipeline.process()에서 번역 완료 log 제거에 따른 관측성 갭** — Story 3-3에서 LLM 호출 + Tier 라우팅 log로 자연 복구.
+- **detection_pipeline.py가 `event.language`나 빈 raw_text guard 없음** — interim 상태. Story 3-3 LLMClient 호출 경로에서 guard 또는 OpenAI 측 처리에 위임.

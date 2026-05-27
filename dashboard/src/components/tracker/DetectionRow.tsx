@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { TypeIcon } from './TypeIcon';
-import { SEVERITY_TINT_CLASSES, severityOf } from '@/lib/severity';
+import { SEVERITY_TINT_CLASSES, severityOfDetection } from '@/lib/severity';
 import { formatRelativeTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import type { Detection } from '@/types/api';
@@ -32,7 +32,7 @@ function DetectionRowImpl({
   }, [focused]);
 
   const time = formatRelativeTime(detection.detectedAt);
-  const severity = severityOf(detection.confidence);
+  const severity = severityOfDetection(detection);
 
   return (
     <TableRow
@@ -60,7 +60,7 @@ function DetectionRowImpl({
       )}
     >
       <TableCell className="w-[88px]">
-        <ConfidenceBadge score={detection.confidence} />
+        <ConfidenceBadge score={detection.confidence} isIllegal={detection.isIllegal} />
       </TableCell>
       <TableCell className="w-[170px]">
         <TypeIcon type={detection.type} />

@@ -5,7 +5,7 @@ name: tracker
 x-redis-db-config: &redis-db-config
   REDIS_MQ_DB: ${REDIS_MQ_DB:-0}         # posts:queue / posts:processing / posts:dlq
   REDIS_DEDUP_DB: ${REDIS_DEDUP_DB:-1}   # posts:dedup (SHA-256 hash SET)
-  REDIS_RATELIMIT_DB: ${REDIS_RATELIMIT_DB:-2}  # varco:rate_limit (token bucket)
+  REDIS_RATELIMIT_DB: ${REDIS_RATELIMIT_DB:-2}  # llm:rate_limit (token bucket)
   REDIS_CACHE_DB: ${REDIS_CACHE_DB:-3}   # cache:detections (API cache)
 
 services:

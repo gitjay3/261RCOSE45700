@@ -31,8 +31,8 @@ async function fetchDetection(id: number): Promise<Detection> {
   return response.data;
 }
 
-/** TanStack Query v5 queryOptions 팩토리 — 키 일관성 + prefetch/setQueryData 용이. */
-export const detectionQueries = {
+// TanStack Query v5 queryOptions 팩토리 — 키 일관성 + 같은 파일 hooks에서만 사용.
+const detectionQueries = {
   all: () => ['detections'] as const,
   lists: () => [...detectionQueries.all(), 'list'] as const,
   list: (filter: DetectionFilter) =>

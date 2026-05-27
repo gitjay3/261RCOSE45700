@@ -4,6 +4,7 @@ import hashlib
 import os
 
 import redis
+
 from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "crawler")

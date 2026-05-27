@@ -582,7 +582,7 @@ LLM 기반 콘텐츠 분류 시스템의 실제 성능 벤치마크(OpenAI Moder
 - **차트**: `< md` 단일 컬럼 stack.
 - **단축키**: 데스크톱 전용. 모바일에서는 비활성.
 - **다크 테마**: `next-themes` + `data-theme` + FOUC 가드 인라인 스크립트(`index.html`). UX Spec 「MVP는 단일 라이트」 결정도 함께 폐기.
-- **PWA**: `vite-plugin-pwa` registerType=prompt — manifest + workbox 정적 자산(이미지/폰트)만 캐시, API 응답은 `navigateFallbackDenylist`로 차단. dev 에서는 MSW 우선.
+- **~~PWA~~**: ~~`vite-plugin-pwa` registerType=prompt — manifest + workbox 정적 자산(이미지/폰트)만 캐시, API 응답은 `navigateFallbackDenylist`로 차단. dev 에서는 MSW 우선.~~ → **2026-05-14 폐기 (commit `2526ac4`)**. frontend-only 데모 배포 경로(PR #42, `infra/compose.demo.yml` + Caddy auto-TLS + `VITE_USE_MOCK=true` 빌드)와 SW 캐싱 정책이 충돌해 인프라 전면 제거. 학생 프로젝트 운영 범위에서 설치성·홈스크린 가치가 비용을 정당화하지 못함.
 - **회귀 방지**: 데스크톱 키보드 단축키·테이블 뷰·5/5 페이지 동작 PASS 유지. Playwright `mobile.mobile.spec.ts` (Pixel 7) 3 시나리오 추가.
 
 ### 10.2 잔존 표기 불일치 (재확인·정리 필요)

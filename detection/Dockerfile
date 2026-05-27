@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1.7
-# Detection — Redis queue consumer + VARCO Translation/LLM classifier
+# Detection — Redis queue consumer + OpenAI multimodal LLM classifier
 # Story 5.2: BuildKit multi-stage with registry cache mode=max.
 
 FROM python:3.11-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PYTHONUTF8=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 

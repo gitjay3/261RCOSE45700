@@ -1,0 +1,18 @@
+# pnpm 11부터 `package.json#pnpm.overrides`가 silent하게 무시됨 (pnpm/pnpm#11536).
+# 워크스페이스가 아니더라도 overrides 적용을 위해 이 파일이 필요하다.
+# packages 키 없이도 단일 패키지 프로젝트에서 동작.
+
+overrides:
+  # workbox-build가 deprecated된 0.8.0-beta.0 pin. stable 0.7.x로 강제.
+  source-map: ^0.7.6
+  # workbox-build>source-map 명시 — 범위 incompat 시에도 확실히 적용되도록.
+  workbox-build>source-map: ^0.7.6
+  # izs.me가 glob v11.x 전체 deprecate ("Old versions ... please update"). v12로.
+  glob: ^12
+
+# pnpm 11부터 `onlyBuiltDependencies` 제거되고 `allowBuilds`(package→bool) 도입
+# (pnpm/pnpm#10235). 설치 중 미해결 postinstall이 있으면 placeholder가 자동 기록되며
+# true/false로 교체해야 한다.
+# msw는 worker 파일을 public/에 복사하는 postinstall이 필수 → true.
+allowBuilds:
+  msw: true

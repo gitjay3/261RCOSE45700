@@ -1,7 +1,7 @@
 name: deploy-demo
 
 # Frontend-only 데모 배포 — dashboard만 GHCR 빌드/푸시 + EC2에 caddy reverse proxy.
-# VARCO API key 발급 전 임시. 운영 deploy.yml과 동일 EC2 호스트 공유 — 머지 충돌 없음.
+# OpenAI/RDS 운영 셋업 전 임시. 운영 deploy.yml과 동일 EC2 호스트 공유 — 머지 충돌 없음.
 #
 # workflow_dispatch 전용 (자동 트리거 X) — 데모 토글성 작업이라 push로 안 묶음.
 
@@ -44,17 +44,20 @@ jobs:
           echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        # v4: Node 24 runtime — GitHub Actions Node 20 deprecation(2026-06) 대응.
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        # v4: Node 24 runtime.
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push (dashboard, VITE_USE_MOCK=true)
-        uses: docker/build-push-action@v6
+        # v7: Node 24 runtime + ESM. DOCKER_BUILD_NO_SUMMARY 등 deprecated env 제거.
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: dashboard/Dockerfile
@@ -78,22 +81,23 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Upload compose.demo.yml + Caddyfile to EC2
+      - name: Upload compose.demo.yml + Caddyfile + deploy-helpers.sh to EC2
         # SHA-pinned for supply-chain integrity (action receives EC2 .pem).
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "infra/compose.demo.yml,infra/Caddyfile"
+          source: "infra/compose.demo.yml,infra/Caddyfile,infra/deploy-helpers.sh"
           target: "/opt/app/"
           # SCP가 디렉토리 구조 보존 → /opt/app/infra/* 로 떨어짐. strip_components로 보정.
           strip_components: 1
           overwrite: true
 
       - name: Deploy demo + healthcheck
-        # SHA-pinned (EC2 .pem + GHCR token 노출 표면).
-        uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0  # v1.2.4
+        # SHA-pinned (EC2 .pem + GHCR token 노출 표면). v1.2.5 — Node 24 호환 + script_stop
+        # 입력 자체 제거됨. 어차피 script가 `set -euo pipefail`로 시작하므로 동일 효과.
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         env:
           IMAGE_TAG: demo-${{ needs.build-push.outputs.image_tag }}
           REGISTRY_PATH: ${{ needs.build-push.outputs.registry_path }}
@@ -103,39 +107,20 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          script_stop: true
           envs: IMAGE_TAG,REGISTRY_PATH,GHCR_USER,GHCR_TOKEN
           script: |
             set -euo pipefail
+            # shellcheck source=/opt/app/deploy-helpers.sh
+            source /opt/app/deploy-helpers.sh
 
-            DOCKER="$(command -v docker)" || { echo "::error::docker not found"; exit 1; }
-            DCOMPOSE="$DOCKER compose"
-
-            # GHCR 자격증명이 ~/.docker/config.json에 영속되지 않도록 종료 시 logout.
-            cleanup() { "$DOCKER" logout ghcr.io >/dev/null 2>&1 || true; }
-            trap cleanup EXIT
+            setup_docker
+            ghcr_login
 
             cd /opt/app
-
-            if ! printf '%s' "$GHCR_TOKEN" | "$DOCKER" login ghcr.io -u "$GHCR_USER" --password-stdin; then
-              echo "::error::GHCR login failed"
-              exit 2
-            fi
-            unset GHCR_TOKEN
-
             echo "deploying demo tag=${IMAGE_TAG}"
             export IMAGE_TAG REGISTRY_PATH
 
-            # 일시적 GHCR 5xx 대비 3-회 재시도.
-            for i in 1 2 3; do
-              if $DCOMPOSE -f /opt/app/compose.demo.yml pull; then
-                break
-              fi
-              echo "::warning::compose pull attempt $i failed, retrying in 5s..."
-              sleep 5
-              [ "$i" = "3" ] && { echo "::error::compose pull failed 3x"; exit 3; }
-            done
-
+            compose_pull_retry /opt/app/compose.demo.yml
             $DCOMPOSE -f /opt/app/compose.demo.yml up -d --remove-orphans
 
             # dashboard healthcheck(`wget /healthz`)는 nginx가 뜨면 즉시 healthy.

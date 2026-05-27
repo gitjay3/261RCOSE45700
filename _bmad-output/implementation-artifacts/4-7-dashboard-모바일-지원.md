@@ -12,7 +12,7 @@ Backport 산출물:
 - UX Spec L120·L1503·L1567: 모바일 차단/햄버거 X 결정 폐기, Tailwind `md` 768px breakpoint 정책 추가
 - UX Spec Design System: 다크 모드 미적용 결정도 함께 폐기 (디자인 시스템 v10 라이트/다크 양쪽 토큰 정의됨)
 - epics.md: UX-DR7 추가, Story 4.7 신설
-- architecture.md: Important Decisions에 모바일 / 색 모드 / PWA 결정 추가
+- architecture.md: Important Decisions에 모바일 / 색 모드 / ~~PWA~~(2026-05-14 폐기) 결정 추가
 
 ## Story
 
@@ -32,7 +32,7 @@ Tracker 대시보드를 모바일 (< 768px) 환경에서도 사용할 수 있기
 8. **And** 키보드 단축키(j/k/enter/o/c/esc/g+t/g+d/g+l/g+s)는 데스크톱 전용으로 유지되며, 모바일에서는 비활성화된다 (cheatsheet 도 노출되지 않음)
 9. **And** Playwright e2e `e2e/mobile.mobile.spec.ts` 에 Pixel 7 viewport 시나리오 3건이 포함된다 (햄버거 drawer / DetectionList 카드 / FilterBar bottom Drawer)
 10. **And** 다크 테마는 `next-themes` + `data-theme` 토글로 활성화되며, FOUC 가드 인라인 스크립트(`index.html`)가 `localStorage('theme') → prefers-color-scheme → light` 우선순위로 동기 적용된다
-11. **And** `vite-plugin-pwa` 가 도입되어 manifest + workbox 정적 자산 캐시(이미지/폰트만)를 제공한다 — `navigateFallbackDenylist: [/^\/api/]` 로 API 응답은 캐시 차단
+11. ~~**And** `vite-plugin-pwa` 가 도입되어 manifest + workbox 정적 자산 캐시(이미지/폰트만)를 제공한다 — `navigateFallbackDenylist: [/^\/api/]` 로 API 응답은 캐시 차단~~ (**2026-05-14 폐기, AC 무효** — commit `2526ac4`로 PWA 인프라 전면 제거. 사유: PR #42에서 들어온 frontend-only 데모 경로(`infra/compose.demo.yml` + Caddy)와 SW 캐싱 정책이 충돌. 학생 프로젝트 운영 범위에서 설치성·홈스크린의 가치가 운영 복잡도를 정당화하지 못함)
 12. **And** Story 4.5/4.6 의 데스크톱 키보드 네비게이션·테이블 레이아웃 회귀가 발생하지 않는다 (기존 데스크톱 e2e PASS 유지)
 
 ## Tasks / Subtasks
@@ -79,9 +79,9 @@ Tracker 대시보드를 모바일 (< 768px) 환경에서도 사용할 수 있기
   - [x] 9.2 `index.html` FOUC 가드 인라인 스크립트 — `localStorage('theme') → prefers-color-scheme → light`
   - [x] 9.3 디자인 시스템 v10 라이트/다크 토큰 양쪽 정의 확인 (`--chart-1~5`, `--primary`, `--border`, `--muted-foreground`, brand cyan deep `#0a5273` 등)
 
-- [x] **Task 10: PWA 도입** (AC: #11)
-  - [x] 10.1 `vite-plugin-pwa` devDependency 추가
-  - [x] 10.2 `vite.config.ts` VitePWA 구성 — `registerType: 'prompt'`, manifest, workbox runtime cache(이미지/폰트만, `navigateFallbackDenylist: [/^\/api/]`), `devOptions.enabled: false` (dev에서는 MSW 우선)
+- [x] **Task 10: PWA 도입** (AC: #11) — **2026-05-14 폐기 (commit `2526ac4`)**
+  - [x] 10.1 ~~`vite-plugin-pwa` devDependency 추가~~ → 제거됨
+  - [x] 10.2 ~~`vite.config.ts` VitePWA 구성~~ → `removeDevMswWorker` 플러그인만 남고 VitePWA 호출 제거. 데모 빌드는 `VITE_USE_MOCK=true` 빌드 플래그로 대체 (`infra/compose.demo.yml` + `.github/workflows/deploy-demo.yml`)
 
 - [ ] **Task 11: 회귀 검증** (AC: #12)
   - [ ] 11.1 데스크톱 단축키 e2e PASS 유지
@@ -92,7 +92,7 @@ Tracker 대시보드를 모바일 (< 768px) 환경에서도 사용할 수 있기
 
 - Tailscale / Cloudflare Tunnel 등 외부 모바일 접근 SaaS — Story 5.2 PIVOT 결정(`feedback_no_external_services`) 유지. EC2 22번 SSH `0.0.0.0/0` + defense-in-depth로 진행.
 - 모바일 / 태블릿 별도 시각 디자인 — 8px 그리드 + zinc + NC AI 브랜드 토큰을 그대로 유지하며 레이아웃 분기만.
-- 푸시 알림(Web Push) — Growth 단계 백로그. PWA manifest 도입은 설치성 + 홈스크린만 목적.
+- 푸시 알림(Web Push) — Growth 단계 백로그. PWA manifest 도입은 ~~설치성 + 홈스크린만 목적~~ → 도입 후 2026-05-14에 폐기되어 본 항목도 무효화. Web Push 자체는 PWA 없이 별도 도입 가능하나 학생 프로젝트 범위 밖.
 
 ## Dev Log
 

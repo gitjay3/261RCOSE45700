@@ -2,10 +2,11 @@
 # Story 5.2 — Docker secrets → process env bridge.
 #
 # compose.prod.yml mounts secret files at /run/secrets/<name>. Application code
-# reads `os.environ["VARCO_API_KEY"]` etc., so this shim exports each file's
+# reads `os.environ["OPENAI_API_KEY"]`, `os.environ["DB_PASSWORD"]`, etc.,
+# so this shim exports each file's
 # contents as the upper-case env var of the file's basename, then exec's CMD.
 #
-# Convention: file `varco_api_key` → env `VARCO_API_KEY`.
+# Convention: file `openai_api_key` → env `OPENAI_API_KEY`.
 # Dots/dashes in filenames are normalized to underscores.
 # Secret files MUST be single-line ASCII. Multi-line / non-ASCII names are
 # rejected with a warning (multi-line secrets should be base64-encoded by the

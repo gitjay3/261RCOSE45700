@@ -86,7 +86,7 @@ export function DetectionDetailPage() {
 
       <section className="bg-card flex flex-col gap-3 rounded-lg border p-6">
         <header className="flex flex-wrap items-center gap-3">
-          <ConfidenceBadge score={data.confidence} />
+          <ConfidenceBadge score={data.confidence} isIllegal={data.isIllegal} />
           <TypeIcon type={data.type} />
           <span className="text-muted-foreground font-mono text-xs">
             {data.siteName}

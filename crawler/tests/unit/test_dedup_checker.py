@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-
 from unittest.mock import MagicMock
 
 from crawler.src.preprocessor.dedup_checker import DedupChecker

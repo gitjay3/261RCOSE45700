@@ -1,10 +1,14 @@
 import type { DetectionType, Language } from '@/types/api';
 
 const TYPE_LABEL: Record<DetectionType, string> = {
-  매크로_판매: '매크로 판매',
-  핵_배포: '핵 배포',
+  핵_치트: '핵·치트',
+  사설서버: '사설서버',
+  불법프로그램_배포: '불법 프로그램',
   계정_거래: '계정 거래',
+  매크로_판매: '매크로 판매',
   리세마라: '리세마라',
+  현금화: '현금화',
+  광고_도배: '광고 도배',
   기타: '기타',
 };
 
@@ -15,11 +19,11 @@ const LANG_LABEL: Record<Language, string> = {
 };
 
 export function getTypeLabel(type: DetectionType): string {
-  return TYPE_LABEL[type];
+  return TYPE_LABEL[type] ?? type;
 }
 
 export function getLangLabel(lang: Language): string {
-  return LANG_LABEL[lang];
+  return LANG_LABEL[lang] ?? lang;
 }
 
 export const TYPE_OPTIONS: { value: DetectionType; label: string }[] = (

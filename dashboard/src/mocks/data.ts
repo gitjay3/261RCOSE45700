@@ -11,7 +11,11 @@ import type {
  * 백엔드 합류 시 VITE_API_BASE_URL만 변경하면 실 데이터로 전환.
  */
 
-const TYPES: DetectionType[] = ['매크로_판매', '핵_배포', '계정_거래', '리세마라', '기타'];
+const TYPES: DetectionType[] = [
+  '핵_치트', '사설서버', '불법프로그램_배포',
+  '계정_거래', '매크로_판매', '리세마라',
+  '현금화', '광고_도배', '기타',
+];
 
 interface SiteDef {
   name: string;
@@ -48,7 +52,7 @@ const SAMPLE_POSTS: SamplePost[] = [
       '게임 자동화 도구의 가격이 명시되어 있고 구매 안내(QQ/카톡)와 동작 보장 문구가 함께 포함되어 있어 매크로 판매 게시글로 판단됨.',
   },
   {
-    type: '핵_배포',
+    type: '핵_치트',
     rawZh:
       '最新游戏辅助工具下载 — 屏蔽反作弊系统，安全无封号。支持windows和android双平台。点击链接 short.url/abc123 下载。',
     rawKo: '최신 게임 핵 배포 — 안티치트 우회 보장. 무료 다운로드 링크 short.url/xyz999.',

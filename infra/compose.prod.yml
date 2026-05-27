@@ -13,7 +13,7 @@
 #
 # 사전 요구사항:
 #   1. /opt/app/                          (chmod 755, owner ubuntu)
-#   2. /opt/app/secrets/varco_api_key     (chmod 600, root:root)
+#   2. /opt/app/secrets/openai_api_key    (chmod 600, root:root)
 #   3. /opt/app/secrets/db_password       (chmod 600, root:root)
 #   4. /opt/app/.env                      (chmod 600) — REDIS_HOST=redis (compose 내부)
 #
@@ -61,9 +61,6 @@ services:
     env_file: /opt/app/.env
     environment:
       SERVICE_NAME: crawler
-    secrets:
-      - varco_api_key
-      - db_password
     networks:
       - tracker-net
     depends_on:
@@ -81,7 +78,7 @@ services:
     environment:
       SERVICE_NAME: detection
     secrets:
-      - varco_api_key
+      - openai_api_key
       - db_password
     networks:
       - tracker-net
@@ -122,8 +119,9 @@ services:
     <<: *image-defaults
     image: ${REGISTRY_PATH}/dashboard:${IMAGE_TAG:-latest}
     container_name: tracker-dashboard
-    ports:
-      - "80:80"
+    # 호스트 publish 제거. caddy 가 80/443 잡고 docker network 안에서 dashboard:80 으로 reverse_proxy.
+    expose:
+      - "80"
     networks:
       - tracker-net
     # api healthy 후 dashboard 시작 — nginx /api proxy가 502 Bad Gateway를 받는
@@ -135,9 +133,43 @@ services:
     # nginx-alpine + Vite 번들 워커 burst 시 OOM-kill 방지를 위해 256m로 상향.
     mem_limit: 256m
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: tracker-caddy
+    # ACME HTTP-01 챌린지(80) + 사용자 HTTPS 접속(443). Caddyfile 의 도메인은 tracker.o-r.kr.
+    # cert 는 caddy_data 볼륨에 영속 — 컨테이너 재기동 시 재발급 없음 (Let's Encrypt rate limit 회피).
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/app/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - tracker-net
+    depends_on:
+      dashboard:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      # Caddyfile 의 site block (tracker.o-r.kr) 는 host header 매칭 필수.
+      # localhost 로 wget 하면 match 안 돼 응답 없음 → unhealthy 오판.
+      # 단순 TCP LISTEN 만 확인 (busybox nc). 80 살아있으면 caddy 도 살아있음.
+      test: ["CMD", "nc", "-z", "localhost", "80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 128m
+
 secrets:
-  varco_api_key:
-    file: /opt/app/secrets/varco_api_key
+  openai_api_key:
+    file: /opt/app/secrets/openai_api_key
   db_password:
     file: /opt/app/secrets/db_password
 
@@ -147,3 +179,5 @@ networks:
 
 volumes:
   redis_data:
+  caddy_data:
+  caddy_config:

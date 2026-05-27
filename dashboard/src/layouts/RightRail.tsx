@@ -39,7 +39,7 @@ export function RightRail() {
           <MetricRow name="Crawler queue" value="0" />
           <MetricRow name="Detection processing" value="0" />
           <MetricRow name="DLQ" value="0" />
-          <MetricRow name="VARCO RPM" value="12 / 60" />
+          <MetricRow name="LLM RPM" value="12 / 60" />
         </div>
       </RailSection>
     </aside>

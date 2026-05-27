@@ -200,10 +200,13 @@ sudo chmod 700 /opt/app/secrets
 sudo chown root:root /opt/app/secrets
 
 # 시크릿 파일 — 평문 1줄 (개행 없음)
-echo -n "<varco-api-key>" | sudo tee /opt/app/secrets/varco_api_key >/dev/null
-echo -n "<rds-password>"  | sudo tee /opt/app/secrets/db_password   >/dev/null
+echo -n "<openai-api-key>" | sudo tee /opt/app/secrets/openai_api_key >/dev/null
+echo -n "<rds-password>"   | sudo tee /opt/app/secrets/db_password    >/dev/null
 sudo chmod 600 /opt/app/secrets/*
-sudo chown root:root /opt/app/secrets/*
+# detection(UID 1001)이 openai_api_key를 읽어야 하므로 소유자를 1001로 설정.
+# api(Spring Boot)는 root로 실행되므로 db_password는 root:root 유지.
+sudo chown 1001:1001 /opt/app/secrets/openai_api_key
+sudo chown root:root /opt/app/secrets/db_password
 
 # 비-시크릿 환경 (chmod 600 권장)
 sudo tee /opt/app/.env <<'EOF'
@@ -228,9 +231,16 @@ REDIS_DEDUP_DB=1
 REDIS_RATELIMIT_DB=2
 REDIS_CACHE_DB=3
 
-# -------- VARCO --------
-# detection/src/pipeline/varco_client.py가 직접 읽음. 미설정 시 placeholder URL → DNS 실패
-VARCO_API_BASE_URL=<varco-api-base-url>
+# -------- OpenAI LLM --------
+# secret-shim이 /run/secrets/openai_api_key를 OPENAI_API_KEY env로 노출한다.
+LLM_MODEL=gpt-4o
+LLM_DAILY_COST_CAP_USD=5
+LLM_SEND_IMAGES=false
+LLM_SPLIT_TEXT_IMAGE=false
+LLM_TIMEOUT_SEC=30
+LLM_RATE_LIMIT_CAPACITY=60
+LLM_RATE_LIMIT_REFILL_PER_SEC=1
+LLM_RATE_LIMIT_MAX_WAIT_SEC=120
 
 # -------- AWS --------
 AWS_REGION=us-east-1
@@ -248,8 +258,36 @@ sudo chmod 600 /opt/app/.env
 >
 > ⚠️ **위 env 템플릿 누락 시 첫 배포 실패 패턴**:
 > - `REDIS_URL` 누락 → crawler/detection가 `redis://localhost:6379` default로 떨어져 docker network 내부 redis 접속 실패. healthcheck 실패 → 자동 롤백.
-> - `VARCO_API_BASE_URL` 누락 → detection이 `https://varco.placeholder/v1` placeholder hit → DNS NXDOMAIN → translate/classify 100% fail → DLQ 폭증.
+> - `/opt/app/secrets/openai_api_key` 누락 또는 소유자가 root:root → detection(UID 1001)이 secret-shim에서 읽지 못해 `OPENAI_API_KEY` 미설정으로 실패. healthcheck 실패 → 자동 롤백. (`sudo chown 1001:1001 /opt/app/secrets/openai_api_key` 필수)
 > - `DB_HOST_PORT` 누락은 default `:5432`로 rescue됨 (subtle bug, 표준 포트만 안전).
+
+### 2.7 기존 EC2 VARCO → OpenAI 전환
+
+이미 VARCO 기준으로 `/opt/app`이 준비된 EC2라면, 첫 OpenAI 배포 전에 호스트
+상태를 새 compose와 맞춘다.
+
+```bash
+# 1) 새 OpenAI secret 작성 (개행 없는 1줄)
+echo -n "<openai-api-key>" | sudo tee /opt/app/secrets/openai_api_key >/dev/null
+sudo chmod 600 /opt/app/secrets/openai_api_key
+sudo chown root:root /opt/app/secrets/openai_api_key
+
+# 2) /opt/app/.env에서 VARCO_* 항목 제거 후 LLM_* 항목 추가/확인
+sudo nano /opt/app/.env
+
+# 3) 더 이상 쓰지 않는 VARCO secret은 즉시 삭제하지 말고 백업명으로 격리
+if [ -f /opt/app/secrets/varco_api_key ]; then
+  sudo mv /opt/app/secrets/varco_api_key \
+    "/opt/app/secrets/varco_api_key.bak.$(date -u +%Y%m%d%H%M%S)"
+fi
+
+# 4) GitHub Actions deploy workflow_dispatch 실행
+#    deploy.yml이 새 compose.prod.yml을 /opt/app/compose.prod.yml로 업로드하고
+#    detection 컨테이너에 openai_api_key + db_password secret을 마운트한다.
+```
+
+`crawler`는 더 이상 OpenAI/DB secret을 마운트하지 않는다. `detection`만
+`openai_api_key`, `db_password`를 사용하고, `api`는 `db_password`만 사용한다.
 
 ---
 
@@ -261,9 +299,9 @@ sudo chmod 600 /opt/app/.env
 3. main 머지 → 자동 배포.
 4. shim이 `<NAME>` 환경변수로 자동 노출 (대문자 변환, dash/dot → underscore).
 
-### VARCO API key 회전
-1. EC2: `/opt/app/secrets/varco_api_key`만 새 값으로 갱신.
-2. `docker compose -f /opt/app/compose.prod.yml restart crawler detection`.
+### OpenAI API key 회전
+1. EC2: `/opt/app/secrets/openai_api_key`만 새 값으로 갱신.
+2. `docker compose -f /opt/app/compose.prod.yml restart detection`.
 3. (코드 변경 없음 → workflow_dispatch 불필요)
 
 ### DB 비밀번호 회전
@@ -389,9 +427,13 @@ identity-based policy: ControlOnlyOwnResources`). IP /32 우회도 동일 패턴
 
 ## 8. 참고
 
-- [Source: `.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)
+- [Source: `.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) — 운영 자동 배포
+- [Source: `.github/workflows/deploy-demo.yml`](../.github/workflows/deploy-demo.yml) — frontend-only 데모 배포(PR #42). OpenAI/RDS 셋업 전 화면만 시연할 때 `workflow_dispatch`로 수동 트리거. `infra/compose.demo.yml` + `infra/Caddyfile`(Let's Encrypt ACME)로 dashboard + Caddy 2컨테이너 토폴로지. 운영 `deploy.yml`과 EC2 호스트를 공유하지만 GHCR 태그(`:demo-*` 분리)와 compose 파일이 분리돼 충돌하지 않음 — 동시 운영은 피하고 배포 전환 시 `docker compose -f compose.demo.yml down` 선행.
 - [Source: `.github/workflows/ci.yml`](../.github/workflows/ci.yml)
 - [Source: `infra/compose.prod.yml`](../infra/compose.prod.yml)
+- [Source: `infra/compose.demo.yml`](../infra/compose.demo.yml)
+- [Source: `infra/Caddyfile`](../infra/Caddyfile)
 - [Source: `infra/docker-secret-shim.sh`](../infra/docker-secret-shim.sh)
 - [`docs/ci-setup.md`](./ci-setup.md) — Story 1.5 deferred 항목이 본 스토리에서 어떻게 해결됐는지
+- [`docs/adr/0001-secret-management-strategy.md`](./adr/0001-secret-management-strategy.md) — 시크릿 관리 결정(Docker secrets + EC2 SSH 수동 작성)
 - Story 5.2 spec — [`_bmad-output/implementation-artifacts/5-2-github-actions-완전-통합-ci-cd-파이프라인.md`](../_bmad-output/implementation-artifacts/5-2-github-actions-완전-통합-ci-cd-파이프라인.md)

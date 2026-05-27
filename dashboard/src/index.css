@@ -1,6 +1,107 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+
+/* shadcn/tailwind.css inlined — shadcn npm 패키지를 dependencies에서 제거하기 위해.
+ * shadcn은 CLI 도구(npx shadcn add ...)로만 쓰이고 런타임 import는 이 CSS 한 곳뿐이었음.
+ * package.json 의존성으로 두면 node-fetch@3 → fetch-blob → node-domexception(deprecated)
+ * 체인이 전이로 따라와서 `npm ci`마다 deprecation 경고를 띄운다. 95줄짜리 정적 CSS라
+ * 인라인이 가장 깨끗. 원본: node_modules/shadcn/dist/tailwind.css.
+ */
+@theme inline {
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(
+        --radix-accordion-content-height,
+        var(--accordion-panel-height, auto)
+      );
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(
+        --radix-accordion-content-height,
+        var(--accordion-panel-height, auto)
+      );
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/* Custom variants (shadcn 컴포넌트 호환) */
+@custom-variant data-open {
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-closed {
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-checked {
+  &:where([data-state="checked"]),
+  &:where([data-checked]:not([data-checked="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-unchecked {
+  &:where([data-state="unchecked"]),
+  &:where([data-unchecked]:not([data-unchecked="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-selected {
+  &:where([data-selected="true"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-disabled {
+  &:where([data-disabled="true"]),
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-active {
+  &:where([data-state="active"]),
+  &:where([data-active]:not([data-active="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
 
 /* Tracker fonts:
  * - Pretendard (한글 + 영문 sans) — index.html <link>로 로드
@@ -58,6 +159,9 @@
   --c4: var(--brand-green);
   --c5: var(--brand-orange);
   --c6: oklch(0.48 0.07 35);
+  --c7: oklch(0.55 0.14 15);
+  --c8: oklch(0.68 0.14 80);
+  --c9: oklch(0.52 0.12 280);
 
   /* Action — Primary CTA */
   --accent: var(--brand-cyan-deep);
@@ -117,6 +221,10 @@
   --chart-3: var(--c3);
   --chart-4: var(--c4);
   --chart-5: var(--c5);
+  --chart-6: var(--c6);
+  --chart-7: var(--c7);
+  --chart-8: var(--c8);
+  --chart-9: var(--c9);
 
   --confidence-high: var(--crit);
   --confidence-medium: var(--warn);
@@ -174,6 +282,9 @@
   --c4: var(--brand-green);
   --c5: var(--brand-orange);
   --c6: oklch(0.70 0.05 35);
+  --c7: oklch(0.72 0.15 15);
+  --c8: oklch(0.78 0.14 80);
+  --c9: oklch(0.68 0.11 280);
 
   --accent: var(--brand-cyan);
   --accent-soft-bg: oklch(0.28 0.04 215);
@@ -210,6 +321,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

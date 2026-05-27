@@ -1,8 +1,12 @@
 export type DetectionType =
-  | '매크로_판매'
-  | '핵_배포'
+  | '핵_치트'
+  | '사설서버'
+  | '불법프로그램_배포'
   | '계정_거래'
+  | '매크로_판매'
   | '리세마라'
+  | '현금화'
+  | '광고_도배'
   | '기타';
 
 export type Language = 'ko' | 'zh-CN' | 'zh-TW';
@@ -71,8 +75,6 @@ export interface DetectionFilter {
   site?: string;
   type?: DetectionType;
   lang?: Language;
-  /** Journey 2 — 수동 트리거 후 새로 들어온 탐지만 */
-  since?: 'triggered';
   page?: number;
   size?: number;
 }

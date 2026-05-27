@@ -1,4 +1,4 @@
-"""Detection Pipeline — Redis 메시지 1건 처리 흐름 (Story 3-3, 2026-05-27 PIVOT).
+"""Detection Pipeline — Redis 메시지 1건 처리 흐름 (Story 3-4 갱신).
 
 흐름:
   1. CrawlEvent 파싱
@@ -6,10 +6,11 @@
   3. LLMClassifier.classify (RetryHandler 감싸기) — OpenAI 멀티모달 단일 호출
   4. TierRouter.route — type → Tier 매핑
   5. CostCap.record — 누적 비용 갱신
-  6. 구조화 로그 출력
-  7. (Story 3-4) detection_repository.save — TODO
+  6. DetectionRepository.save — posts + detections RDS 저장 (Story 3-4 신규)
+  7. 구조화 로그 출력
 
-본 스토리에서는 RDS 저장 미수행. threshold 분기 미사용 (전수 저장 정책 — 부록 A-2).
+threshold 분기 미사용 (전수 저장 정책 — 부록 A-2).
+RDS 저장 실패는 retryable로 보지 않음 — ACK 되지 않고 watchdog이 재시도.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import os
 from detection.src.pipeline.llm_classifier import LLMClassifier
 from detection.src.pipeline.tier_router import TierRouter
 from detection.src.rate_limit.cost_cap import CostCap
+from detection.src.repository.detection_repository import DetectionRepository
 from detection.src.retry.retry_handler import RetryHandler
 from shared.models.crawl_event import CrawlEvent
 from shared.structured_logger import get_logger
@@ -34,11 +36,13 @@ class DetectionPipeline:
         tier_router: TierRouter,
         cost_cap: CostCap,
         retry_handler: RetryHandler,
+        repository: DetectionRepository | None = None,
     ) -> None:
         self._classifier = classifier
         self._tier_router = tier_router
         self._cost_cap = cost_cap
         self._retry_handler = retry_handler
+        self._repository = repository
 
     def process(self, message: str) -> None:
         event = CrawlEvent.from_json(message)
@@ -56,11 +60,19 @@ class DetectionPipeline:
 
         tier = self._tier_router.route(response.type)
 
-        self._cost_cap.record(
-            response.input_tokens,
-            response.output_tokens,
-            self._classifier.model_version.split(":", 2)[1] if ":" in self._classifier.model_version else "gpt-4o",
+        model = (
+            self._classifier.model_version.split(":", 2)[1]
+            if ":" in self._classifier.model_version else "gpt-4o"
         )
+        self._cost_cap.record(response.input_tokens, response.output_tokens, model)
+
+        if self._repository is not None:
+            self._repository.save(
+                event=event,
+                response=response,
+                tier=tier,
+                model_version=self._classifier.model_version,
+            )
 
         _logger.info(
             "classification — type=%s tier=%s conf=%.3f cost=$%.5f tokens(in/out)=%d/%d image_observed=%s",
@@ -74,4 +86,3 @@ class DetectionPipeline:
                 "model_version": self._classifier.model_version,
             },
         )
-        # TODO(Story 3-4): detection_repository.save(event, response, tier, self._classifier.model_version)

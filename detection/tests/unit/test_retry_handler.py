@@ -1,18 +1,18 @@
+"""RetryHandler — exponential backoff + Tier 차등 max_attempts + DLQ (Story 3-3 갱신)."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+from openai import APIConnectionError, APITimeoutError
 
-from detection.src.mocks.varco_mock import RateLimitError
-from detection.src.retry.retry_handler import (
-    RetryExhaustedError,
-    RetryHandler,
-)
+from detection.src.retry.retry_handler import RetryExhaustedError, RetryHandler
 from shared.config.redis_config import (
     REDIS_KEY_POSTS_DLQ,
     REDIS_KEY_POSTS_PROCESSING,
 )
+from shared.interfaces.llm import RateLimitError
 
 _MESSAGE = '{"post_id":"tieba_001","correlation_id":"cid-001"}'
 _POST_ID = "tieba_001"
@@ -65,7 +65,6 @@ def test_retry_exhausted_moves_to_dlq() -> None:
     mock_sleep.assert_has_calls([call(1.0), call(2.0), call(4.0)])
     mock_redis.lpush.assert_called_once_with(REDIS_KEY_POSTS_DLQ, _MESSAGE)
     mock_redis.lrem.assert_called_once_with(REDIS_KEY_POSTS_PROCESSING, 1, _MESSAGE)
-    # retry_key + processing_time_key 둘 다 DELETE
     assert mock_redis.delete.call_count == 2
     assert exc_info.value.post_id == _POST_ID
     assert exc_info.value.attempts == 4
@@ -102,3 +101,48 @@ def test_rate_limit_error_propagates_immediately() -> None:
     assert func.call_count == 1
     mock_sleep.assert_not_called()
     mock_redis.lpush.assert_not_called()
+
+
+def test_openai_timeout_treated_as_retryable() -> None:
+    mock_redis = MagicMock()
+    handler = RetryHandler(mock_redis)
+    func = MagicMock(side_effect=[APITimeoutError(request=MagicMock()), "ok"])
+
+    with patch("detection.src.retry.retry_handler.time.sleep"):
+        result = handler.execute_with_retry(
+            func, message=_MESSAGE, post_id=_POST_ID, correlation_id=_CID,
+        )
+
+    assert result == "ok"
+    assert func.call_count == 2
+
+
+def test_openai_connection_error_treated_as_retryable() -> None:
+    mock_redis = MagicMock()
+    handler = RetryHandler(mock_redis)
+    func = MagicMock(side_effect=[APIConnectionError(request=MagicMock()), "ok"])
+
+    with patch("detection.src.retry.retry_handler.time.sleep"):
+        result = handler.execute_with_retry(
+            func, message=_MESSAGE, post_id=_POST_ID, correlation_id=_CID,
+        )
+
+    assert result == "ok"
+    assert func.call_count == 2
+
+
+def test_max_attempts_override_zero_means_no_retry() -> None:
+    mock_redis = MagicMock()
+    handler = RetryHandler(mock_redis)
+    func = MagicMock(side_effect=TimeoutError("nope"))
+
+    with patch("detection.src.retry.retry_handler.time.sleep") as mock_sleep:
+        with pytest.raises(RetryExhaustedError):
+            handler.execute_with_retry(
+                func, message=_MESSAGE, post_id=_POST_ID, correlation_id=_CID,
+                max_attempts=0,
+            )
+
+    # max_attempts=0 → 원본 1회만 시도. sleep 0회.
+    assert func.call_count == 1
+    mock_sleep.assert_not_called()

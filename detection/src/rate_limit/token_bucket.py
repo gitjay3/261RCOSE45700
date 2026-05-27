@@ -5,7 +5,7 @@ import time
 
 import redis
 
-from shared.config.redis_config import REDIS_KEY_VARCO_RATE_LIMIT_TRANSLATE
+from shared.config.redis_config import REDIS_KEY_LLM_RATE_LIMIT_CLASSIFY
 from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "detection")
@@ -58,7 +58,7 @@ class TokenBucket:
     def __init__(
         self,
         redis_client: redis.Redis,
-        key: str = REDIS_KEY_VARCO_RATE_LIMIT_TRANSLATE,
+        key: str = REDIS_KEY_LLM_RATE_LIMIT_CLASSIFY,
         capacity: int | None = None,
         refill_per_sec: float | None = None,
     ) -> None:
@@ -66,18 +66,18 @@ class TokenBucket:
         self._key = key
         self._capacity = int(
             capacity if capacity is not None
-            else os.environ.get("VARCO_RATE_LIMIT_CAPACITY", "60")
+            else os.environ.get("LLM_RATE_LIMIT_CAPACITY", "60")
         )
         self._refill = float(
             refill_per_sec if refill_per_sec is not None
-            else os.environ.get("VARCO_RATE_LIMIT_REFILL_PER_SEC", "1")
+            else os.environ.get("LLM_RATE_LIMIT_REFILL_PER_SEC", "1")
         )
         self._script = self._redis.register_script(_LUA_ACQUIRE)
 
     def acquire(self, timeout: float | None = None) -> None:
         """토큰 1개 차감. 부족 시 충전까지 sleep 후 재시도. timeout 초과 시 RateLimitTimeoutError."""
         if timeout is None:
-            timeout = float(os.environ.get("VARCO_RATE_LIMIT_MAX_WAIT_SEC", "120"))
+            timeout = float(os.environ.get("LLM_RATE_LIMIT_MAX_WAIT_SEC", "120"))
         deadline = time.monotonic() + timeout
         while True:
             wait_str = self._script(

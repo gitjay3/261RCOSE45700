@@ -211,3 +211,17 @@ Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 
 - **trigger_listener reconnect storm (5s fixed back-off)** [crawler/src/scheduler/trigger_listener.py:66-71] — 네트워크 partition 시 5초 고정 backoff로 로그 spam. exponential backoff + jitter는 별도 stability 항목.
 - **이미지 확장자 결정에 Content-Type 미사용** [crawler/src/crawl4ai_crawler.py:289] — URL `?` 앞 path suffix 만으로 결정하여 extensionless CDN URL은 `.jpg` 기본값. Content-Type 기반 보정은 별도 storage 정밀도 항목.
 - **PTT/Dcard validator marker 튜닝 (False positive 가능성)** [crawler/src/preprocessor/content_validator.py:126-148] — 4-header 부분 일치 / `## #` 본문 매칭이 quoted text 에서 오탐 가능. 운영 데이터 수집 후 정량화하여 튜닝.
+
+## Deferred from: 3-layer adversarial review of spec-3-2-cleanup-varco-translation (2026-05-27)
+
+본 cleanup PR은 deletion 범위에 충실. 아래 항목은 Story 3-3 또는 별도 cleanup pass로 이월.
+
+- **`VarcoMock.translate()` dead method + mock_response_rate_limited.json / timeout.json 고아 fixture** [detection/src/mocks/varco_mock.py, tests/fixtures/varco/] — Story 3-3에서 `llm_mock.py` 전면 대체 시 함께 정리.
+- **README.md doc drift — Translator 마케팅 문구 잔존** [README.md L21,51,109,141,149] — Story 3-3 머지 후 일괄 doc cleanup pass.
+- **architecture.md L702 `varco.py # Protocol class: translate/classify/analyze` 잔존** [_bmad-output/planning-artifacts/architecture.md:702] — Story 3-3에서 shared/interfaces/llm.py로 rename 시 갱신.
+- **`varco_client.py::__init__` 와 `classify()` 의 VARCO_CLASSIFY_TIMEOUT_SEC 이중 읽기** [detection/src/pipeline/varco_client.py:23,31] — pre-existing 코드 패턴. Story 3-3에서 varco_client.py 전체가 llm_client.py로 대체되며 자연 해소.
+- **infra/compose.prod.yml + deploy.yml의 `varco_api_key` Docker secret mount 잔존** [infra/compose.prod.yml:65,84,139, .github/workflows/deploy.yml:219] — Story 3-3에서 OpenAI secret으로 교체 시 함께 정리.
+- **detection/tests/integration/ 디렉터리 사실상 비어있음 (consumer→pipeline→retry→DLQ 통합 커버리지 0)** — Story 3-3 AC에 `test_llm_pipeline.py` 신설 명시되어 있음. 진행 시 자연 복구.
+- **stale Redis 키 `varco:rate_limit:translate` 운영 정리 (production migration)** — 본 PR은 feature 브랜치 단계라 운영 영향 없음. 운영 배포 전 stale 키 삭제 1회 필요 시 Story 3-3 또는 5-2 deploy 단계에 포함.
+- **DetectionPipeline.process()에서 번역 완료 log 제거에 따른 관측성 갭** — Story 3-3에서 LLM 호출 + Tier 라우팅 log로 자연 복구.
+- **detection_pipeline.py가 `event.language`나 빈 raw_text guard 없음** — interim 상태. Story 3-3 LLMClient 호출 경로에서 guard 또는 OpenAI 측 처리에 위임.

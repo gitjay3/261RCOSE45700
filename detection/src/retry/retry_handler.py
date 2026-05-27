@@ -1,3 +1,13 @@
+"""Retry Handler — Tier 차등 retry + exponential backoff + DLQ 격리 (Story 3-3 갱신).
+
+2026-05-27 PIVOT: exception whitelist에 `openai.APITimeoutError` / `openai.APIConnectionError`
+추가. `max_attempts` 인자로 Tier 차등 시도 횟수 주입 가능 (default: `RETRY_MAX_ATTEMPTS` env).
+RateLimitError(`shared.interfaces.llm`)는 호출자 책임 — RetryHandler가 catch하지 않음.
+
+Tier 차등 retry는 OpenAI 단일 호출 모델에서 응답 받기 전 tier 미상이므로 default 3회 적용.
+응답 후 동일 게시글 재시도 또는 Story 3-6 알림 보장 로직에서 `max_attempts` 주입 사용.
+"""
+
 from __future__ import annotations
 
 import os
@@ -7,6 +17,7 @@ from typing import TypeVar
 
 import httpx
 import redis
+from openai import APIConnectionError, APITimeoutError
 
 from detection.src.consumer.watchdog import processing_time_key, retry_key
 from shared.config.redis_config import (
@@ -16,7 +27,7 @@ from shared.config.redis_config import (
 from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "detection")
-_MAX_ATTEMPTS = int(os.environ.get("RETRY_MAX_ATTEMPTS", "3"))
+_DEFAULT_MAX_ATTEMPTS = int(os.environ.get("RETRY_MAX_ATTEMPTS", "3"))
 _BACKOFF_BASE = float(os.environ.get("RETRY_BACKOFF_BASE_SEC", "1"))
 _logger = get_logger(__name__)
 
@@ -26,6 +37,8 @@ _RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
     TimeoutError,
     ConnectionError,
     httpx.HTTPError,
+    APITimeoutError,
+    APIConnectionError,
 )
 
 T = TypeVar("T")
@@ -57,9 +70,11 @@ class RetryHandler:
         message: str,
         post_id: str,
         correlation_id: str,
+        max_attempts: int | None = None,
     ) -> T:
         last_error: BaseException | None = None
-        total_attempts = _MAX_ATTEMPTS + 1  # 원본 1 + 재시도 N
+        retries = max_attempts if max_attempts is not None else _DEFAULT_MAX_ATTEMPTS
+        total_attempts = retries + 1  # 원본 1 + 재시도 N
 
         for attempt in range(total_attempts):
             try:
@@ -69,7 +84,7 @@ class RetryHandler:
                 if attempt < total_attempts - 1:
                     backoff = _BACKOFF_BASE * (2 ** attempt)
                     _logger.warning(
-                        "VARCO classify 재시도 — attempt=%d/%d, backoff=%.1fs, error=%s",
+                        "LLM classify 재시도 — attempt=%d/%d, backoff=%.1fs, error=%s",
                         attempt + 1, total_attempts, backoff, type(exc).__name__,
                         extra={
                             "post_id": post_id,
@@ -98,7 +113,7 @@ class RetryHandler:
         self._redis.delete(retry_key(post_id))
         self._redis.delete(processing_time_key(post_id))
         _logger.error(
-            "DLQ 이동 — VARCO classify 재시도 한도 초과 (attempts=%d)",
+            "DLQ 이동 — LLM classify 재시도 한도 초과 (attempts=%d)",
             attempts,
             extra={
                 "post_id": post_id,

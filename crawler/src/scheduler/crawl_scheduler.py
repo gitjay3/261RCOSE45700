@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import redis
 from apscheduler.events import EVENT_JOB_MISSED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from crawl4ai.async_configs import CacheMode
 
@@ -375,12 +376,14 @@ class CrawlScheduler:
         mq_client = redis.from_url(redis_url, db=REDIS_MQ_DB, decode_responses=True)
         dedup_client = redis.from_url(redis_url, db=REDIS_DEDUP_DB, decode_responses=True)
 
+        # 같은 ZSET 을 파이프라인과 cleanup 잡이 공유해야 하므로 인스턴스 분리 보관.
+        self._url_dedup = UrlDedupChecker(dedup_client)
         self._pipeline = CrawlPipeline(
             crawler=Crawl4AICrawler(headless=True, output_dir="output/_tmp"),
             storage=PostStorage(),
             dedup=DedupChecker(dedup_client),
             publisher=RedisPublisher(mq_client),
-            url_dedup=UrlDedupChecker(dedup_client),  # DB1(dedup) 안에 같이 둔다.
+            url_dedup=self._url_dedup,
         )
         # scheduled run + 수동 trigger 동시 실행 방지
         self._run_lock = asyncio.Lock()
@@ -397,6 +400,10 @@ class CrawlScheduler:
             return
         async with self._run_lock:
             await self._pipeline.run()
+
+    async def _cleanup_url_dedup_job(self) -> None:
+        # sync redis 호출을 thread 로 오프로드 — 다른 async 잡(crawl_pipeline) 이벤트 루프 블락 방지.
+        await asyncio.to_thread(self._url_dedup.cleanup_older_than)
 
     def _on_job_missed(self, event) -> None:
         # Story 5-1 운영 가시성 — misfire_grace_time 초과로 스킵된 잡 구조화 로그.
@@ -418,12 +425,27 @@ class CrawlScheduler:
             minutes=interval,
             max_instances=1,
             misfire_grace_time=60,
+            # 다운타임 복귀 시 적체된 missed run 을 모두 실행하지 않고 1회로 합쳐 발화.
+            coalesce=True,
             id="crawl_pipeline",
+            replace_existing=True,
+        )
+        # 03:00 UTC = 12:00 KST — 한·중·대만 점심시간으로 게시판 트래픽 최저, fetch 잡과 충돌 확률 최소.
+        # timezone="UTC" 명시 — Docker base(python:3.11-slim) 는 UTC 지만 EC2 host TZ 또는 TZ env 변경 시
+        # 03:00 이 KST 로 해석돼 12시간 어긋나는 회귀 차단.
+        self._scheduler.add_job(
+            self._cleanup_url_dedup_job,
+            trigger=CronTrigger(hour=3, minute=0, timezone="UTC"),
+            max_instances=1,
+            misfire_grace_time=3600,
+            coalesce=True,
+            id="url_dedup_cleanup",
             replace_existing=True,
         )
         self._scheduler.add_listener(self._on_job_missed, EVENT_JOB_MISSED)
         _logger.info(
-            "APScheduler 등록: %d분 주기", interval,
+            "APScheduler 등록: crawl_pipeline %d분 주기 + url_dedup_cleanup 일 1회 03:00 UTC",
+            interval,
             extra={"correlation_id": "", "service": _SERVICE_NAME},
         )
 

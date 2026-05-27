@@ -195,6 +195,18 @@ class TestSiteRegistryWiring:
             s = SITES[sid]
             assert s.title_keywords is not None, f"{sid} missing title_keywords"
 
+    def test_dcard_online_uses_delay_not_selector(self):
+        # 2026-05-27: wait_for="css:article" 가 /f/online 에서 항상 타임아웃 → DOM 셀렉터 의존 제거.
+        # Dcard React CSS module 해시(PostList_entry_*)는 빌드마다 바뀌어 셀렉터 자체가 안티패턴.
+        s = SITES["dcard_online"]
+        assert s.wait_for is None, "dcard_online 셀렉터 의존 회귀 — wait_for 는 None 이어야 함"
+        assert s.delay_before_return_html == 3.0
+
+    def test_dcard_game_board_selector_unchanged(self):
+        # 회귀 가드: 게임 보드는 현재 정상 작동 중. wait_for 그대로.
+        assert SITES["dcard"].wait_for == "css:article"
+        assert SITES["dcard"].delay_before_return_html is None
+
     # ── PTT Lineage 보드 ──
     def test_ptt_targets_lineage_board(self):
         # 이전 C_Chat 에서 NC 전용 Lineage 보드로 교체.

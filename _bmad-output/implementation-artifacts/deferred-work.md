@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: Epic 2 ops polish (spec-epic-2-ops-polish, 2026-05-27)
+
+본 polish 묶음에서 의도적으로 out-of-scope 처리한 2건. Stories 2-8 (SearchEngineConfig) 또는 신규 Story 2-13 등에서 흡수 권장.
+
+- **Dcard `/_api/forums/{slug}/posts` JSON endpoint 직결** — 이번 fix 는 `wait_for` 제거 + 3초 delay 로 보수적 처리. Dcard 공식 JSON endpoint 가 존재 (예: `https://www.dcard.tw/_api/forums/online/posts?before=&limit=&popular=`). 직결 시 (1) 브라우저 우회 자체 불필요 (2) 페이지네이션 trivial (3) anti-bot 부담 감소. 단 현 `SiteConfig` 는 `listing → post URL pattern matching` 1-hop 모델이라 JSON endpoint 흐름을 우겨넣으면 추상화 더러워짐. Story 2-8 (SearchEngineConfig) 작업 시 같은 family 로 묶거나 Story 2-13 (Dcard JSON adapter) 신설 검토.
+- **`UndetectedAdapter` 옵션 슬롯 (`SiteConfig.use_undetected`)** — 2026 기준 `BrowserConfig(enable_stealth=True)` 만으로 Cloudflare 통과 효과 미미 (puppeteer-stealth deprecated 2025-02, playwright-stealth 비슷). 현재 52pojie 가 통과되는 건 사이트가 약한 룰만 돌려서일 가능성. Cloudflare 강화 시 `crawl4ai.UndetectedAdapter` + `AsyncPlaywrightCrawlerStrategy` 조합으로 fallback 옵션 슬롯 추가 필요. Story 2-8 BrowserConfig 추상화 설계 시 같이 흡수 권장 (검색엔진형이 anti-bot 더 강함).
+- **APScheduler 잡 함수 예외 핸들링 부재** — `_cleanup_url_dedup_job` / `_run_locked` 둘 다 예외 발생 시 APScheduler 가 로그만 남기고 다음 발화 대기 (기본 동작). 단 redis connection refused 같은 영구 오류 시 매 발화마다 같은 예외 반복 → 알람 없음. Story 5-1 Prometheus/Grafana 통합 시 잡 실패 카운터 + 알람 룰 추가 권장.
+
+---
+
 ## Deferred from: Story 5-2 dev (2026-05-12 — USER 외부 종속성, Task 5 blocked)
 
 Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 종속성 4종이 손에 들어오기 전까지 Task 5 / 7 / 8 진행 불가. 첫 배포 자체가 시크릿 + 백엔드 컨테이너 startup 모두 의존:

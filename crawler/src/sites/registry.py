@@ -318,12 +318,14 @@ SITES: dict[str, SiteConfig] = {
         ],
         post_url_pattern=r"https://www\.dcard\.tw/f/online/p/\d+",
         image_filter=_dcard_image_filter,
-        wait_for="css:article",
+        # Dcard React 클래스가 CSS module 해시 (PostList_entry_*) 라 selector 매번 깨짐.
+        # /f/online 은 wait_for="css:article" 가 타임아웃 (회수율 0) — DOM 의존 끊고 hydration 시간만 대기.
+        delay_before_return_html=3.0,
         page_timeout=45_000,
         headers=_TW_HEADERS,
         title_keywords=_NC_GAME_KEYWORDS,
         enabled=True,
-        note="온라인게임 카테고리. NC 키워드 매칭만 fetch.",
+        note="온라인게임 카테고리. NC 키워드 매칭만 fetch. selector 의존 제거 (2026-05-27).",
     ),
 
     # ── 대만 Bahamut — NC 게임 8개 보드 (모두 순수 NC, title_keywords 불필요) ──

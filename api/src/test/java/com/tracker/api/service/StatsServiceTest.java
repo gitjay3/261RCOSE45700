@@ -39,7 +39,7 @@ class StatsServiceTest {
 
     @Test
     void getStats_cacheHit_returnsWithoutDbCall() throws Exception {
-        StatsResponse expected = new StatsResponse(5L, 1L, List.of(), List.of(), List.of(), List.of());
+        StatsResponse expected = new StatsResponse(5L, 1L, List.of(), List.of(), List.of(), List.of(), List.of());
         String cachedJson = objectMapper.writeValueAsString(expected);
 
         when(cacheRedisTemplate.opsForValue()).thenReturn(valueOps);

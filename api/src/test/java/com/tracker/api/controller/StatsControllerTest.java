@@ -27,7 +27,7 @@ class StatsControllerTest {
         var siteItem = new StatsResponse.SiteDistributionItem("tailstar.net", 3L);
         var langItem = new StatsResponse.LangDistributionItem("zh-CN", 4L);
         var response = new StatsResponse(10L, 2L,
-                List.of(typeItem), List.of(siteItem), List.of(langItem), List.of());
+                List.of(typeItem), List.of(siteItem), List.of(langItem), List.of(), List.of());
         when(statsService.getStats(null)).thenReturn(response);
 
         mockMvc.perform(get("/api/stats"))
@@ -45,7 +45,7 @@ class StatsControllerTest {
     @Test
     void getStats_withPeriodWeekly_returnsTrend() throws Exception {
         var trendItem = new StatsResponse.TrendItem("2026-04-30", 5L);
-        var response = new StatsResponse(10L, 2L, List.of(), List.of(), List.of(), List.of(trendItem));
+        var response = new StatsResponse(10L, 2L, List.of(), List.of(), List.of(), List.of(trendItem), List.of());
         when(statsService.getStats("weekly")).thenReturn(response);
 
         mockMvc.perform(get("/api/stats").param("period", "weekly"))
@@ -58,7 +58,7 @@ class StatsControllerTest {
 
     @Test
     void getStats_withPeriodMonthly_returnsTrend() throws Exception {
-        var response = new StatsResponse(10L, 2L, List.of(), List.of(), List.of(), List.of());
+        var response = new StatsResponse(10L, 2L, List.of(), List.of(), List.of(), List.of(), List.of());
         when(statsService.getStats("monthly")).thenReturn(response);
 
         mockMvc.perform(get("/api/stats").param("period", "monthly"))

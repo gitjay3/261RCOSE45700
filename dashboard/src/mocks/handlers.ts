@@ -14,6 +14,7 @@ const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const mockNotificationChannels: NotificationChannel[] = [];
 const mockNotificationRules: NotificationRule[] = [];
 const mockNotificationDeliveries: NotificationDelivery[] = [];
+const mockActivityLog: { id: number; eventType: string; message: string; occurredAt: string }[] = [];
 
 function maskWebhookUrl(value: string) {
   return `••••${value.slice(-6)}`;
@@ -215,4 +216,19 @@ export const handlers = [
   http.get(`${baseUrl}/notifications/deliveries`, () => (
     HttpResponse.json(mockNotificationDeliveries)
   )),
+
+  // GET /activity
+  http.get(`${baseUrl}/activity`, () => HttpResponse.json(mockActivityLog)),
+
+  // POST /activity
+  http.post(`${baseUrl}/activity`, async ({ request }) => {
+    const body = await request.json() as { eventType: string; message: string };
+    mockActivityLog.unshift({
+      id: mockActivityLog.length + 1,
+      eventType: body.eventType,
+      message: body.message,
+      occurredAt: new Date().toISOString(),
+    });
+    return new HttpResponse(null, { status: 204 });
+  }),
 ];

@@ -1,10 +1,20 @@
-import { KNOWN_SOURCES } from '@/lib/sources';
+import { useQuery } from '@tanstack/react-query';
+import { statsQueries } from '@/api/stats';
+import { useActivityQuery } from '@/api/activity';
+import { useCrawlerQueueQuery, useCorruptQueueQuery, useDlqDepthQuery, useProcessingQueueQuery } from '@/api/metrics';
+import { formatRelativeTime } from '@/lib/time';
 
-/**
- * 오른쪽 레일 — Activity / Source health / Pipeline.
- * MVP는 정적 mock 값. 백엔드 API 붙으면 실데이터 swap.
- */
 export function RightRail() {
+  const statsQuery = useQuery(statsQueries.byPeriod());
+  const activityQuery = useActivityQuery();
+  const crawlerQueueQuery = useCrawlerQueueQuery();
+  const processingQueueQuery = useProcessingQueueQuery();
+  const dlqQuery = useDlqDepthQuery();
+  const corruptQueueQuery = useCorruptQueueQuery();
+
+  const sourceHealth = statsQuery.data?.sourceHealth ?? [];
+  const activities = activityQuery.data ?? [];
+
   return (
     <aside
       aria-label="시스템 활동 패널"
@@ -17,33 +27,74 @@ export function RightRail() {
     >
       {/* 1. Activity */}
       <RailSection title="Activity">
-        <ActivityItem variant="self" tag="나" text="5건 검토 완료" time="10:14 — 10:38" />
-        <ActivityItem variant="ok" text="새 탐지 3건 추가됨" time="3분 전" />
-        <ActivityItem variant="self" tag="나" text="2건 FP로 표시" time="11:02" />
-        <ActivityItem variant="default" text="크롤링 사이클 완료 (6/6)" time="18분 전" />
-        <ActivityItem variant="ok" text="DLQ 비워짐" time="1시간 전" />
+        {activities.length === 0 ? (
+          <EmptyRow label={activityQuery.isLoading ? '불러오는 중…' : '활동 없음'} />
+        ) : (
+          activities.map((a) => {
+            const meta = ACTIVITY_META[a.eventType] ?? { variant: 'default' as ActivityVariant, tag: undefined };
+            return (
+              <ActivityItem
+                key={a.id}
+                variant={meta.variant}
+                tag={meta.tag}
+                text={a.message}
+                time={formatRelativeTime(a.occurredAt)}
+              />
+            );
+          })
+        )}
       </RailSection>
 
       {/* 2. Source health */}
       <RailSection title="Source health">
         <div className="flex flex-col">
-          {KNOWN_SOURCES.map((src) => (
-            <HealthRow key={src} name={src} />
-          ))}
+          {sourceHealth.length === 0 ? (
+            <EmptyRow label={statsQuery.isLoading ? '불러오는 중…' : '소스 없음'} />
+          ) : (
+            sourceHealth.map(({ siteName, lastCrawledAt }) => (
+              <HealthRow key={siteName} name={siteName} lastCrawledAt={lastCrawledAt} />
+            ))
+          )}
         </div>
       </RailSection>
 
       {/* 3. Pipeline */}
       <RailSection title="Pipeline">
         <div className="flex flex-col">
-          <MetricRow name="Crawler queue" value="0" />
-          <MetricRow name="Detection processing" value="0" />
-          <MetricRow name="DLQ" value="0" />
-          <MetricRow name="LLM RPM" value="12 / 60" />
+          <MetricRow name="Crawler queue" value={fmtQueue(crawlerQueueQuery.data)} />
+          <MetricRow name="Processing" value={fmtQueue(processingQueueQuery.data)} />
+          <MetricRow name="DLQ" value={fmtQueue(dlqQuery.data)} warn={Boolean(dlqQuery.data && dlqQuery.data > 0)} />
+          <MetricRow name="Corrupt" value={fmtQueue(corruptQueueQuery.data)} warn={Boolean(corruptQueueQuery.data && corruptQueueQuery.data > 0)} />
+          <MetricRow name="오늘 탐지" value={statsQuery.data ? String(statsQuery.data.todayCount) : '—'} />
+          <MetricRow name="전일 대비" value={statsQuery.data ? formatDelta(statsQuery.data.deltaFromYesterday) : '—'} />
         </div>
       </RailSection>
     </aside>
   );
+}
+
+function fmtQueue(val: number | undefined): string {
+  return val !== undefined ? String(val) : '—';
+}
+
+function sourceStatus(lastCrawledAt: string | null): { label: string; color: string } {
+  if (!lastCrawledAt) return { label: 'UNKNOWN', color: 'var(--fg-3)' };
+  const diffH = (Date.now() - new Date(lastCrawledAt).getTime()) / 3_600_000;
+  if (diffH < 2)   return { label: 'ACTIVE',  color: 'var(--safe)' };
+  if (diffH < 24)  return { label: 'OK',      color: 'var(--safe)' };
+  if (diffH < 168) return { label: 'STALE',   color: 'var(--warn, #f59e0b)' };
+  return             { label: 'OLD',    color: 'var(--fg-3)' };
+}
+
+const ACTIVITY_META: Record<string, { variant: ActivityVariant; tag?: string }> = {
+  MANUAL_CRAWL_TRIGGERED: { variant: 'self', tag: '나' },
+  MANUAL_CRAWL_COMPLETED: { variant: 'ok', tag: '나' },
+  MANUAL_CRAWL_FAILED:    { variant: 'default', tag: '나' },
+};
+
+function formatDelta(delta: number): string {
+  if (delta === 0) return '±0';
+  return delta > 0 ? `+${delta}` : String(delta);
 }
 
 function RailSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -119,7 +170,11 @@ function ActivityItem({
   );
 }
 
-function HealthRow({ name }: { name: string }) {
+function HealthRow({ name, lastCrawledAt }: { name: string; lastCrawledAt: string | null }) {
+  const { label, color } = sourceStatus(lastCrawledAt);
+  const title = lastCrawledAt
+    ? `마지막 크롤: ${new Date(lastCrawledAt).toLocaleString('ko-KR')}`
+    : '크롤 이력 없음';
   return (
     <div
       className="grid items-center border-b last:border-b-0"
@@ -129,22 +184,20 @@ function HealthRow({ name }: { name: string }) {
         padding: '10px 0',
         borderColor: 'var(--border-1)',
       }}
+      title={title}
     >
-      <span className="size-2.5 rounded-full" style={{ background: 'var(--safe)' }} />
-      <span className="font-mono" style={{ color: 'var(--fg-2)', fontSize: 'var(--text-base-mono)' }}>
+      <span className="size-2.5 rounded-full" style={{ background: color }} />
+      <span className="font-mono truncate" style={{ color: 'var(--fg-2)', fontSize: 'var(--text-base-mono)' }}>
         {name}
       </span>
-      <span
-        className="font-mono text-right"
-        style={{ color: 'var(--fg-3)', fontSize: 'var(--text-base-mono)' }}
-      >
-        OK
+      <span className="font-mono text-right" style={{ color, fontSize: 'var(--text-base-mono)' }}>
+        {label}
       </span>
     </div>
   );
 }
 
-function MetricRow({ name, value }: { name: string; value: string }) {
+function MetricRow({ name, value, warn = false }: { name: string; value: string; warn?: boolean }) {
   return (
     <div
       className="grid items-baseline border-b text-sm last:border-b-0"
@@ -158,10 +211,18 @@ function MetricRow({ name, value }: { name: string; value: string }) {
       <span style={{ color: 'var(--fg-2)' }}>{name}</span>
       <span
         className="font-mono font-medium tabular-nums"
-        style={{ color: 'var(--fg)', fontSize: 'var(--text-base-mono)' }}
+        style={{ color: warn ? 'var(--warn, #f59e0b)' : 'var(--fg)', fontSize: 'var(--text-base-mono)' }}
       >
         {value}
       </span>
     </div>
+  );
+}
+
+function EmptyRow({ label }: { label: string }) {
+  return (
+    <span className="text-sm" style={{ color: 'var(--fg-3)' }}>
+      {label}
+    </span>
   );
 }

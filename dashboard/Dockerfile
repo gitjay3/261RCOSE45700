@@ -74,6 +74,15 @@ RUN printf '%s\n' \
     '        proxy_set_header X-Forwarded-Proto $scheme;' \
     '        proxy_read_timeout 30s;' \
     '    }' \
+    '    location /actuator {' \
+    '        set $api_upstream "http://api:8080";' \
+    '        proxy_pass $api_upstream;' \
+    '        proxy_set_header Host $host;' \
+    '        proxy_set_header X-Real-IP $remote_addr;' \
+    '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
+    '        proxy_set_header X-Forwarded-Proto $scheme;' \
+    '        proxy_read_timeout 10s;' \
+    '    }' \
     '    location / { try_files $uri $uri/ /index.html; }' \
     '}' \
     > /etc/nginx/conf.d/default.conf

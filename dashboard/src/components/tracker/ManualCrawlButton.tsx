@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   useCrawlJobStatusQuery,
   useCrawlTriggerMutation,
 } from '@/api/detections';
+import { useLogActivityMutation } from '@/api/activity';
 import { Kbd } from '@/components/ui/kbd';
 import { useShortcut } from '@/lib/shortcuts';
 import {
@@ -75,8 +76,10 @@ export function ManualCrawlButton() {
     else sessionStorage.removeItem('crawl:progressWindow');
   }, []);
   const mutation = useCrawlTriggerMutation();
+  const { mutate: logActivity } = useLogActivityMutation();
   const jobStatusQuery = useCrawlJobStatusQuery(jobId);
   const jobStatus = jobStatusQuery.data;
+  const loggedJobIdRef = useRef<string | null>(null);
 
   const estimatedProgress = useMemo(() => {
     if (!progressWindow) return null;
@@ -111,6 +114,20 @@ export function ManualCrawlButton() {
   }, [progressWindow]);
 
   useEffect(() => {
+    if (!isTerminal || !jobStatus || !jobId) return;
+    if (loggedJobIdRef.current === jobId) return;
+    loggedJobIdRef.current = jobId;
+
+    if (jobStatus.status === 'succeeded') {
+      logActivity({ eventType: 'MANUAL_CRAWL_COMPLETED', message: '수동 크롤링 완료' });
+    } else if (jobStatus.status === 'failed') {
+      logActivity({ eventType: 'MANUAL_CRAWL_FAILED', message: '수동 크롤링 실패' });
+    } else if (jobStatus.status === 'skipped') {
+      logActivity({ eventType: 'MANUAL_CRAWL_SKIPPED', message: '수동 크롤링 스킵 — 이미 실행 중' });
+    }
+  }, [isTerminal, jobStatus?.status, jobId, logActivity]);
+
+  useEffect(() => {
     if (!estimatedProgress?.isComplete && !isTerminal) return undefined;
 
     const timeoutId = window.setTimeout(() => {
@@ -124,6 +141,7 @@ export function ManualCrawlButton() {
   const handleConfirm = async () => {
     try {
       const result = await mutation.mutateAsync();
+      logActivity({ eventType: 'MANUAL_CRAWL_TRIGGERED', message: '수동 크롤링 트리거됨' });
       const startedAtMs = Date.now();
       setNowMs(startedAtMs);
       persistJobId(result.jobId);

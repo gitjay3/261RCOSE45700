@@ -54,6 +54,11 @@ export interface TrendEntry {
   count: number;
 }
 
+export interface SourceHealthItem {
+  siteName: string;
+  lastCrawledAt: string | null;
+}
+
 export interface StatsResponse {
   todayCount: number;
   deltaFromYesterday: number;
@@ -61,6 +66,7 @@ export interface StatsResponse {
   siteDistribution: SiteDistributionEntry[];
   langDistribution: LangDistributionEntry[];
   trend?: TrendEntry[];
+  sourceHealth?: SourceHealthItem[];
 }
 
 export interface ProblemDetail {

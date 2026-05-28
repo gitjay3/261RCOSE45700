@@ -183,6 +183,19 @@ function buildStatsBase(): Omit<StatsResponse, 'trend'> {
     langCount.set(d.language, (langCount.get(d.language) ?? 0) + 1);
   });
 
+  // sourceHealth: 사이트별 마지막 크롤 시각 시뮬레이션 (ACTIVE/OK/STALE/UNKNOWN 분포)
+  const now = Date.now();
+  const sourceHealth = SOURCE_META.map((s, i) => {
+    const offsets = [30, 90, 600, 1440 * 3, null]; // 분 단위 or null
+    const offset = offsets[i % offsets.length];
+    return {
+      siteName: s.name,
+      lastCrawledAt: offset !== null
+        ? new Date(now - offset * 60_000).toISOString()
+        : null,
+    };
+  });
+
   return {
     todayCount,
     deltaFromYesterday: todayCount - yesterdayCount,
@@ -196,6 +209,7 @@ function buildStatsBase(): Omit<StatsResponse, 'trend'> {
       lang,
       count,
     })),
+    sourceHealth,
   };
 }
 

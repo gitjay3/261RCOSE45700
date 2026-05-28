@@ -58,9 +58,8 @@ RUN printf '%s\n' \
     '    add_header Referrer-Policy "strict-origin-when-cross-origin" always;' \
     '    # XSS Auditor는 레거시·버그 多 → 0으로 비활성(modern best practice).' \
     '    add_header X-XSS-Protection "0" always;' \
-    '    # CSP: Vite 번들 기준 외부 출처 없음. style unsafe-inline은 shadcn/ui radix' \
-    '    # 인라인 스타일 대응. connect-src self: /api proxy 경유 동일 origin 호출만.' \
-    '    add_header Content-Security-Policy "default-src '"'"'self'"'"'; script-src '"'"'self'"'"'; style-src '"'"'self'"'"' '"'"'unsafe-inline'"'"'; img-src '"'"'self'"'"' data:; connect-src '"'"'self'"'"'; font-src '"'"'self'"'"'; frame-ancestors '"'"'none'"'"';" always;' \
+    '    # CSP: Pretendard CDN(jsdelivr) 허용. Vite 빌드가 인라인 스크립트를 주입.' \
+    '    add_header Content-Security-Policy "default-src '"'"'self'"'"'; script-src '"'"'self'"'"' '"'"'unsafe-inline'"'"'; style-src '"'"'self'"'"' '"'"'unsafe-inline'"'"' https://cdn.jsdelivr.net; img-src '"'"'self'"'"' data:; connect-src '"'"'self'"'"'; font-src '"'"'self'"'"' data: https://cdn.jsdelivr.net; frame-ancestors '"'"'none'"'"';" always;' \
     '    location /healthz { return 200 "ok\n"; add_header Content-Type text/plain; }' \
     '    # docker network embedded DNS — api 컨테이너 재시작 시 IP 갱신 (10s TTL).' \
     '    # resolver + 변수 기반 proxy_pass 패턴 없으면 nginx가 worker 시작 시 1회만' \

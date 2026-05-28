@@ -35,7 +35,7 @@ import { LANG_OPTIONS, TYPE_OPTIONS } from '@/components/tracker/labels';
 import { PageContainer } from '@/layouts/PageContainer';
 import { useDetectionFilter } from '@/lib/useDetectionFilter';
 import { useShortcut } from '@/lib/shortcuts';
-import { KNOWN_SOURCES } from '@/lib/sources';
+import { detectionFilterOptions, type FilterSelectOption } from '@/lib/filterOptions';
 import { cn } from '@/lib/utils';
 import type { DetectionFilter, DetectionType, Language } from '@/types/api';
 
@@ -198,12 +198,6 @@ interface FilterBarProps {
 
 const ALL_VALUE = '__all__';
 
-interface FilterSelectOption {
-  value: string;
-  label: string;
-  className?: string;
-}
-
 interface FilterSelectProps {
   value: string;
   allLabel: string;
@@ -240,9 +234,7 @@ function FilterBar(props: FilterBarProps) {
 }
 
 function DesktopFilterBar({ filter, onChange, onReset, active }: FilterBarProps) {
-  const siteOptions = KNOWN_SOURCES.map((s) => ({ value: s, label: s, className: 'font-mono text-xs' }));
-  const typeOptions = TYPE_OPTIONS.map((t) => ({ value: t.value, label: t.label }));
-  const langOptions = LANG_OPTIONS.map((l) => ({ value: l.value, label: l.label }));
+  const { siteOptions, typeOptions, langOptions } = detectionFilterOptions();
 
   return (
     <div className="bg-card hidden flex-wrap items-center gap-2 rounded-lg border p-3 md:flex">
@@ -303,9 +295,7 @@ function FilterChip({
 }
 
 function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) {
-  const siteOptions = KNOWN_SOURCES.map((s) => ({ value: s, label: s, className: 'font-mono text-xs' }));
-  const typeOptions = TYPE_OPTIONS.map((t) => ({ value: t.value, label: t.label }));
-  const langOptions = LANG_OPTIONS.map((l) => ({ value: l.value, label: l.label }));
+  const { siteOptions, typeOptions, langOptions } = detectionFilterOptions();
 
   const typeLabel = TYPE_OPTIONS.find((t) => t.value === filter.type)?.label;
   const langLabel = LANG_OPTIONS.find((l) => l.value === filter.lang)?.label;
@@ -428,4 +418,3 @@ function Pagination({ page, totalPages, onPage }: PaginationProps) {
     </div>
   );
 }
-

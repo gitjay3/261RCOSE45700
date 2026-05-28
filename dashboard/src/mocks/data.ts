@@ -5,6 +5,7 @@ import type {
   StatsResponse,
   Tier,
 } from '@/types/api';
+import { SOURCE_META } from '@/lib/sources';
 
 /**
  * MSW mock 데이터.
@@ -16,20 +17,6 @@ const TYPES: DetectionType[] = [
   '핵_치트', '사설서버', '불법프로그램_배포',
   '계정_거래', '매크로_판매', '리세마라',
   '현금화', '광고_도배', '기타',
-];
-
-interface SiteDef {
-  name: string;
-  lang: Language;
-}
-
-const SITES: SiteDef[] = [
-  { name: 'tailstar.net', lang: 'ko' },
-  { name: 'ptt.cc', lang: 'zh-TW' },
-  { name: 'dcard.tw', lang: 'zh-TW' },
-  { name: 'tieba.baidu.com', lang: 'zh-CN' },
-  { name: '52pojie.cn', lang: 'zh-CN' },
-  { name: 'bbs.nga.cn', lang: 'zh-CN' },
 ];
 
 const TYPE_TO_TIER: Record<DetectionType, Tier> = {
@@ -113,7 +100,7 @@ function generateMockDetections(count: number): Detection[] {
   for (let i = 0; i < count; i++) {
     const seed = i + 1;
     const sample = SAMPLE_POSTS[i % SAMPLE_POSTS.length];
-    const site = SITES[Math.floor(pseudoRandom(seed * 7) * SITES.length)];
+    const site = SOURCE_META[Math.floor(pseudoRandom(seed * 7) * SOURCE_META.length)];
     const minutesAgo = Math.floor(pseudoRandom(seed * 13) * 60 * 8); // 0~8시간 전
     const detectedAt = new Date(now - minutesAgo * 60 * 1000).toISOString();
 

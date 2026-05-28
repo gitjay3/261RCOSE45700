@@ -5,6 +5,7 @@ import asyncio
 import os
 import random
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import redis
@@ -25,7 +26,7 @@ from crawler.src.scheduler.crawl_job_progress import (
     CrawlTriggerCommand,
 )
 from crawler.src.scheduler.trigger_listener import TriggerListener
-from crawler.src.sites.registry import get_enabled_sites
+from crawler.src.sites.registry import SiteConfig, get_enabled_sites
 from crawler.src.storage import PostStorage
 from shared.config.redis_config import REDIS_DEDUP_DB, REDIS_MQ_DB
 from shared.correlation_id import generate
@@ -48,75 +49,136 @@ def _jittered(base: float, jitter_ratio: float = 0.25) -> float:
     return base * (1.0 + random.uniform(-jitter_ratio, jitter_ratio))
 
 
+@dataclass(frozen=True)
+class CrawlOptions:
+    cookies: list[dict] | None = None
+    wait_for: str | None = None
+    headers: dict[str, str] | None = None
+    page_timeout: int | None = None
+    proxy: dict | None = None
+    js_code: list[str] | None = None
+    delay_before_return_html: float | None = None
+    scan_full_page: bool = False
+    scroll_delay: float | None = None
+    virtual_scroll_config: dict | None = None
+    wait_until: str | None = None
+    simulate_user: bool = False
+    user_agent_mode: str | None = None
+    c4a_script: list[str] | None = None
+    exclude_social_media_links: bool = True
+    exclude_external_links: bool | None = None
+    title_keywords: list[str] | None = None
+    css_selector: str | None = None
+    image_filter: Callable[[dict], bool] | None = None
+
+    @classmethod
+    def from_site(cls, site: SiteConfig) -> "CrawlOptions":
+        return cls(
+            cookies=site.cookies,
+            wait_for=site.wait_for,
+            headers=site.headers,
+            page_timeout=site.page_timeout,
+            proxy=site.proxy,
+            js_code=site.js_code,
+            delay_before_return_html=site.delay_before_return_html,
+            scan_full_page=site.scan_full_page,
+            scroll_delay=site.scroll_delay,
+            virtual_scroll_config=site.virtual_scroll_config,
+            wait_until=site.wait_until,
+            simulate_user=site.simulate_user,
+            user_agent_mode=site.user_agent_mode,
+            c4a_script=site.c4a_script,
+            exclude_social_media_links=site.exclude_social_media_links,
+            exclude_external_links=site.exclude_external_links,
+            title_keywords=site.title_keywords,
+            css_selector=site.css_selector,
+            image_filter=site.image_filter,
+        )
+
+    def browser_kwargs(self) -> dict:
+        kwargs: dict = dict(headless=True, enable_stealth=True, verbose=False)
+        if self.proxy is not None:
+            kwargs["proxy_config"] = self.proxy
+        if self.headers is not None:
+            kwargs["headers"] = self.headers
+        if self.user_agent_mode is not None:
+            kwargs["user_agent_mode"] = self.user_agent_mode
+        return kwargs
+
+    def listing_run_kwargs(self) -> dict:
+        kwargs: dict = dict(
+            cache_mode=CacheMode.BYPASS,
+            page_timeout=self.page_timeout if self.page_timeout is not None else 20_000,
+        )
+        if self.wait_for is not None:
+            kwargs["wait_for"] = self.wait_for
+        if self.js_code is not None:
+            kwargs["js_code"] = self.js_code
+        if self.delay_before_return_html is not None:
+            kwargs["delay_before_return_html"] = self.delay_before_return_html
+        if self.scan_full_page:
+            kwargs["scan_full_page"] = True
+            if self.scroll_delay is not None:
+                kwargs["scroll_delay"] = self.scroll_delay
+        if self.virtual_scroll_config is not None:
+            kwargs["virtual_scroll_config"] = self.virtual_scroll_config
+        if self.wait_until is not None:
+            kwargs["wait_until"] = self.wait_until
+        if self.simulate_user:
+            kwargs["simulate_user"] = True
+        if self.c4a_script is not None:
+            kwargs["c4a_script"] = self.c4a_script
+        if self.exclude_social_media_links:
+            kwargs["exclude_social_media_links"] = True
+        if self.exclude_external_links is not None:
+            kwargs["exclude_external_links"] = self.exclude_external_links
+        return kwargs
+
+    def arun_kwargs(self, url: str, run: CrawlerRunConfig) -> dict:
+        kwargs: dict = {"url": url, "config": run}
+        if self.cookies is not None:
+            kwargs["cookies"] = self.cookies
+        return kwargs
+
+    def fetch_kwargs(self) -> dict:
+        return {
+            "image_filter": self.image_filter,
+            "css_selector": self.css_selector,
+            "cookies": self.cookies,
+            "wait_for": self.wait_for,
+            "headers": self.headers,
+            "page_timeout": self.page_timeout,
+            "proxy": self.proxy,
+            "js_code": self.js_code,
+            "delay_before_return_html": self.delay_before_return_html,
+            "scan_full_page": self.scan_full_page,
+            "scroll_delay": self.scroll_delay,
+            "virtual_scroll_config": self.virtual_scroll_config,
+            "wait_until": self.wait_until,
+            "simulate_user": self.simulate_user,
+            "user_agent_mode": self.user_agent_mode,
+            "c4a_script": self.c4a_script,
+            "exclude_social_media_links": self.exclude_social_media_links,
+            "exclude_external_links": self.exclude_external_links,
+        }
+
+
 async def _fetch_post_urls(
     board_url: str,
     pattern: str,
     limit: int,
     *,
     correlation_id: str = "",
-    cookies: list[dict] | None = None,
-    wait_for: str | None = None,
-    headers: dict[str, str] | None = None,
-    page_timeout: int | None = None,
-    proxy: dict | None = None,
-    js_code: list[str] | None = None,
-    delay_before_return_html: float | None = None,
-    scan_full_page: bool = False,
-    scroll_delay: float | None = None,
-    virtual_scroll_config: dict | None = None,
-    wait_until: str | None = None,
-    simulate_user: bool = False,
-    user_agent_mode: str | None = None,
-    c4a_script: list[str] | None = None,
-    exclude_social_media_links: bool = True,
-    exclude_external_links: bool | None = None,
-    title_keywords: list[str] | None = None,
+    options: CrawlOptions,
 ) -> list[str]:
     """게시판 목록 페이지에서 게시글 URL 추출 (stealth 브라우저 + 링크 파싱).
 
     사이트별 옵션(cookies/wait_for/headers/proxy)으로 PTT over18·Dcard SPA·
     Tieba 프록시 등 접근 제어를 통과한다.
     """
-    browser_kwargs: dict = dict(headless=True, enable_stealth=True, verbose=False)
-    if proxy is not None:
-        browser_kwargs["proxy_config"] = proxy
-    if headers is not None:
-        browser_kwargs["headers"] = headers
-    if user_agent_mode is not None:
-        browser_kwargs["user_agent_mode"] = user_agent_mode
-    cfg = BrowserConfig(**browser_kwargs)
-
-    run_kwargs: dict = dict(
-        cache_mode=CacheMode.BYPASS,
-        page_timeout=page_timeout if page_timeout is not None else 20_000,
-    )
-    if wait_for is not None:
-        run_kwargs["wait_for"] = wait_for
-    if js_code is not None:
-        run_kwargs["js_code"] = js_code
-    if delay_before_return_html is not None:
-        run_kwargs["delay_before_return_html"] = delay_before_return_html
-    if scan_full_page:
-        run_kwargs["scan_full_page"] = True
-        if scroll_delay is not None:
-            run_kwargs["scroll_delay"] = scroll_delay
-    if virtual_scroll_config is not None:
-        run_kwargs["virtual_scroll_config"] = virtual_scroll_config
-    if wait_until is not None:
-        run_kwargs["wait_until"] = wait_until
-    if simulate_user:
-        run_kwargs["simulate_user"] = True
-    if c4a_script is not None:
-        run_kwargs["c4a_script"] = c4a_script
-    if exclude_social_media_links:
-        run_kwargs["exclude_social_media_links"] = True
-    if exclude_external_links is not None:
-        run_kwargs["exclude_external_links"] = exclude_external_links
-    run = CrawlerRunConfig(**run_kwargs)
-
-    arun_kwargs: dict = {"url": board_url, "config": run}
-    if cookies is not None:
-        arun_kwargs["cookies"] = cookies
+    cfg = BrowserConfig(**options.browser_kwargs())
+    run = CrawlerRunConfig(**options.listing_run_kwargs())
+    arun_kwargs = options.arun_kwargs(board_url, run)
 
     try:
         async with AsyncWebCrawler(config=cfg) as crawler:
@@ -138,7 +200,7 @@ async def _fetch_post_urls(
     seen: set[str] = set()
     post_urls: list[str] = []
     compiled = re.compile(pattern)
-    keywords_lower = [k.lower() for k in (title_keywords or [])]
+    keywords_lower = [k.lower() for k in (options.title_keywords or [])]
     for link in all_links:
         full = (link.get("href") or "")
         href = full.split("?")[0]
@@ -215,166 +277,14 @@ class CrawlPipeline:
 
         site_items = list(sites.items())
         for site_idx, (site_id, site) in enumerate(site_items):
-            if self._progress_store is not None and job_id:
-                self._progress_store.mark_site_running(
-                    job_id,
-                    site_id=site_id,
-                    completed_sites=site_idx,
-                    total_sites=total_sites,
-                )
-            if site_idx > 0:
-                # 사이트 간 휴식 — anti-bot rate limit 회피.
-                delay = _jittered(_INTER_SITE_DELAY_SECONDS)
-                _logger.debug(
-                    "사이트 전환 휴식: %.1fs (다음=%s)", delay, site_id,
-                    extra={"correlation_id": "", "service": _SERVICE_NAME},
-                )
-                await asyncio.sleep(delay)
-            for board_idx, board_url in enumerate(site.board_urls):
-                if board_idx > 0:
-                    # 같은 사이트의 보드 간 짧은 휴식.
-                    await asyncio.sleep(_jittered(_INTER_BOARD_DELAY_SECONDS))
-                board_cid = generate()
-                post_urls = await _fetch_post_urls(
-                    board_url, site.post_url_pattern, _MAX_POSTS_PER_BOARD,
-                    correlation_id=board_cid,
-                    cookies=site.cookies,
-                    wait_for=site.wait_for,
-                    headers=site.headers,
-                    page_timeout=site.page_timeout,
-                    proxy=site.proxy,
-                    js_code=site.js_code,
-                    delay_before_return_html=site.delay_before_return_html,
-                    scan_full_page=site.scan_full_page,
-                    scroll_delay=site.scroll_delay,
-                    virtual_scroll_config=site.virtual_scroll_config,
-                    wait_until=site.wait_until,
-                    simulate_user=site.simulate_user,
-                    user_agent_mode=site.user_agent_mode,
-                    c4a_script=site.c4a_script,
-                    exclude_social_media_links=site.exclude_social_media_links,
-                    exclude_external_links=site.exclude_external_links,
-                    title_keywords=site.title_keywords,
-                )
-                for post_url in post_urls:
-                    cid = generate()
-                    # Cross-run URL dedup — fetch 자체를 막아 대역폭·시간 절감.
-                    if (
-                        self._url_dedup is not None
-                        and self._url_dedup.has_seen(post_url, correlation_id=cid)
-                    ):
-                        stats.skipped_seen_url += 1
-                        continue
-                    stats.attempted += 1
-                    try:
-                        result = await self._crawler.fetch(
-                            post_url,
-                            correlation_id=cid,
-                            image_filter=site.image_filter,
-                            css_selector=site.css_selector,
-                            cookies=site.cookies,
-                            wait_for=site.wait_for,
-                            headers=site.headers,
-                            page_timeout=site.page_timeout,
-                            proxy=site.proxy,
-                            js_code=site.js_code,
-                            delay_before_return_html=site.delay_before_return_html,
-                            scan_full_page=site.scan_full_page,
-                            scroll_delay=site.scroll_delay,
-                            virtual_scroll_config=site.virtual_scroll_config,
-                            wait_until=site.wait_until,
-                            simulate_user=site.simulate_user,
-                            user_agent_mode=site.user_agent_mode,
-                            c4a_script=site.c4a_script,
-                            exclude_social_media_links=site.exclude_social_media_links,
-                            exclude_external_links=site.exclude_external_links,
-                        )
-                        if not (result.fit_markdown or "").strip():
-                            stats.skipped_empty += 1
-                            _logger.warning(
-                                "빈 게시글 스킵: %s", post_url,
-                                extra={"correlation_id": cid, "service": _SERVICE_NAME},
-                            )
-                            continue
-                        # 공지·인증벽·캡차·404 등 사용자 글 아닌 것 자동 제외.
-                        # dedup 보다 먼저 — 이상 페이지가 dedup SET 을 오염시키지 않게.
-                        validation = content_validator.validate(
-                            site_id, result.fit_markdown, post_url,
-                        )
-                        if not validation.is_real_user_post:
-                            if validation.kind == "sticky":
-                                stats.skipped_sticky += 1
-                            elif validation.kind in ("auth_wall", "captcha", "error"):
-                                stats.skipped_blocked += 1
-                            elif validation.kind in ("empty", "short"):
-                                stats.skipped_empty += 1
-                            else:
-                                stats.skipped_unknown += 1
-                            _logger.info(
-                                "validator 스킵 [%s]: %s — %s",
-                                validation.kind, post_url, validation.reason,
-                                extra={"correlation_id": cid, "service": _SERVICE_NAME},
-                            )
-                            continue
-                        if self._dedup.is_duplicate(result.fit_markdown, correlation_id=cid):
-                            stats.skipped_dedup += 1
-                            continue
-                        language = language_detector.detect(result.fit_markdown, correlation_id=cid)
-                        post_id = site.post_id_extractor(post_url)
-                        storage_result = self._storage.save(
-                            site_id=site_id,
-                            post_id=post_id,
-                            url=post_url,
-                            result=result,
-                            correlation_id=cid,
-                        )
-                        event = to_crawl_event(
-                            result,
-                            site_id=site_id,
-                            site=site,
-                            url=post_url,
-                            language=language,
-                            correlation_id=cid,
-                            s3_text_path=storage_result.s3_text_path,
-                            s3_image_paths=storage_result.s3_image_paths,
-                        )
-                        self._publisher.enqueue(event.to_json(), correlation_id=cid)
-                        stats.enqueued += 1
-                    except Exception as exc:
-                        stats.failed += 1
-                        _logger.error(
-                            "게시글 처리 실패: %s — %s", post_url, exc,
-                            extra={"correlation_id": cid, "service": _SERVICE_NAME},
-                            exc_info=True,
-                        )
-                        continue
-                    # LPUSH 성공 후 mark_seen — 실패해도 enqueued는 유지(다음 run에서 재발행 허용)
-                    try:
-                        self._dedup.mark_seen(result.fit_markdown, correlation_id=cid)
-                    except Exception as exc:
-                        _logger.warning(
-                            "dedup mark_seen 실패 (큐에는 이미 발행됨): %s — %s", post_url, exc,
-                            extra={"correlation_id": cid, "service": _SERVICE_NAME},
-                            exc_info=True,
-                        )
-                    # 성공 enqueue 후 URL 도 cross-run dedup 에 등록 — 다음 시간 run 에서 재시도 안 함.
-                    if self._url_dedup is not None:
-                        try:
-                            self._url_dedup.mark_seen(post_url, correlation_id=cid)
-                        except Exception as exc:
-                            _logger.warning(
-                                "url_dedup mark_seen 실패: %s — %s", post_url, exc,
-                                extra={"correlation_id": cid, "service": _SERVICE_NAME},
-                                exc_info=True,
-                            )
-
-            if self._progress_store is not None and job_id:
-                self._progress_store.mark_site_complete(
-                    job_id,
-                    site_id=site_id,
-                    completed_sites=site_idx + 1,
-                    total_sites=total_sites,
-                )
+            await self._process_site(
+                stats,
+                site_id=site_id,
+                site=site,
+                site_idx=site_idx,
+                total_sites=total_sites,
+                job_id=job_id,
+            )
 
         _logger.info(
             "파이프라인 완료: 시도=%d 큐=%d url중복=%d 본문중복=%d 빈=%d 공지=%d 차단=%d 미확인=%d 실패=%d",
@@ -390,6 +300,194 @@ class CrawlPipeline:
             extra={"correlation_id": "", "service": _SERVICE_NAME},
         )
         return stats
+
+    async def _process_site(
+        self,
+        stats: PipelineStats,
+        *,
+        site_id: str,
+        site: SiteConfig,
+        site_idx: int,
+        total_sites: int,
+        job_id: str,
+    ) -> None:
+        if self._progress_store is not None and job_id:
+            self._progress_store.mark_site_running(
+                job_id,
+                site_id=site_id,
+                completed_sites=site_idx,
+                total_sites=total_sites,
+            )
+        if site_idx > 0:
+            delay = _jittered(_INTER_SITE_DELAY_SECONDS)
+            _logger.debug(
+                "사이트 전환 휴식: %.1fs (다음=%s)", delay, site_id,
+                extra={"correlation_id": "", "service": _SERVICE_NAME},
+            )
+            await asyncio.sleep(delay)
+
+        options = CrawlOptions.from_site(site)
+        for board_idx, board_url in enumerate(site.board_urls):
+            await self._process_board(
+                stats,
+                site_id=site_id,
+                site=site,
+                board_url=board_url,
+                board_idx=board_idx,
+                options=options,
+            )
+
+        if self._progress_store is not None and job_id:
+            self._progress_store.mark_site_complete(
+                job_id,
+                site_id=site_id,
+                completed_sites=site_idx + 1,
+                total_sites=total_sites,
+            )
+
+    async def _process_board(
+        self,
+        stats: PipelineStats,
+        *,
+        site_id: str,
+        site: SiteConfig,
+        board_url: str,
+        board_idx: int,
+        options: CrawlOptions,
+    ) -> None:
+        if board_idx > 0:
+            await asyncio.sleep(_jittered(_INTER_BOARD_DELAY_SECONDS))
+        board_cid = generate()
+        post_urls = await _fetch_post_urls(
+            board_url, site.post_url_pattern, _MAX_POSTS_PER_BOARD,
+            correlation_id=board_cid,
+            options=options,
+        )
+        for post_url in post_urls:
+            await self._process_post(
+                stats,
+                site_id=site_id,
+                site=site,
+                post_url=post_url,
+                options=options,
+            )
+
+    async def _process_post(
+        self,
+        stats: PipelineStats,
+        *,
+        site_id: str,
+        site: SiteConfig,
+        post_url: str,
+        options: CrawlOptions,
+    ) -> None:
+        cid = generate()
+        if self._url_dedup is not None and self._url_dedup.has_seen(post_url, correlation_id=cid):
+            stats.skipped_seen_url += 1
+            return
+        stats.attempted += 1
+        try:
+            result = await self._crawler.fetch(
+                post_url,
+                correlation_id=cid,
+                **options.fetch_kwargs(),
+            )
+            if not (result.fit_markdown or "").strip():
+                stats.skipped_empty += 1
+                _logger.warning(
+                    "빈 게시글 스킵: %s", post_url,
+                    extra={"correlation_id": cid, "service": _SERVICE_NAME},
+                )
+                return
+
+            if self._should_skip_post(stats, site_id, post_url, result.fit_markdown, cid):
+                return
+            if self._dedup.is_duplicate(result.fit_markdown, correlation_id=cid):
+                stats.skipped_dedup += 1
+                return
+
+            language = language_detector.detect(result.fit_markdown, correlation_id=cid)
+            post_id = site.post_id_extractor(post_url)
+            storage_result = self._storage.save(
+                site_id=site_id,
+                post_id=post_id,
+                url=post_url,
+                result=result,
+                correlation_id=cid,
+            )
+            event = to_crawl_event(
+                result,
+                site_id=site_id,
+                site=site,
+                url=post_url,
+                language=language,
+                correlation_id=cid,
+                s3_text_path=storage_result.s3_text_path,
+                s3_image_paths=storage_result.s3_image_paths,
+            )
+            self._publisher.enqueue(event.to_json(), correlation_id=cid)
+            stats.enqueued += 1
+        except Exception as exc:
+            stats.failed += 1
+            _logger.error(
+                "게시글 처리 실패: %s — %s", post_url, exc,
+                extra={"correlation_id": cid, "service": _SERVICE_NAME},
+                exc_info=True,
+            )
+            return
+
+        self._mark_successful_enqueue(post_url, result.fit_markdown, cid)
+
+    def _should_skip_post(
+        self,
+        stats: PipelineStats,
+        site_id: str,
+        post_url: str,
+        markdown: str,
+        correlation_id: str,
+    ) -> bool:
+        validation = content_validator.validate(site_id, markdown, post_url)
+        if validation.is_real_user_post:
+            return False
+        if validation.kind == "sticky":
+            stats.skipped_sticky += 1
+        elif validation.kind in ("auth_wall", "captcha", "error"):
+            stats.skipped_blocked += 1
+        elif validation.kind in ("empty", "short"):
+            stats.skipped_empty += 1
+        else:
+            stats.skipped_unknown += 1
+        _logger.info(
+            "validator 스킵 [%s]: %s — %s",
+            validation.kind, post_url, validation.reason,
+            extra={"correlation_id": correlation_id, "service": _SERVICE_NAME},
+        )
+        return True
+
+    def _mark_successful_enqueue(
+        self,
+        post_url: str,
+        markdown: str,
+        correlation_id: str,
+    ) -> None:
+        try:
+            self._dedup.mark_seen(markdown, correlation_id=correlation_id)
+        except Exception as exc:
+            _logger.warning(
+                "dedup mark_seen 실패 (큐에는 이미 발행됨): %s — %s", post_url, exc,
+                extra={"correlation_id": correlation_id, "service": _SERVICE_NAME},
+                exc_info=True,
+            )
+        if self._url_dedup is None:
+            return
+        try:
+            self._url_dedup.mark_seen(post_url, correlation_id=correlation_id)
+        except Exception as exc:
+            _logger.warning(
+                "url_dedup mark_seen 실패: %s — %s", post_url, exc,
+                extra={"correlation_id": correlation_id, "service": _SERVICE_NAME},
+                exc_info=True,
+            )
 
 
 class CrawlScheduler:

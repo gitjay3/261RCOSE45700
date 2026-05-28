@@ -65,13 +65,28 @@ public class NotificationEventProcessor {
     }
 
     private void processEvent(Long id) {
-        transactionTemplate.executeWithoutResult(status -> {
+        NotificationWork work = loadWork(id);
+        if (work == null) {
+            return;
+        }
+
+        List<DeliveryAttempt> attempts = work.rules().stream()
+                .map(rule -> new DeliveryAttempt(
+                        rule.ruleId(),
+                        channelService.adapterFor(rule.type()).send(work.detection(), rule.config())))
+                .toList();
+
+        saveResults(id, attempts);
+    }
+
+    private NotificationWork loadWork(Long id) {
+        return transactionTemplate.execute(status -> {
             NotificationEvent event = eventRepository.findByIdFetched(id)
                     .orElseThrow(() -> new IllegalStateException("notification event 없음: " + id));
             Detection detection = event.getDetection();
             if (detection == null || !detection.isIllegal()) {
                 finish(event, NotificationEventStatus.SKIPPED, null);
-                return;
+                return null;
             }
 
             List<NotificationRule> rules = ruleRepository.findEnabledRules(event.getEventType());
@@ -81,21 +96,34 @@ public class NotificationEventProcessor {
 
             if (matchedRules.isEmpty()) {
                 finish(event, NotificationEventStatus.SKIPPED, null);
-                return;
+                return null;
             }
 
+            List<MatchedRule> matched = matchedRules.stream()
+                    .map(rule -> new MatchedRule(
+                            rule.getId(),
+                            rule.getChannel().getType(),
+                            channelService.readConfig(rule.getChannel())))
+                    .toList();
+            return new NotificationWork(detection, matched);
+        });
+    }
+
+    private void saveResults(Long eventId, List<DeliveryAttempt> attempts) {
+        transactionTemplate.executeWithoutResult(status -> {
+            NotificationEvent event = eventRepository.findByIdFetched(eventId)
+                    .orElseThrow(() -> new IllegalStateException("notification event 없음: " + eventId));
             boolean anySuccess = false;
             String lastError = null;
-            for (NotificationRule rule : matchedRules) {
-                NotificationSendResult result = channelService
-                        .adapterFor(rule.getChannel().getType())
-                        .send(detection, channelService.readConfig(rule.getChannel()));
-                saveDelivery(event, rule, result);
-                if (result.success()) {
+            for (DeliveryAttempt attempt : attempts) {
+                NotificationRule rule = ruleRepository.findById(attempt.ruleId())
+                        .orElseThrow(() -> new IllegalStateException("notification rule 없음: " + attempt.ruleId()));
+                saveDelivery(event, rule, attempt.result());
+                if (attempt.result().success()) {
                     anySuccess = true;
                     rule.getChannel().setLastSuccessAt(Instant.now());
                 } else {
-                    lastError = result.errorMessage();
+                    lastError = attempt.result().errorMessage();
                     rule.getChannel().setLastFailureAt(Instant.now());
                 }
             }
@@ -140,5 +168,24 @@ public class NotificationEventProcessor {
         event.setStatus(status);
         event.setLastError(error);
         event.setProcessedAt(Instant.now());
+    }
+
+    private record NotificationWork(
+            Detection detection,
+            List<MatchedRule> rules
+    ) {
+    }
+
+    private record MatchedRule(
+            Long ruleId,
+            NotificationChannelType type,
+            WebhookConfig config
+    ) {
+    }
+
+    private record DeliveryAttempt(
+            Long ruleId,
+            NotificationSendResult result
+    ) {
     }
 }

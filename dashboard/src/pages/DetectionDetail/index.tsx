@@ -13,6 +13,21 @@ import { PageContainer } from '@/layouts/PageContainer';
 import { useShortcut } from '@/lib/shortcuts';
 import { formatRelativeTime } from '@/lib/time';
 
+// crawler가 받아온 외부 URL이라 백엔드를 trust anchor로 두지만, defense-in-depth로
+// http(s) scheme만 통과시킴 (javascript:/data: 등 차단). regex 대신 WHATWG URL
+// parser를 사용 — 선행 control char/whitespace 등의 우회 케이스가 자동 정규화됨.
+// credential URL(`https://user:pass@evil.com`)도 phishing 벡터라 함께 차단.
+function isSafeHttpUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const schemeOk = u.protocol === 'https:' || u.protocol === 'http:';
+    const noCreds = u.username === '' && u.password === '';
+    return schemeOk && noCreds;
+  } catch {
+    return false;
+  }
+}
+
 export function DetectionDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id ? Number(params.id) : undefined;
@@ -21,28 +36,21 @@ export function DetectionDetailPage() {
   const { data, isLoading, error } = useDetectionQuery(id);
   if (error) throw error;
 
-  // crawler가 받아온 외부 URL이라 백엔드를 trust anchor로 두지만, defense-in-depth로
-  // http(s) scheme만 통과시킴 (javascript:/data: 등 차단). regex 대신 WHATWG URL
-  // parser를 사용 — 선행 control char/whitespace 등의 우회 케이스가 자동 정규화됨.
-  // credential URL(`https://user:pass@evil.com`)도 phishing 벡터라 함께 차단.
-  const isSafeHttpUrl = (raw: string) => {
-    try {
-      const u = new URL(raw);
-      const schemeOk = u.protocol === 'https:' || u.protocol === 'http:';
-      const noCreds = u.username === '' && u.password === '';
-      return schemeOk && noCreds;
-    } catch {
-      return false;
-    }
-  };
-
   const handleOpen = () => {
-    if (!data || !isSafeHttpUrl(data.postUrl)) return;
+    if (!data) return;
+    if (!data.postUrl || !isSafeHttpUrl(data.postUrl)) {
+      toast.error('원본 게시글 URL이 없습니다', { duration: 3000 });
+      return;
+    }
     window.open(data.postUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleCopy = async () => {
     if (!data) return;
+    if (!data.postUrl) {
+      toast.error('복사할 URL이 없습니다', { duration: 3000 });
+      return;
+    }
     try {
       await navigator.clipboard.writeText(data.postUrl);
       toast.success('링크 복사됨', { duration: 2000 });
@@ -86,7 +94,7 @@ export function DetectionDetailPage() {
 
       <section className="bg-card flex flex-col gap-3 rounded-lg border p-6">
         <header className="flex flex-wrap items-center gap-3">
-          <ConfidenceBadge score={data.confidence} isIllegal={data.isIllegal} />
+          <ConfidenceBadge score={data.confidence} tier={data.tier} isIllegal={data.isIllegal} />
           <TypeIcon type={data.type} />
           <span className="text-muted-foreground font-mono text-xs">
             {data.siteName}

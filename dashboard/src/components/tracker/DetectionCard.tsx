@@ -38,7 +38,7 @@ export function DetectionCard({ detection, visited = false, onSelect }: Detectio
     >
       <div className="flex flex-col gap-1.5 px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <ConfidenceBadge score={detection.confidence} isIllegal={detection.isIllegal} aria-hidden />
+          <ConfidenceBadge score={detection.confidence} tier={detection.tier} isIllegal={detection.isIllegal} aria-hidden />
           <TypeIcon type={detection.type} />
           <ChevronRight
             className="text-muted-foreground ml-auto size-4 shrink-0"

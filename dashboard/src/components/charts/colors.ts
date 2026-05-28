@@ -2,7 +2,7 @@ import type { DetectionType } from '@/types/api';
 
 /**
  * Tracker chart palette (UX Spec Step 8) — 식별 전용 색.
- * 의미적 위계 없이 채도/명도가 비슷하게 설계. 위험 시그널은 confidence 색이 담당.
+ * 의미적 위계 없이 채도/명도가 비슷하게 설계. 위험 시그널은 tier 기반 badge/tint가 담당.
  */
 const TYPE_TO_CHART_VAR: Record<DetectionType, string> = {
   매크로_판매: '--chart-1',

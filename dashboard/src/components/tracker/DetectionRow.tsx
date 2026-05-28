@@ -60,7 +60,7 @@ function DetectionRowImpl({
       )}
     >
       <TableCell className="w-[88px]">
-        <ConfidenceBadge score={detection.confidence} isIllegal={detection.isIllegal} />
+        <ConfidenceBadge score={detection.confidence} tier={detection.tier} isIllegal={detection.isIllegal} />
       </TableCell>
       <TableCell className="w-[170px]">
         <TypeIcon type={detection.type} />

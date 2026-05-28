@@ -19,18 +19,16 @@ public class StatsRepository {
     @Transactional(readOnly = true)
     public long countToday(LocalDate today) {
         Instant from = today.atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant to = from.plus(1, ChronoUnit.DAYS);
-        return (Long) em.createQuery(
-                "SELECT COUNT(d) FROM Detection d WHERE d.detectedAt >= :from AND d.detectedAt < :to AND d.confidence >= 0.70")
-                .setParameter("from", from)
-                .setParameter("to", to)
-                .getSingleResult();
+        return countInRange(from, from.plus(1, ChronoUnit.DAYS));
     }
 
     @Transactional(readOnly = true)
     public long countYesterday(LocalDate today) {
         Instant to = today.atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant from = to.minus(1, ChronoUnit.DAYS);
+        return countInRange(to.minus(1, ChronoUnit.DAYS), to);
+    }
+
+    private long countInRange(Instant from, Instant to) {
         return (Long) em.createQuery(
                 "SELECT COUNT(d) FROM Detection d WHERE d.detectedAt >= :from AND d.detectedAt < :to AND d.confidence >= 0.70")
                 .setParameter("from", from)

@@ -198,6 +198,38 @@ interface FilterBarProps {
 
 const ALL_VALUE = '__all__';
 
+interface FilterSelectOption {
+  value: string;
+  label: string;
+  className?: string;
+}
+
+interface FilterSelectProps {
+  value: string;
+  allLabel: string;
+  options: FilterSelectOption[];
+  onChange: (value: string) => void;
+  triggerClassName?: string;
+}
+
+function FilterSelect({ value, allLabel, options, onChange, triggerClassName }: FilterSelectProps) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className={triggerClassName}>
+        <SelectValue placeholder={allLabel} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL_VALUE}>{allLabel}</SelectItem>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value} className={o.className}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function FilterBar(props: FilterBarProps) {
   return (
     <>
@@ -208,71 +240,33 @@ function FilterBar(props: FilterBarProps) {
 }
 
 function DesktopFilterBar({ filter, onChange, onReset, active }: FilterBarProps) {
-  const sites = KNOWN_SOURCES;
+  const siteOptions = KNOWN_SOURCES.map((s) => ({ value: s, label: s, className: 'font-mono text-xs' }));
+  const typeOptions = TYPE_OPTIONS.map((t) => ({ value: t.value, label: t.label }));
+  const langOptions = LANG_OPTIONS.map((l) => ({ value: l.value, label: l.label }));
 
   return (
     <div className="bg-card hidden flex-wrap items-center gap-2 rounded-lg border p-3 md:flex">
-      <Select
+      <FilterSelect
         value={filter.site ?? ALL_VALUE}
-        onValueChange={(v) =>
-          onChange({ site: v === ALL_VALUE ? undefined : v })
-        }
-      >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="사이트" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>모든 사이트</SelectItem>
-          {sites.map((s) => (
-            <SelectItem key={s} value={s} className="font-mono text-xs">
-              {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
+        allLabel="모든 사이트"
+        options={siteOptions}
+        onChange={(v) => onChange({ site: v === ALL_VALUE ? undefined : v })}
+        triggerClassName="w-[180px]"
+      />
+      <FilterSelect
         value={filter.type ?? ALL_VALUE}
-        onValueChange={(v) =>
-          onChange({
-            type: v === ALL_VALUE ? undefined : (v as DetectionType),
-          })
-        }
-      >
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="유형" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>모든 유형</SelectItem>
-          {TYPE_OPTIONS.map((t) => (
-            <SelectItem key={t.value} value={t.value}>
-              {t.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
+        allLabel="모든 유형"
+        options={typeOptions}
+        onChange={(v) => onChange({ type: v === ALL_VALUE ? undefined : (v as DetectionType) })}
+        triggerClassName="w-[160px]"
+      />
+      <FilterSelect
         value={filter.lang ?? ALL_VALUE}
-        onValueChange={(v) =>
-          onChange({
-            lang: v === ALL_VALUE ? undefined : (v as Language),
-          })
-        }
-      >
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="언어" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>모든 언어</SelectItem>
-          {LANG_OPTIONS.map((l) => (
-            <SelectItem key={l.value} value={l.value}>
-              {l.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
+        allLabel="모든 언어"
+        options={langOptions}
+        onChange={(v) => onChange({ lang: v === ALL_VALUE ? undefined : (v as Language) })}
+        triggerClassName="w-[160px]"
+      />
       {active && (
         <Button
           variant="ghost"
@@ -309,7 +303,10 @@ function FilterChip({
 }
 
 function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) {
-  const sites = KNOWN_SOURCES;
+  const siteOptions = KNOWN_SOURCES.map((s) => ({ value: s, label: s, className: 'font-mono text-xs' }));
+  const typeOptions = TYPE_OPTIONS.map((t) => ({ value: t.value, label: t.label }));
+  const langOptions = LANG_OPTIONS.map((l) => ({ value: l.value, label: l.label }));
+
   const typeLabel = TYPE_OPTIONS.find((t) => t.value === filter.type)?.label;
   const langLabel = LANG_OPTIONS.find((l) => l.value === filter.lang)?.label;
 
@@ -338,79 +335,26 @@ function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) 
             </DrawerDescription>
           </DrawerHeader>
           <div className="flex flex-col gap-3 px-4 pb-2">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-fg-3 text-xs font-medium uppercase tracking-wide">
-                사이트
-              </span>
-              <Select
-                value={filter.site ?? ALL_VALUE}
-                onValueChange={(v) =>
-                  onChange({ site: v === ALL_VALUE ? undefined : v })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="모든 사이트" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_VALUE}>모든 사이트</SelectItem>
-                  {sites.map((s) => (
-                    <SelectItem key={s} value={s} className="font-mono text-xs">
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-fg-3 text-xs font-medium uppercase tracking-wide">
-                유형
-              </span>
-              <Select
-                value={filter.type ?? ALL_VALUE}
-                onValueChange={(v) =>
-                  onChange({
-                    type: v === ALL_VALUE ? undefined : (v as DetectionType),
-                  })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="모든 유형" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_VALUE}>모든 유형</SelectItem>
-                  {TYPE_OPTIONS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-fg-3 text-xs font-medium uppercase tracking-wide">
-                언어
-              </span>
-              <Select
-                value={filter.lang ?? ALL_VALUE}
-                onValueChange={(v) =>
-                  onChange({
-                    lang: v === ALL_VALUE ? undefined : (v as Language),
-                  })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="모든 언어" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_VALUE}>모든 언어</SelectItem>
-                  {LANG_OPTIONS.map((l) => (
-                    <SelectItem key={l.value} value={l.value}>
-                      {l.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
+            {(
+              [
+                { label: '사이트', options: siteOptions, value: filter.site, onChange: (v: string) => onChange({ site: v === ALL_VALUE ? undefined : v }) },
+                { label: '유형',   options: typeOptions,  value: filter.type, onChange: (v: string) => onChange({ type: v === ALL_VALUE ? undefined : (v as DetectionType) }) },
+                { label: '언어',   options: langOptions,  value: filter.lang, onChange: (v: string) => onChange({ lang: v === ALL_VALUE ? undefined : (v as Language) }) },
+              ] as const
+            ).map(({ label, options, value, onChange: onRowChange }) => (
+              <label key={label} className="flex flex-col gap-1.5">
+                <span className="text-fg-3 text-xs font-medium uppercase tracking-wide">
+                  {label}
+                </span>
+                <FilterSelect
+                  value={value ?? ALL_VALUE}
+                  allLabel={`모든 ${label}`}
+                  options={options as FilterSelectOption[]}
+                  onChange={onRowChange}
+                  triggerClassName="w-full"
+                />
+              </label>
+            ))}
           </div>
           <DrawerFooter>
             <Button onClick={onReset} variant="outline" disabled={!active}>

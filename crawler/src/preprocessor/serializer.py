@@ -30,4 +30,5 @@ def to_crawl_event(
         correlation_id=correlation_id,
         s3_text_path=s3_text_path,
         s3_image_paths=s3_image_paths or [],
+        post_url=url,
     )

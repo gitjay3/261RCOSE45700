@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from shared.interfaces.llm import LLMResponse, RateLimitError
+from shared.interfaces.llm import ALLOWED_DETECTION_TYPES, LLMResponse, RateLimitError
 from shared.structured_logger import get_logger
 
 try:
@@ -45,20 +45,20 @@ SYSTEM_PROMPT = (
     "- 기타: 위 카테고리에 해당 안 함 (합법 게시글 포함)\n\n"
     "한국어 외 본문 + 이미지 속 외국어 텍스트는 translated_text_ko에 자연스러운 한국어 번역을 포함. 한국어 원문은 null.\n"
     "이미지 첨부가 있고 분류에 의미 있게 기여했으면 image_observed=true.\n"
-    "reason_ko는 항상 한국어로 작성. 판단 근거를 1-2문장."
-)
-
-_ALLOWED_TYPES = (
-    "핵_치트", "사설서버", "불법프로그램_배포",
-    "계정_거래", "매크로_판매",
-    "리세마라", "현금화", "광고_도배",
-    "기타",
+    "reason_ko는 항상 한국어로 작성. 판단 근거를 1-2문장.\n\n"
+    "confidence는 불법 위험도가 아니라 선택한 type 분류의 신뢰도입니다. 다음 기준으로 0.01 단위 숫자를 사용하세요:\n"
+    "- 0.95-1.00: 본문에 명시적 판매/배포/거래 문구, 연락처, 가격, 다운로드 링크 등 직접 증거가 여러 개 있음\n"
+    "- 0.85-0.94: 핵심 위반 표현이 명확하지만 연락처·가격·링크 같은 보조 증거가 부족함\n"
+    "- 0.70-0.84: 위반 가능성이 높지만 맥락 의존적이거나 표현이 우회적임\n"
+    "- 0.50-0.69: 애매한 회색 영역. type은 추정하되 reason_ko에 불확실성을 명시\n"
+    "- 0.00-0.49: 해당 type 근거가 약함. 합법/무관 게시글이면 type=기타와 낮은 confidence를 사용\n"
+    "0.90 또는 0.95를 기본값처럼 반복하지 말고, 근거 강도에 맞춰 다양한 값을 선택하세요."
 )
 
 CLASSIFICATION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "enum": list(_ALLOWED_TYPES)},
+        "type": {"type": "string", "enum": sorted(ALLOWED_DETECTION_TYPES)},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         "reason_ko": {"type": "string"},
         "translated_text_ko": {"type": ["string", "null"]},
@@ -230,7 +230,7 @@ class LLMClient:
 
         # response_format=json_schema strict가 enforce하지만 방어적으로 검증.
         type_value = parsed.get("type")
-        if type_value not in _ALLOWED_TYPES:
+        if type_value not in ALLOWED_DETECTION_TYPES:
             raise ValueError(f"invalid type: {type_value}")
         confidence = parsed.get("confidence")
         if not isinstance(confidence, (int, float)) or not 0.0 <= float(confidence) <= 1.0:

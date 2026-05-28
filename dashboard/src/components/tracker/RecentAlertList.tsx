@@ -75,7 +75,7 @@ function AlertRow({ detection, onClick }: { detection: Detection; onClick: () =>
       {/* Mobile (< md) */}
       <div className="flex flex-col gap-1.5 px-4 py-3 md:hidden">
         <div className="flex items-center gap-2.5">
-          <ConfidenceBadge score={detection.confidence} isIllegal={detection.isIllegal} aria-hidden />
+          <ConfidenceBadge score={detection.confidence} tier={detection.tier} isIllegal={detection.isIllegal} aria-hidden />
           <TypeIcon type={detection.type} />
           <span
             className="text-fg-3 font-mono ml-auto text-xs tabular-nums"
@@ -107,7 +107,7 @@ function AlertRow({ detection, onClick }: { detection: Detection; onClick: () =>
           padding: 'var(--pad-alert-row-y) var(--pad-alert-row-x)',
         }}
       >
-        <ConfidenceBadge score={detection.confidence} isIllegal={detection.isIllegal} aria-hidden />
+        <ConfidenceBadge score={detection.confidence} tier={detection.tier} isIllegal={detection.isIllegal} aria-hidden />
         <TypeIcon type={detection.type} showLabel={false} />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span

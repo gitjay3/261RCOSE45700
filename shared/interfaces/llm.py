@@ -9,6 +9,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+# detection type enum 단일 정의 — llm_client / llm_classifier 양쪽에서 import.
+ALLOWED_DETECTION_TYPES: frozenset[str] = frozenset({
+    "핵_치트", "사설서버", "불법프로그램_배포",
+    "계정_거래", "매크로_판매",
+    "리세마라", "현금화", "광고_도배",
+    "기타",
+})
+
 
 @dataclass
 class LLMResponse:

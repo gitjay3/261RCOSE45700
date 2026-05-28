@@ -17,12 +17,12 @@ import time
 
 import redis
 
+from shared.config.redis_config import REDIS_KEY_SEEN_URLS
 from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "crawler")
 _logger = get_logger(__name__)
 
-_SEEN_URLS_KEY = "posts:seen_urls"
 _DEFAULT_TTL_SECONDS = 7 * 86400  # 7일
 
 
@@ -34,7 +34,7 @@ class UrlDedupChecker:
         redis_client: redis.Redis,
         *,
         ttl_seconds: int = _DEFAULT_TTL_SECONDS,
-        key: str = _SEEN_URLS_KEY,
+        key: str = REDIS_KEY_SEEN_URLS,
     ) -> None:
         self._redis = redis_client
         self._ttl = ttl_seconds

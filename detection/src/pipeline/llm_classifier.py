@@ -11,17 +11,10 @@ import os
 from datetime import datetime, timezone
 
 from detection.src.rate_limit.token_bucket import TokenBucket
-from shared.interfaces.llm import LLMInterface, LLMResponse
+from shared.interfaces.llm import ALLOWED_DETECTION_TYPES, LLMInterface, LLMResponse
 from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "detection")
-
-_ALLOWED_TYPES = frozenset({
-    "핵_치트", "사설서버", "불법프로그램_배포",
-    "계정_거래", "매크로_판매",
-    "리세마라", "현금화", "광고_도배",
-    "기타",
-})
 
 _logger = get_logger(__name__)
 
@@ -50,11 +43,17 @@ class LLMClassifier:
     def model_version(self) -> str:
         return self._model_version
 
+    @property
+    def model_name(self) -> str:
+        """'openai:{model}:{date}' 포맷에서 model 부분만 반환. CostCap.record 용."""
+        parts = self._model_version.split(":", 2)
+        return parts[1] if len(parts) >= 2 else self._model_version
+
     def classify(self, text: str, images: list[str] | None = None) -> LLMResponse:
         self._bucket.acquire()
         result = self._llm.classify(text, images)
 
-        if result.type not in _ALLOWED_TYPES:
+        if result.type not in ALLOWED_DETECTION_TYPES:
             raise ValueError(f"invalid type: {result.type}")
         if not 0.0 <= result.confidence <= 1.0:
             raise ValueError(f"confidence out of range: {result.confidence}")

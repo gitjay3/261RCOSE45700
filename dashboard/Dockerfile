@@ -52,6 +52,15 @@ RUN printf '%s\n' \
     '    index index.html;' \
     '    gzip on;' \
     '    gzip_types text/css application/javascript application/json image/svg+xml;' \
+    '    # Security headers — 브라우저 클릭재킹·MIME 스니핑·XSS 기본 방어.' \
+    '    add_header X-Content-Type-Options "nosniff" always;' \
+    '    add_header X-Frame-Options "DENY" always;' \
+    '    add_header Referrer-Policy "strict-origin-when-cross-origin" always;' \
+    '    # XSS Auditor는 레거시·버그 多 → 0으로 비활성(modern best practice).' \
+    '    add_header X-XSS-Protection "0" always;' \
+    '    # CSP: Vite 번들 기준 외부 출처 없음. style unsafe-inline은 shadcn/ui radix' \
+    '    # 인라인 스타일 대응. connect-src self: /api proxy 경유 동일 origin 호출만.' \
+    '    add_header Content-Security-Policy "default-src '"'"'self'"'"'; script-src '"'"'self'"'"'; style-src '"'"'self'"'"' '"'"'unsafe-inline'"'"'; img-src '"'"'self'"'"' data:; connect-src '"'"'self'"'"'; font-src '"'"'self'"'"'; frame-ancestors '"'"'none'"'"';" always;' \
     '    location /healthz { return 200 "ok\n"; add_header Content-Type text/plain; }' \
     '    # docker network embedded DNS — api 컨테이너 재시작 시 IP 갱신 (10s TTL).' \
     '    # resolver + 변수 기반 proxy_pass 패턴 없으면 nginx가 worker 시작 시 1회만' \

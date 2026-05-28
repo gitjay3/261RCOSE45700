@@ -26,7 +26,7 @@ public class Post {
 
     private String author;
 
-    @Column(name = "post_url", nullable = false, length = 1000)
+    @Column(name = "post_url", nullable = true, length = 1000)
     private String postUrl;
 
     @Column(length = 10)

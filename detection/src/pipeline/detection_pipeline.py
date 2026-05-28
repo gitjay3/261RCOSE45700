@@ -60,11 +60,7 @@ class DetectionPipeline:
 
         tier = self._tier_router.route(response.type)
 
-        model = (
-            self._classifier.model_version.split(":", 2)[1]
-            if ":" in self._classifier.model_version else "gpt-4o"
-        )
-        self._cost_cap.record(response.input_tokens, response.output_tokens, model)
+        self._cost_cap.record(response.input_tokens, response.output_tokens, self._classifier.model_name)
 
         if self._repository is not None:
             self._repository.save(

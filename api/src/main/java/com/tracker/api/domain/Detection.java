@@ -23,6 +23,9 @@ public class Detection {
     @Column(length = 50)
     private String type;
 
+    @Column(nullable = false, length = 2)
+    private String tier;
+
     @Column(nullable = false)
     private double confidence;
 

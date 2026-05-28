@@ -24,10 +24,8 @@ public class CrawlController {
     @Operation(summary = "수동 크롤링 트리거", description = "Redis crawl:trigger 채널에 PUBLISH. 완료까지 약 3분 소요.")
     public ResponseEntity<CrawlTriggerResponse> trigger(HttpServletRequest request) {
 
-        String correlationId = request.getHeader("X-Correlation-ID");
-        if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString();
-        }
+        String raw = request.getHeader("X-Correlation-ID");
+        String correlationId = (raw != null && !raw.isBlank()) ? raw : UUID.randomUUID().toString();
 
         crawlTriggerService.trigger(correlationId);
 

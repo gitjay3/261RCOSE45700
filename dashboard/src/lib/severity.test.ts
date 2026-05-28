@@ -45,6 +45,12 @@ describe('severityOfTier', () => {
   it('falls back to confidence for illegal detections without tier', () => {
     expect(severityOfDetection({ confidence: 0.95, isIllegal: true })).toBe('high');
     expect(severityOfDetection({ confidence: 0.7, isIllegal: true })).toBe('medium');
+    expect(severityOfDetection({ confidence: 0.3, isIllegal: true })).toBe('low');
+  });
+
+  it('uses tier over confidence when both present', () => {
+    expect(severityOfDetection({ tier: 'T1', confidence: 0.1, isIllegal: true })).toBe('high');
+    expect(severityOfDetection({ tier: 'T3', confidence: 0.99, isIllegal: true })).toBe('medium');
   });
 });
 

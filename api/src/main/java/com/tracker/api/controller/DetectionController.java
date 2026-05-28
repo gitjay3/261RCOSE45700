@@ -6,6 +6,7 @@ import com.tracker.api.service.DetectionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -33,18 +34,12 @@ public class DetectionController {
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String lang,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) int size,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             HttpServletRequest request) {
 
         var result = detectionService.getDetections(date, site, type, lang, page, size);
-
-        String correlationId = request.getHeader("X-Correlation-ID");
-        if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString();
-        }
-
         return ResponseEntity.ok()
-                .header("X-Correlation-ID", correlationId)
+                .header("X-Correlation-ID", resolveCorrelationId(request))
                 .body(result);
     }
 
@@ -55,14 +50,13 @@ public class DetectionController {
             HttpServletRequest request) {
 
         var result = detectionService.getDetectionById(id);
-
-        String correlationId = request.getHeader("X-Correlation-ID");
-        if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString();
-        }
-
         return ResponseEntity.ok()
-                .header("X-Correlation-ID", correlationId)
+                .header("X-Correlation-ID", resolveCorrelationId(request))
                 .body(result);
+    }
+
+    private static String resolveCorrelationId(HttpServletRequest request) {
+        String id = request.getHeader("X-Correlation-ID");
+        return (id != null && !id.isBlank()) ? id : UUID.randomUUID().toString();
     }
 }

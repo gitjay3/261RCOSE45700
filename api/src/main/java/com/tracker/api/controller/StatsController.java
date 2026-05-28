@@ -29,14 +29,11 @@ public class StatsController {
             HttpServletRequest request) {
 
         StatsResponse stats = statsService.getStats(period);
-
         String correlationId = request.getHeader("X-Correlation-ID");
-        if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString();
-        }
-
         return ResponseEntity.ok()
-                .header("X-Correlation-ID", correlationId)
+                .header("X-Correlation-ID",
+                        (correlationId != null && !correlationId.isBlank())
+                                ? correlationId : UUID.randomUUID().toString())
                 .body(stats);
     }
 }

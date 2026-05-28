@@ -3,10 +3,21 @@ import type {
   CrawlJobStatusResponse,
   CrawlTriggerResponse,
   DetectionListResponse,
+  NotificationChannel,
+  NotificationDelivery,
+  NotificationRule,
 } from '@/types/api';
 import { MOCK_DETECTIONS, buildStatsResponse, getDetectionById } from './data';
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
+
+const mockNotificationChannels: NotificationChannel[] = [];
+const mockNotificationRules: NotificationRule[] = [];
+const mockNotificationDeliveries: NotificationDelivery[] = [];
+
+function maskWebhookUrl(value: string) {
+  return `••••${value.slice(-6)}`;
+}
 
 export const handlers = [
   // GET /stats?period=weekly|monthly
@@ -117,4 +128,91 @@ export const handlers = [
     };
     return HttpResponse.json(response);
   }),
+
+  http.get(`${baseUrl}/notifications/channels`, () => (
+    HttpResponse.json(mockNotificationChannels)
+  )),
+
+  http.post(`${baseUrl}/notifications/channels`, async ({ request }) => {
+    const body = await request.json() as {
+      name: string;
+      type: NotificationChannel['type'];
+      webhookUrl: string;
+      enabled: boolean;
+    };
+    const now = new Date().toISOString();
+    const channel: NotificationChannel = {
+      id: mockNotificationChannels.length + 1,
+      name: body.name,
+      type: body.type,
+      enabled: body.enabled,
+      configPreview: maskWebhookUrl(body.webhookUrl),
+      lastTestedAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    mockNotificationChannels.unshift(channel);
+    return HttpResponse.json(channel, { status: 201 });
+  }),
+
+  http.post(`${baseUrl}/notifications/channels/:id/test`, ({ params }) => {
+    const id = Number(params.id);
+    const channel = mockNotificationChannels.find((item) => item.id === id);
+    if (channel) {
+      const now = new Date().toISOString();
+      channel.lastTestedAt = now;
+      channel.lastSuccessAt = now;
+      mockNotificationDeliveries.unshift({
+        id: mockNotificationDeliveries.length + 1,
+        detectionId: null,
+        channelId: channel.id,
+        channelName: channel.name,
+        status: 'SUCCESS',
+        responseCode: 200,
+        errorMessage: null,
+        attemptedAt: now,
+        sentAt: now,
+      });
+    }
+    return HttpResponse.json({ success: true, responseCode: 200, errorMessage: null });
+  }),
+
+  http.get(`${baseUrl}/notifications/rules`, () => (
+    HttpResponse.json(mockNotificationRules)
+  )),
+
+  http.post(`${baseUrl}/notifications/rules`, async ({ request }) => {
+    const body = await request.json() as {
+      name: string;
+      channelId: number;
+      enabled: boolean;
+      minConfidence: number | null;
+      minTier: NotificationRule['minTier'];
+      detectionType: NotificationRule['detectionType'];
+      sourceSiteName: string | null;
+    };
+    const channel = mockNotificationChannels.find((item) => item.id === body.channelId);
+    const now = new Date().toISOString();
+    const rule: NotificationRule = {
+      id: mockNotificationRules.length + 1,
+      name: body.name,
+      enabled: body.enabled,
+      channelId: body.channelId,
+      channelName: channel?.name ?? '알 수 없는 채널',
+      minConfidence: body.minConfidence,
+      minTier: body.minTier,
+      detectionType: body.detectionType,
+      sourceSiteName: body.sourceSiteName,
+      createdAt: now,
+      updatedAt: now,
+    };
+    mockNotificationRules.unshift(rule);
+    return HttpResponse.json(rule, { status: 201 });
+  }),
+
+  http.get(`${baseUrl}/notifications/deliveries`, () => (
+    HttpResponse.json(mockNotificationDeliveries)
+  )),
 ];

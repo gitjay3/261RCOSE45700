@@ -14,6 +14,9 @@ const DetectionDetailPage = lazy(() =>
 const StatsPage = lazy(() =>
   import('./pages/Stats').then((m) => ({ default: m.StatsPage })),
 );
+const NotificationsPage = lazy(() =>
+  import('./pages/Notifications').then((m) => ({ default: m.NotificationsPage })),
+);
 
 export const router = createBrowserRouter([
   {
@@ -25,6 +28,7 @@ export const router = createBrowserRouter([
       { path: 'detections', element: <DetectionListPage /> },
       { path: 'detections/:id', element: <DetectionDetailPage /> },
       { path: 'stats', element: <StatsPage /> },
+      { path: 'notifications', element: <NotificationsPage /> },
     ],
   },
 ]);

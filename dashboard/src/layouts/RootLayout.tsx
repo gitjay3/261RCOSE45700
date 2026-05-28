@@ -20,6 +20,7 @@ export function RootLayout() {
   useShortcut('g+d', () => navigate('/'));
   useShortcut('g+l', () => navigate('/detections'));
   useShortcut('g+s', () => navigate('/stats'));
+  useShortcut('g+n', () => navigate('/notifications'));
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   // "previous state in render" — 경로 바뀌면 drawer 닫힘 (effect 회피, DetectionListPage 패턴과 동일).

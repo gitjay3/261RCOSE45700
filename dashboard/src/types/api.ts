@@ -106,3 +106,56 @@ export interface CrawlJobStatusResponse {
 }
 
 export type StatsPeriod = 'weekly' | 'monthly';
+
+export type NotificationChannelType =
+  | 'GENERIC_WEBHOOK'
+  | 'DISCORD'
+  | 'GOOGLE_CHAT'
+  | 'SLACK_WORKFLOW'
+  | 'SLACK_WEBHOOK'
+  | 'TEAMS_WORKFLOW';
+
+export interface NotificationChannel {
+  id: number;
+  name: string;
+  type: NotificationChannelType;
+  enabled: boolean;
+  configPreview: string;
+  lastTestedAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationRule {
+  id: number;
+  name: string;
+  enabled: boolean;
+  channelId: number;
+  channelName: string;
+  minConfidence: number | null;
+  minTier: Tier | null;
+  detectionType: DetectionType | null;
+  sourceSiteName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationDelivery {
+  id: number;
+  detectionId: number | null;
+  channelId: number | null;
+  channelName: string | null;
+  status: 'SUCCESS' | 'FAILED' | 'SKIPPED';
+  responseCode: number | null;
+  errorMessage: string | null;
+  attemptedAt: string;
+  sentAt: string | null;
+}
+
+export interface NotificationTestResponse {
+  success: boolean;
+  responseCode: number | null;
+  errorMessage: string | null;
+}

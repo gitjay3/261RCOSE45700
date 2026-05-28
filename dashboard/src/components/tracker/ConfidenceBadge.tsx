@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import {
   SEVERITY_LABEL,
   formatScore,
+  riskScore,
   severityOf,
   severityOfDetection,
   severityOfTier,
@@ -46,15 +47,17 @@ export function ConfidenceBadge({
         ? severityOfTier(tier)
         : severityOf(score);
   const Icon = LEVEL_ICON[level];
-  const numText = formatScore(score);
-  const ariaScore = Number.isFinite(score)
-    ? Math.max(0, Math.min(1, score)).toFixed(2)
+  // tier가 있으면 Tier 우선 위험도 점수로 표시 — 숫자가 높을수록 실제로 위험.
+  const displayScore = tier ? riskScore(score, tier) : score;
+  const numText = formatScore(displayScore);
+  const ariaScore = Number.isFinite(displayScore)
+    ? Math.max(0, Math.min(1, displayScore)).toFixed(2)
     : '알 수 없음';
 
   return (
     <span
       role="status"
-      aria-label={`신뢰도 ${ariaScore} (${SEVERITY_LABEL[level]})`}
+      aria-label={`위험도 ${ariaScore} (${SEVERITY_LABEL[level]})`}
       className={cn(
         'inline-flex size-11 flex-col items-center justify-center gap-[3px] rounded-md font-mono leading-none',
         LEVEL_CHIP[level],

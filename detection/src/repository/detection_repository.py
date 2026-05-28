@@ -143,6 +143,18 @@ class DetectionRepository:
                 det_row = cur.fetchone()
                 detection_id = det_row[0] if det_row else None
 
+                if detection_id is not None:
+                    cur.execute(
+                        """
+                        INSERT INTO notification_events (
+                            event_type, detection_id, correlation_id, status, attempts, created_at
+                        )
+                        VALUES ('DETECTION_CREATED', %s, %s, 'PENDING', 0, NOW())
+                        ON CONFLICT (event_type, detection_id) DO NOTHING
+                        """,
+                        (detection_id, event.correlation_id),
+                    )
+
         if detection_id is None:
             _logger.info(
                 "detection 멱등 skip — 이미 저장됨 (post_id=%s, model_version=%s)",

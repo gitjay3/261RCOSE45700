@@ -74,6 +74,13 @@ def test_save_creates_sources_posts_detections(clean_db) -> None:
             assert float(det[6]) == pytest.approx(0.00197, rel=1e-3)
             assert det[7] == "openai:gpt-4o:2024-08-06"
 
+            cur.execute(
+                "SELECT event_type, status, correlation_id FROM notification_events WHERE detection_id=%s",
+                (detection_id,),
+            )
+            event_row = cur.fetchone()
+            assert event_row == ("DETECTION_CREATED", "PENDING", event.correlation_id)
+
 
 @requires_pg
 def test_save_t4_marks_is_illegal_false(clean_db) -> None:
@@ -112,6 +119,9 @@ def test_save_is_idempotent_on_same_model_version(clean_db) -> None:
                 "WHERE post_id IN (SELECT id FROM posts WHERE post_id_at_source=%s)",
                 (event.post_id,),
             )
+            assert cur.fetchone()[0] == 1
+
+            cur.execute("SELECT COUNT(*) FROM notification_events")
             assert cur.fetchone()[0] == 1
 
 

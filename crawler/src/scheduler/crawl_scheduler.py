@@ -8,6 +8,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import httpx
 import redis
 from apscheduler.events import EVENT_JOB_MISSED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -531,15 +532,45 @@ class CrawlScheduler:
                 },
             )
             return
+        activity: tuple[str, str] | None = None
+        exc_to_reraise: Exception | None = None
         async with self._run_lock:
             try:
-                await self._pipeline.run(job_id=job_id)
+                stats = await self._pipeline.run(job_id=job_id)
                 if job_id:
                     self._progress_store.mark_succeeded(job_id)
+                trigger = "수동" if job_id else "스케줄"
+                activity = (
+                    "CRAWL_COMPLETED",
+                    f"{trigger} 크롤링 완료 — 큐 {stats.enqueued}건 / 시도 {stats.attempted}건",
+                )
             except Exception as exc:
                 if job_id:
                     self._progress_store.mark_failed(job_id, message=str(exc))
-                raise
+                activity = ("CRAWL_FAILED", f"크롤링 실패: {exc}")
+                exc_to_reraise = exc
+
+        # lock 해제 후 HTTP 호출 — 최대 5초 타임아웃이 다음 크롤 스케줄에 영향 없도록.
+        if activity:
+            await self._post_activity(*activity)
+        if exc_to_reraise is not None:
+            raise exc_to_reraise
+
+    async def _post_activity(self, event_type: str, message: str) -> None:
+        api_url = os.environ.get("TRACKER_API_URL", "").rstrip("/")
+        if not api_url:
+            return
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                await client.post(
+                    f"{api_url}/api/activity",
+                    json={"eventType": event_type, "message": message},
+                )
+        except Exception as exc:
+            _logger.warning(
+                "activity POST 실패 (무시): %s", exc,
+                extra={"correlation_id": "", "service": _SERVICE_NAME},
+            )
 
     async def _cleanup_url_dedup_job(self) -> None:
         # sync redis 호출을 thread 로 오프로드 — 다른 async 잡(crawl_pipeline) 이벤트 루프 블락 방지.

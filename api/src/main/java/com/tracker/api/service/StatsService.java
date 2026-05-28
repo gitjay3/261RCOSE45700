@@ -117,10 +117,7 @@ public class StatsService {
     }
 
     private String buildCacheKey(String period) {
-        if (period != null) {
-            return "cache:detections:stats:" + period;
-        }
-        return "cache:detections:stats";
+        return "cache:detections:stats" + (period != null ? ":" + period : "");
     }
 
     private String normalizePeriod(String period) {

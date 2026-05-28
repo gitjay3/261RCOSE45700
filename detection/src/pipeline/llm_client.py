@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from shared.interfaces.llm import LLMResponse, RateLimitError
+from shared.interfaces.llm import ALLOWED_DETECTION_TYPES, LLMResponse, RateLimitError
 from shared.structured_logger import get_logger
 
 try:
@@ -55,17 +55,10 @@ SYSTEM_PROMPT = (
     "0.90 또는 0.95를 기본값처럼 반복하지 말고, 근거 강도에 맞춰 다양한 값을 선택하세요."
 )
 
-_ALLOWED_TYPES = (
-    "핵_치트", "사설서버", "불법프로그램_배포",
-    "계정_거래", "매크로_판매",
-    "리세마라", "현금화", "광고_도배",
-    "기타",
-)
-
 CLASSIFICATION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "enum": list(_ALLOWED_TYPES)},
+        "type": {"type": "string", "enum": sorted(ALLOWED_DETECTION_TYPES)},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         "reason_ko": {"type": "string"},
         "translated_text_ko": {"type": ["string", "null"]},
@@ -237,7 +230,7 @@ class LLMClient:
 
         # response_format=json_schema strict가 enforce하지만 방어적으로 검증.
         type_value = parsed.get("type")
-        if type_value not in _ALLOWED_TYPES:
+        if type_value not in ALLOWED_DETECTION_TYPES:
             raise ValueError(f"invalid type: {type_value}")
         confidence = parsed.get("confidence")
         if not isinstance(confidence, (int, float)) or not 0.0 <= float(confidence) <= 1.0:

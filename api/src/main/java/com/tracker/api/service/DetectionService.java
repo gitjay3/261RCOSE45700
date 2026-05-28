@@ -3,7 +3,6 @@ package com.tracker.api.service;
 import com.tracker.api.dto.DetectionListResponse;
 import com.tracker.api.dto.DetectionResponse;
 import com.tracker.api.exception.DetectionNotFoundException;
-import com.tracker.api.exception.InvalidFilterParamException;
 import com.tracker.api.repository.DetectionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,8 +24,6 @@ public class DetectionService {
     @Transactional(readOnly = true)
     public DetectionListResponse getDetections(
             LocalDate date, String site, String type, String lang, int page, int size) {
-
-        validatePagination(page, size);
 
         Instant fromTime = date != null ? date.atStartOfDay(ZoneOffset.UTC).toInstant() : null;
         Instant toTime   = date != null ? date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant() : null;
@@ -55,12 +52,4 @@ public class DetectionService {
                 .orElseThrow(() -> new DetectionNotFoundException(id));
     }
 
-    private void validatePagination(int page, int size) {
-        if (page < 0) {
-            throw new InvalidFilterParamException("page는 0 이상이어야 합니다.");
-        }
-        if (size < 1) {
-            throw new InvalidFilterParamException("size는 1 이상이어야 합니다.");
-        }
-    }
 }

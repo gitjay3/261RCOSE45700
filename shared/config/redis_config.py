@@ -8,6 +8,7 @@ REDIS_KEY_POSTS_PROCESSING: str = "posts:processing"
 REDIS_KEY_POSTS_DLQ: str = "posts:dlq"
 REDIS_KEY_POSTS_CORRUPT: str = "posts:corrupt"
 REDIS_KEY_POSTS_DEDUP: str = "posts:dedup"
+REDIS_KEY_SEEN_URLS: str = "posts:seen_urls"
 
 # 2026-05-27 PIVOT — OpenAI 멀티모달 LLM 단일 호출 rate limit key.
 REDIS_KEY_LLM_RATE_LIMIT_CLASSIFY: str = "llm:rate_limit:classify"

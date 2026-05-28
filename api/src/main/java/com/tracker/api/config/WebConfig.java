@@ -15,7 +15,7 @@ public class WebConfig implements WebMvcConfigurer {
                         "http://localhost:3000"
                 )
                 .allowedMethods("GET", "POST", "OPTIONS")
-                .allowedHeaders("*")
+                .allowedHeaders("Content-Type", "X-Correlation-ID")
                 .exposedHeaders("X-Correlation-ID")
                 .maxAge(3600);
     }

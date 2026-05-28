@@ -52,3 +52,19 @@ export function formatScore(score: number): string {
   const s = Math.max(0, Math.min(0.99, score));
   return s.toFixed(2).replace(/^0/, '');
 }
+
+/**
+ * Tier 우선 위험도 점수 — 숫자가 높을수록 실제로 위험.
+ * T1: 0.85~1.00 / T2: 0.65~0.80 / T3: 0.45~0.60
+ * Tier 내에서는 confidence가 높을수록 올라가되, T1은 항상 T2보다 높음.
+ */
+export function riskScore(
+  confidence: number,
+  tier: Tier | string | null | undefined,
+): number {
+  const c = Math.max(0, Math.min(1, Number.isFinite(confidence) ? confidence : 0));
+  if (tier === 'T1') return 0.85 + c * 0.15;
+  if (tier === 'T2') return 0.65 + c * 0.15;
+  if (tier === 'T3') return 0.45 + c * 0.15;
+  return c;
+}

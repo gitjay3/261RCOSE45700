@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatScore, severityOf } from './severity';
+import { formatScore, severityOf, severityOfDetection, severityOfTier } from './severity';
 
 describe('severityOf', () => {
   it('returns high for score >= 0.8', () => {
@@ -27,6 +27,24 @@ describe('severityOf', () => {
   it('returns low for non-finite inputs', () => {
     expect(severityOf(NaN)).toBe('low');
     expect(severityOf(Infinity)).toBe('low');
+  });
+});
+
+describe('severityOfTier', () => {
+  it('maps T1/T2 to high, T3 to medium, and T4 to low', () => {
+    expect(severityOfTier('T1')).toBe('high');
+    expect(severityOfTier('T2')).toBe('high');
+    expect(severityOfTier('T3')).toBe('medium');
+    expect(severityOfTier('T4')).toBe('low');
+  });
+
+  it('keeps legal detections low regardless of tier', () => {
+    expect(severityOfDetection({ tier: 'T1', isIllegal: false })).toBe('low');
+  });
+
+  it('falls back to confidence for illegal detections without tier', () => {
+    expect(severityOfDetection({ confidence: 0.95, isIllegal: true })).toBe('high');
+    expect(severityOfDetection({ confidence: 0.7, isIllegal: true })).toBe('medium');
   });
 });
 

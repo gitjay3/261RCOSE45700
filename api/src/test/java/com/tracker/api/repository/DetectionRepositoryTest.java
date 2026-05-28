@@ -78,6 +78,7 @@ class DetectionRepositoryTest {
         ReflectionTestUtils.setField(detection, "post", post);
         ReflectionTestUtils.setField(detection, "illegal", true);
         ReflectionTestUtils.setField(detection, "type", type);
+        ReflectionTestUtils.setField(detection, "tier", "T2");
         ReflectionTestUtils.setField(detection, "confidence", confidence);
         ReflectionTestUtils.setField(detection, "reason", "reason");
         ReflectionTestUtils.setField(detection, "modelVersion", "test-model");

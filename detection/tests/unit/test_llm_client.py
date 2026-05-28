@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from detection.src.pipeline import llm_client as llm_client_module
-from detection.src.pipeline.llm_client import CLASSIFICATION_SCHEMA, LLMClient
+from detection.src.pipeline.llm_client import CLASSIFICATION_SCHEMA, LLMClient, SYSTEM_PROMPT
 from shared.interfaces.llm import RateLimitError
 
 
@@ -68,6 +68,13 @@ def test_classify_text_only_uses_text_content_block() -> None:
     assert response.input_tokens == 100
     assert response.output_tokens == 40
     assert response.cost_usd > 0
+
+
+def test_system_prompt_defines_confidence_rubric() -> None:
+    assert "confidence는 불법 위험도가 아니라 선택한 type 분류의 신뢰도" in SYSTEM_PROMPT
+    assert "0.95-1.00" in SYSTEM_PROMPT
+    assert "0.50-0.69" in SYSTEM_PROMPT
+    assert "0.90 또는 0.95를 기본값처럼 반복하지 말고" in SYSTEM_PROMPT
 
 
 def test_classify_with_images_sends_multimodal_content(monkeypatch: pytest.MonkeyPatch) -> None:

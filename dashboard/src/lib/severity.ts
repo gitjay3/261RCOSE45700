@@ -1,7 +1,9 @@
 /**
- * Severity threshold + display 표준 — confidence([0,1])를 high/medium/low로 매핑.
+ * Severity display 표준 — detection tier를 high/medium/low로 매핑.
  * ConfidenceBadge / DetectionRow / RecentAlertList 등에서 동일 룰 공유.
  */
+
+import type { Tier } from '@/types/api';
 
 export type Severity = 'high' | 'medium' | 'low';
 
@@ -27,10 +29,21 @@ export function severityOf(score: number): Severity {
   return 'low';
 }
 
-/** isIllegal=false(T4 기타)이면 confidence와 무관하게 low — 합법 게시글에 경고 배지 방지. */
-export function severityOfDetection(d: { confidence: number; isIllegal: boolean }): Severity {
+export function severityOfTier(tier: Tier | string | null | undefined): Severity {
+  if (tier === 'T1' || tier === 'T2') return 'high';
+  if (tier === 'T3') return 'medium';
+  return 'low';
+}
+
+/** isIllegal=false(T4 기타)이면 tier와 무관하게 low — 합법 게시글에 경고 배지 방지. */
+export function severityOfDetection(d: {
+  tier?: Tier | string | null;
+  confidence?: number;
+  isIllegal: boolean;
+}): Severity {
   if (!d.isIllegal) return 'low';
-  return severityOf(d.confidence);
+  if (!d.tier && d.confidence !== undefined) return severityOf(d.confidence);
+  return severityOfTier(d.tier);
 }
 
 /** 0.95 → ".95" — 44px 칩 너비에 맞춤. 1.00은 0.99로 캡(폭 보호). NaN은 "—". */

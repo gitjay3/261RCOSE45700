@@ -31,7 +31,7 @@ class DetectionControllerTest {
 
     @Test
     void getDetections_returnsOk() throws Exception {
-        var mockDetection = new DetectionResponse(1L, true, "매크로_판매", 0.95,
+        var mockDetection = new DetectionResponse(1L, true, "매크로_판매", "T2", 0.95,
                 "이유", "원문", null, "http://example.com", "tailstar.net", "zh-CN",
                 "2026-04-24T14:30:00Z");
         when(detectionService.getDetections(any(), any(), any(), any(), eq(0), eq(20)))
@@ -42,6 +42,7 @@ class DetectionControllerTest {
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].isIllegal").value(true))
+                .andExpect(jsonPath("$.content[0].tier").value("T2"))
                 .andExpect(jsonPath("$.content[0].detectedAt").value("2026-04-24T14:30:00Z"))
                 .andExpect(header().exists("X-Correlation-ID"));
     }
@@ -104,7 +105,7 @@ class DetectionControllerTest {
 
     @Test
     void getDetection_returnsOk() throws Exception {
-        var mockDetection = new DetectionResponse(1L, true, "매크로_판매", 0.95,
+        var mockDetection = new DetectionResponse(1L, true, "매크로_판매", "T2", 0.95,
                 "이유", "원문", "번역문", "http://example.com", "tailstar.net", "zh-CN",
                 "2026-04-24T14:30:00Z");
         when(detectionService.getDetectionById(1L)).thenReturn(mockDetection);
@@ -114,6 +115,7 @@ class DetectionControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.isIllegal").value(true))
                 .andExpect(jsonPath("$.type").value("매크로_판매"))
+                .andExpect(jsonPath("$.tier").value("T2"))
                 .andExpect(jsonPath("$.confidence").value(0.95))
                 .andExpect(jsonPath("$.reason").value("이유"))
                 .andExpect(jsonPath("$.rawText").value("원문"))

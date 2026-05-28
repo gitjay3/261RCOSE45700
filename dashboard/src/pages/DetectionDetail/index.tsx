@@ -37,12 +37,20 @@ export function DetectionDetailPage() {
   };
 
   const handleOpen = () => {
-    if (!data || !isSafeHttpUrl(data.postUrl)) return;
+    if (!data) return;
+    if (!data.postUrl || !isSafeHttpUrl(data.postUrl)) {
+      toast.error('원본 게시글 URL이 없습니다', { duration: 3000 });
+      return;
+    }
     window.open(data.postUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleCopy = async () => {
     if (!data) return;
+    if (!data.postUrl) {
+      toast.error('복사할 URL이 없습니다', { duration: 3000 });
+      return;
+    }
     try {
       await navigator.clipboard.writeText(data.postUrl);
       toast.success('링크 복사됨', { duration: 2000 });
@@ -86,7 +94,7 @@ export function DetectionDetailPage() {
 
       <section className="bg-card flex flex-col gap-3 rounded-lg border p-6">
         <header className="flex flex-wrap items-center gap-3">
-          <ConfidenceBadge score={data.confidence} isIllegal={data.isIllegal} />
+          <ConfidenceBadge score={data.confidence} tier={data.tier} isIllegal={data.isIllegal} />
           <TypeIcon type={data.type} />
           <span className="text-muted-foreground font-mono text-xs">
             {data.siteName}

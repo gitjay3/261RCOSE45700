@@ -84,15 +84,18 @@ class DetectionRepository:
                 source_id = source_row[0]
 
                 # 2) posts UPSERT — (source_id, post_id_at_source) unique
+                # post_url: 비어 있으면 None 전달 — 기존 URL이 있을 경우 덮지 않음 (COALESCE).
+                post_url_value = event.post_url if event.post_url else None
                 cur.execute(
                     """
                     INSERT INTO posts (
-                        source_id, post_id_at_source, body, language, crawled_at
+                        source_id, post_id_at_source, body, language, crawled_at, post_url
                     )
-                    VALUES (%s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (source_id, post_id_at_source) DO UPDATE
                         SET body = EXCLUDED.body,
-                            language = EXCLUDED.language
+                            language = EXCLUDED.language,
+                            post_url = COALESCE(EXCLUDED.post_url, posts.post_url)
                     RETURNING id
                     """,
                     (
@@ -101,6 +104,7 @@ class DetectionRepository:
                         event.raw_text,
                         event.language,
                         crawled_at,
+                        post_url_value,
                     ),
                 )
                 post_row = cur.fetchone()

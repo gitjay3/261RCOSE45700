@@ -3,6 +3,7 @@ import type {
   DetectionType,
   Language,
   StatsResponse,
+  Tier,
 } from '@/types/api';
 
 /**
@@ -30,6 +31,18 @@ const SITES: SiteDef[] = [
   { name: '52pojie.cn', lang: 'zh-CN' },
   { name: 'bbs.nga.cn', lang: 'zh-CN' },
 ];
+
+const TYPE_TO_TIER: Record<DetectionType, Tier> = {
+  '핵_치트': 'T1',
+  '사설서버': 'T1',
+  '불법프로그램_배포': 'T1',
+  '계정_거래': 'T2',
+  '매크로_판매': 'T2',
+  '리세마라': 'T3',
+  '현금화': 'T3',
+  '광고_도배': 'T3',
+  '기타': 'T4',
+};
 
 interface SamplePost {
   type: DetectionType;
@@ -113,8 +126,9 @@ function generateMockDetections(count: number): Detection[] {
 
     detections.push({
       id: 1000 + i,
-      isIllegal: true,
+      isIllegal: TYPE_TO_TIER[sample.type] !== 'T4',
       type: sample.type,
+      tier: TYPE_TO_TIER[sample.type],
       confidence: Math.round(confidence * 100) / 100,
       reason: sample.reason,
       rawText,

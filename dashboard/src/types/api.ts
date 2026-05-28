@@ -10,16 +10,18 @@ export type DetectionType =
   | '기타';
 
 export type Language = 'ko' | 'zh-CN' | 'zh-TW';
+export type Tier = 'T1' | 'T2' | 'T3' | 'T4';
 
 export interface Detection {
   id: number;
   isIllegal: boolean;
   type: DetectionType;
+  tier: Tier;
   confidence: number;
   reason: string;
   rawText: string;
   translatedText: string | null;
-  postUrl: string;
+  postUrl: string | null;
   siteName: string;
   language: Language;
   detectedAt: string;

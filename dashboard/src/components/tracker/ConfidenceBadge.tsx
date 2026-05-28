@@ -6,13 +6,17 @@ import {
   formatScore,
   severityOf,
   severityOfDetection,
+  severityOfTier,
   type Severity,
 } from '@/lib/severity';
+import type { Tier } from '@/types/api';
 
 interface ConfidenceBadgeProps extends HTMLAttributes<HTMLSpanElement> {
   /** Confidence score 0~1 from LLM detection */
   score: number;
-  /** isIllegal=false(T4)이면 항상 low로 표시. 미전달 시 score만으로 판단. */
+  /** Detection tier. 전달되면 위험도 색상/아이콘 기준으로 사용. */
+  tier?: Tier | string | null;
+  /** isIllegal=false(T4)이면 항상 low로 표시. tier 미전달 시 score만으로 판단. */
   isIllegal?: boolean;
 }
 
@@ -30,14 +34,17 @@ const LEVEL_ICON = {
 
 export function ConfidenceBadge({
   score,
+  tier,
   isIllegal,
   className,
   ...rest
 }: ConfidenceBadgeProps) {
   const level =
     isIllegal !== undefined
-      ? severityOfDetection({ confidence: score, isIllegal })
-      : severityOf(score);
+      ? severityOfDetection({ tier, confidence: score, isIllegal })
+      : tier
+        ? severityOfTier(tier)
+        : severityOf(score);
   const Icon = LEVEL_ICON[level];
   const numText = formatScore(score);
   const ariaScore = Number.isFinite(score)

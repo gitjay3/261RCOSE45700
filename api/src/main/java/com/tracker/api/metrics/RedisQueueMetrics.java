@@ -26,6 +26,14 @@ public class RedisQueueMetrics implements MeterBinder {
              .tag("queue", "posts:dlq")
              .description("Redis posts:dlq 리스트 길이")
              .register(registry);
+        Gauge.builder("redis.queue.size", this, m -> getLen("posts:processing"))
+             .tag("queue", "posts:processing")
+             .description("Redis posts:processing 리스트 길이")
+             .register(registry);
+        Gauge.builder("redis.queue.size", this, m -> getLen("posts:corrupt"))
+             .tag("queue", "posts:corrupt")
+             .description("Redis posts:corrupt 리스트 길이")
+             .register(registry);
         Gauge.builder("redis.queue.scrape.failure", this, RedisQueueMetrics::getFailureState)
              .description("Redis queue metric scrape failure state; 1 means the last scrape failed")
              .register(registry);

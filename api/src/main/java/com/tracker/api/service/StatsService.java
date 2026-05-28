@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
@@ -82,7 +84,13 @@ public class StatsService {
 
         List<StatsResponse.TrendItem> trend = buildTrend(period, today);
 
-        return new StatsResponse(todayCount, delta, typeDistribution, siteDistribution, langDistribution, trend);
+        var sourceHealth = statsRepository.findSourceHealthRaw().stream()
+                .map(row -> new StatsResponse.SourceHealthItem(
+                        (String) row[0],
+                        toInstant(row[1])))
+                .toList();
+
+        return new StatsResponse(todayCount, delta, typeDistribution, siteDistribution, langDistribution, trend, sourceHealth);
     }
 
     private List<StatsResponse.TrendItem> buildTrend(String period, LocalDate today) {
@@ -118,6 +126,15 @@ public class StatsService {
 
     private String buildCacheKey(String period) {
         return "cache:detections:stats" + (period != null ? ":" + period : "");
+    }
+
+    private static Instant toInstant(Object value) {
+        if (value == null) return null;
+        if (value instanceof OffsetDateTime odt) return odt.toInstant();
+        if (value instanceof LocalDateTime ldt) return ldt.toInstant(ZoneOffset.UTC);
+        if (value instanceof java.sql.Timestamp ts) return ts.toInstant();
+        if (value instanceof Instant i) return i;
+        throw new IllegalStateException("Unexpected timestamp type: " + value.getClass());
     }
 
     private String normalizePeriod(String period) {

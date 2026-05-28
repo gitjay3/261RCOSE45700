@@ -62,6 +62,16 @@ public class StatsRepository {
 
     @Transactional(readOnly = true)
     @SuppressWarnings("unchecked")
+    public List<Object[]> findSourceHealthRaw() {
+        return (List<Object[]>) em.createNativeQuery(
+                "SELECT s.site_name, MAX(p.crawled_at) AS last_crawled_at " +
+                "FROM sources s LEFT JOIN posts p ON p.source_id = s.id " +
+                "GROUP BY s.site_name ORDER BY s.site_name")
+                .getResultList();
+    }
+
+    @Transactional(readOnly = true)
+    @SuppressWarnings("unchecked")
     public List<Object[]> findTrendRaw(Instant from, Instant to) {
         return em.createNativeQuery(
                 "SELECT CAST(detected_at AT TIME ZONE 'UTC' AS DATE) AS day, COUNT(*) AS cnt " +

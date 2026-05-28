@@ -47,7 +47,7 @@ export function DetectionListPage() {
     useDetectionFilter(PAGE_SIZE);
   const { data } = useDetectionsSuspenseQuery(filter);
 
-  const [focusedIdx, setFocusedIdx] = useState(0);
+  const [focusedIdx, setFocusedIdx] = useState(-1);
   const [visited, setVisited] = useState<Set<number>>(() => new Set());
 
   // "previous state in render" — filter ref가 바뀌면 focus 리셋 (effect 회피).
@@ -70,10 +70,10 @@ export function DetectionListPage() {
   };
 
   useShortcut('j', () => {
-    setFocusedIdx((idx) => Math.min(idx + 1, Math.max(items.length - 1, 0)));
+    setFocusedIdx((idx) => Math.min(idx < 0 ? 0 : idx + 1, Math.max(items.length - 1, 0)));
   });
   useShortcut('k', () => {
-    setFocusedIdx((idx) => Math.max(idx - 1, 0));
+    setFocusedIdx((idx) => Math.max(idx < 0 ? 0 : idx - 1, 0));
   });
   useShortcut('Enter', () => {
     const item = items[focusedIdx];

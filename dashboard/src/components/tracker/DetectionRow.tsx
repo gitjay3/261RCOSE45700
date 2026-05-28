@@ -53,8 +53,8 @@ function DetectionRowImpl({
       className={cn(
         'cursor-pointer',
         SEVERITY_TINT_CLASSES,
-        // focused는 severity보다 우선
-        'data-[focused]:bg-accent data-[focused]:ring-ring/40 data-[focused]:ring-2',
+        // focused는 severity보다 우선 — 키보드 네비 시만 표시, 중성 surface로
+        'data-[focused]:bg-secondary data-[focused]:ring-1 data-[focused]:ring-border',
         // visited는 셀 내부에만 — 행 자체 opacity는 ring 대비를 깎음
         '[&[data-visited]_td]:opacity-70',
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -53,8 +53,27 @@ export function ManualCrawlButton() {
   const [open, setOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [progressWindow, setProgressWindow] =
-    useState<CrawlProgressWindow | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+    useState<CrawlProgressWindow | null>(() => {
+      try {
+        const s = sessionStorage.getItem('crawl:progressWindow');
+        return s ? (JSON.parse(s) as CrawlProgressWindow) : null;
+      } catch { return null; }
+    });
+  const [jobId, setJobId] = useState<string | null>(
+    () => sessionStorage.getItem('crawl:jobId'),
+  );
+
+  const persistJobId = useCallback((id: string | null) => {
+    setJobId(id);
+    if (id) sessionStorage.setItem('crawl:jobId', id);
+    else sessionStorage.removeItem('crawl:jobId');
+  }, []);
+
+  const persistProgressWindow = useCallback((pw: CrawlProgressWindow | null) => {
+    setProgressWindow(pw);
+    if (pw) sessionStorage.setItem('crawl:progressWindow', JSON.stringify(pw));
+    else sessionStorage.removeItem('crawl:progressWindow');
+  }, []);
   const mutation = useCrawlTriggerMutation();
   const jobStatusQuery = useCrawlJobStatusQuery(jobId);
   const jobStatus = jobStatusQuery.data;
@@ -95,20 +114,20 @@ export function ManualCrawlButton() {
     if (!estimatedProgress?.isComplete && !isTerminal) return undefined;
 
     const timeoutId = window.setTimeout(() => {
-      setProgressWindow(null);
-      setJobId(null);
+      persistProgressWindow(null);
+      persistJobId(null);
     }, 3_000);
 
     return () => window.clearTimeout(timeoutId);
-  }, [estimatedProgress?.isComplete, isTerminal]);
+  }, [estimatedProgress?.isComplete, isTerminal, persistJobId, persistProgressWindow]);
 
   const handleConfirm = async () => {
     try {
       const result = await mutation.mutateAsync();
       const startedAtMs = Date.now();
       setNowMs(startedAtMs);
-      setJobId(result.jobId);
-      setProgressWindow({
+      persistJobId(result.jobId);
+      persistProgressWindow({
         startedAtMs,
         durationMs: estimatedMinutesToDurationMs(result.estimatedMinutes),
       });

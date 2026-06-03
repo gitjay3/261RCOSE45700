@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import redis
 
 from shared.config.redis_config import (
@@ -10,10 +12,23 @@ from shared.config.redis_config import (
 )
 
 
+def _mq_socket_timeout_sec() -> float:
+    block_timeout_sec = float(os.environ.get("BRPOPLPUSH_TIMEOUT", "30"))
+    return float(
+        os.environ.get("REDIS_MQ_SOCKET_TIMEOUT_SEC", str(block_timeout_sec + 10))
+    )
+
+
 def get_mq_client() -> redis.Redis:
     url = get_redis_url()
     return redis.from_url(
-        url, db=REDIS_MQ_DB, decode_responses=True, **redis_auth_kwargs(url)
+        url,
+        db=REDIS_MQ_DB,
+        decode_responses=True,
+        socket_timeout=_mq_socket_timeout_sec(),
+        socket_connect_timeout=5,
+        health_check_interval=30,
+        **redis_auth_kwargs(url),
     )
 
 

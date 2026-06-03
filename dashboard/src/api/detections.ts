@@ -87,7 +87,7 @@ export function useCrawlTriggerMutation() {
   return useMutation({
     mutationFn: triggerCrawl,
     onSuccess: () => {
-      // 트리거 후 목록·통계 stale 처리 → 다음 폴링에서 갱신
+      // 트리거 후 목록·대시보드 stale 처리 → 다음 폴링에서 갱신
       queryClient.invalidateQueries({ queryKey: detectionQueries.all() });
       queryClient.invalidateQueries({ queryKey: statsQueries.all() });
     },

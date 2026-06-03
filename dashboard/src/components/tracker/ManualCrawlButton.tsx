@@ -79,6 +79,7 @@ export function ManualCrawlButton() {
   const { mutate: logActivity } = useLogActivityMutation();
   const jobStatusQuery = useCrawlJobStatusQuery(jobId);
   const jobStatus = jobStatusQuery.data;
+  const jobStatusStatus = jobStatus?.status;
   const loggedJobIdRef = useRef<string | null>(null);
 
   const estimatedProgress = useMemo(() => {
@@ -90,7 +91,7 @@ export function ManualCrawlButton() {
     );
   }, [nowMs, progressWindow]);
 
-  const isTerminal = jobStatus ? TERMINAL_STATUSES.has(jobStatus.status) : false;
+  const isTerminal = jobStatusStatus ? TERMINAL_STATUSES.has(jobStatusStatus) : false;
   const progressPercent = jobStatus?.percent ?? estimatedProgress?.percent ?? 0;
   const isCrawlActive =
     jobStatus !== undefined
@@ -114,18 +115,18 @@ export function ManualCrawlButton() {
   }, [progressWindow]);
 
   useEffect(() => {
-    if (!isTerminal || !jobStatus || !jobId) return;
+    if (!isTerminal || !jobStatusStatus || !jobId) return;
     if (loggedJobIdRef.current === jobId) return;
     loggedJobIdRef.current = jobId;
 
-    if (jobStatus.status === 'succeeded') {
+    if (jobStatusStatus === 'succeeded') {
       logActivity({ eventType: 'MANUAL_CRAWL_COMPLETED', message: '수동 크롤링 완료' });
-    } else if (jobStatus.status === 'failed') {
+    } else if (jobStatusStatus === 'failed') {
       logActivity({ eventType: 'MANUAL_CRAWL_FAILED', message: '수동 크롤링 실패' });
-    } else if (jobStatus.status === 'skipped') {
+    } else if (jobStatusStatus === 'skipped') {
       logActivity({ eventType: 'MANUAL_CRAWL_SKIPPED', message: '수동 크롤링 스킵 — 이미 실행 중' });
     }
-  }, [isTerminal, jobStatus?.status, jobId, logActivity]);
+  }, [isTerminal, jobStatusStatus, jobId, logActivity]);
 
   useEffect(() => {
     if (!estimatedProgress?.isComplete && !isTerminal) return undefined;
@@ -205,7 +206,7 @@ export function ManualCrawlButton() {
           <DialogTitle>지금 크롤링하시겠습니까?</DialogTitle>
           <DialogDescription>
             모든 등록된 사이트에 대해 즉시 크롤링을 실행합니다. 일반적으로 3분
-            내외 소요되며, 완료되면 목록·통계가 다음 폴링 주기(최대 60초)에
+            내외 소요되며, 완료되면 대시보드·목록이 다음 폴링 주기(최대 60초)에
             자동 갱신됩니다.
           </DialogDescription>
         </DialogHeader>

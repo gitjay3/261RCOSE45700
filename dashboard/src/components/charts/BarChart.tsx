@@ -10,21 +10,30 @@ import {
 } from 'recharts';
 import { chartTooltipProps } from './tooltip';
 import { useIsMobile } from '@/lib/useIsMobile';
+import type { BarRectangleItem } from 'recharts/types/cartesian/Bar';
+
+type BarDatum = { name: string; value: number; site?: string };
 
 interface BarChartProps {
-  data: Array<{ name: string; value: number }>;
+  data: BarDatum[];
+  onSelect?: (entry: BarDatum) => void;
 }
 
 /**
  * 모바일에선 YAxis 폭/라벨 길이를 축소해 좁은 화면에서 카테고리 라벨이 차트 영역을
  * 침범하지 않게 한다.
  */
-export function BarChart({ data }: BarChartProps) {
+export function BarChart({ data, onSelect }: BarChartProps) {
   const isMobile = useIsMobile();
+  const interactive = Boolean(onSelect);
   const yAxisWidth = isMobile ? 84 : 140;
   const truncateAt = isMobile ? 10 : 18;
   const truncateLabel = (name: string) =>
     name.length > truncateAt ? name.slice(0, truncateAt - 1) + '…' : name;
+  const handleSelect = (entry: BarRectangleItem) => {
+    const payload = entry.payload as BarDatum | undefined;
+    if (payload) onSelect?.(payload);
+  };
 
   return (
     <ResponsiveContainer width="100%" height={isMobile ? 200 : 260}>
@@ -57,6 +66,8 @@ export function BarChart({ data }: BarChartProps) {
           fillOpacity={0.85}
           radius={[0, 4, 4, 0]}
           barSize={isMobile ? 12 : 14}
+          onClick={onSelect ? handleSelect : undefined}
+          style={interactive ? { cursor: 'pointer' } : undefined}
         >
           <LabelList
             dataKey="value"

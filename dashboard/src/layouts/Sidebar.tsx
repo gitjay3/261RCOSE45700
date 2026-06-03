@@ -1,12 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, BarChart3, BellRing, X } from 'lucide-react';
+import { LayoutDashboard, ListChecks, BellRing, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { to: '/', label: '대시보드', end: true, Icon: LayoutDashboard },
   { to: '/detections', label: '탐지 목록', end: false, Icon: ListChecks },
-  { to: '/stats', label: '통계', end: false, Icon: BarChart3 },
   { to: '/notifications', label: '알림 연동', end: false, Icon: BellRing },
 ] as const;
 

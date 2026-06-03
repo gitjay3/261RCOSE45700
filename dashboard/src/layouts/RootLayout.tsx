@@ -19,7 +19,6 @@ export function RootLayout() {
   const location = useLocation();
   useShortcut('g+d', () => navigate('/'));
   useShortcut('g+l', () => navigate('/detections'));
-  useShortcut('g+s', () => navigate('/stats'));
   useShortcut('g+n', () => navigate('/notifications'));
 
   const [drawerOpen, setDrawerOpen] = useState(false);

@@ -19,7 +19,7 @@ const SHORTCUTS: readonly ShortcutEntry[] = [
   { keys: ['?'], label: '단축키 안내', scope: '전역' },
   { keys: ['g', 'd'], label: '대시보드', scope: '전역' },
   { keys: ['g', 'l'], label: '탐지 목록', scope: '전역' },
-  { keys: ['g', 's'], label: '통계', scope: '전역' },
+  { keys: ['g', 'n'], label: '알림 연동', scope: '전역' },
   { keys: ['g', 't'], label: '수동 크롤링', scope: '전역' },
   { keys: ['j'], label: '다음 행', scope: '목록' },
   { keys: ['k'], label: '이전 행', scope: '목록' },

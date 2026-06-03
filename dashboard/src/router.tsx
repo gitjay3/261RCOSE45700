@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { RootLayout } from './layouts/RootLayout';
 import { DashboardPage } from './pages/Dashboard';
@@ -10,9 +10,6 @@ const DetectionListPage = lazy(() =>
 );
 const DetectionDetailPage = lazy(() =>
   import('./pages/DetectionDetail').then((m) => ({ default: m.DetectionDetailPage })),
-);
-const StatsPage = lazy(() =>
-  import('./pages/Stats').then((m) => ({ default: m.StatsPage })),
 );
 const NotificationsPage = lazy(() =>
   import('./pages/Notifications').then((m) => ({ default: m.NotificationsPage })),
@@ -27,7 +24,7 @@ export const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'detections', element: <DetectionListPage /> },
       { path: 'detections/:id', element: <DetectionDetailPage /> },
-      { path: 'stats', element: <StatsPage /> },
+      { path: 'stats', element: <Navigate to="/" replace /> },
       { path: 'notifications', element: <NotificationsPage /> },
     ],
   },

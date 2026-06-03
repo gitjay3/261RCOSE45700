@@ -205,7 +205,7 @@ export function ManualCrawlButton() {
           <DialogTitle>지금 크롤링하시겠습니까?</DialogTitle>
           <DialogDescription>
             모든 등록된 사이트에 대해 즉시 크롤링을 실행합니다. 일반적으로 3분
-            내외 소요되며, 완료되면 목록·통계가 다음 폴링 주기(최대 60초)에
+            내외 소요되며, 완료되면 대시보드·목록이 다음 폴링 주기(최대 60초)에
             자동 갱신됩니다.
           </DialogDescription>
         </DialogHeader>

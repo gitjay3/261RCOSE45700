@@ -59,7 +59,7 @@ src/
 │   ├── charts/     # Recharts 래퍼 (BarChart, LineChart, PieChart, colors)
 │   └── tracker/    # 도메인 컴포넌트 (DetectionRow, DetectionCard, BilingualPanel, ManualCrawlButton, NewDetectionsBadge, ConfidenceBadge, TypeIcon, ChartCard, EmptyState, ShortcutsCheatsheet, RecentAlertList, labels)
 ├── layouts/        # RootLayout / Sidebar(햄버거 drawer) / Topbar / PageContainer
-├── pages/          # Dashboard / DetectionList / DetectionDetail / Stats (route-level lazy)
+├── pages/          # Dashboard / DetectionList / DetectionDetail / Notifications (route-level lazy)
 ├── lib/            # detectionFilter / severity / statsView / time / shortcuts / sources / useIsMobile / utils
 ├── mocks/          # MSW v2 handlers + dev fixtures
 ├── main.tsx        # createRoot + ThemeProvider + QueryClientProvider + Router
@@ -71,7 +71,7 @@ src/
 - `j` / `k` — 목록 행 다음/이전
 - `enter` — 상세 진입, `esc` — 목록 복귀
 - `o` — 출처 URL 새 탭, `c` — 링크 복사
-- `g + d` — 대시보드, `g + l` — 탐지 목록, `g + s` — 통계, `g + t` — 수동 트리거
+- `g + d` — 대시보드, `g + l` — 탐지 목록, `g + n` — 알림 연동, `g + t` — 수동 트리거
 - `/` — 검색 focus, `?` — 단축키 cheatsheet
 
 모바일 < md 에서는 단축키 비활성, 햄버거 menu drawer + 카드 탭으로 대체.
@@ -80,7 +80,7 @@ src/
 
 - API 응답은 camelCase (Jackson). Spring `ProblemDetail` (RFC 9457) 기반 에러를 `ErrorBoundary` 에서 사용자 메시지로 변환.
 - `X-Correlation-ID` 응답 헤더는 axios interceptor 가 sessionStorage 에 캐시 → 사용자가 신고 시 콘솔에서 식별 가능.
-- 60초 폴링은 `useQuery({ refetchInterval: 60_000 })` 기본값. 통계 / 목록 모두 동일.
+- 60초 폴링은 `useQuery({ refetchInterval: 60_000 })` 기본값. 대시보드 / 목록 모두 동일.
 
 ## Story 4-7 모바일 지원 (PR #41 머지)
 

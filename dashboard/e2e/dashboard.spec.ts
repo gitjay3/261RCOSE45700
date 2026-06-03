@@ -29,6 +29,30 @@ test.describe('Dashboard journey', () => {
     expect(totalAfter).not.toBe(totalBefore);
   });
 
+  test('drills through from dashboard hotspots to filtered list', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('text=오늘의 탐지 현황');
+
+    await page.getByRole('button', { name: '핵·치트 tailstar.net 탐지 목록 보기 — 1건' }).click();
+    await expect(page).toHaveURL(/\/detections\?site=.*&type=|\/detections\?type=.*&site=/);
+    await expect(page.getByRole('heading', { name: '탐지 목록' })).toBeVisible();
+    await expect(page.getByText(/필터 적용:/)).toBeVisible();
+
+    await page.goto('/');
+    await page.getByRole('button', { name: /^tailstar.net \d+$/ }).click();
+    await expect(page).toHaveURL(/\/detections\?site=tailstar\.net/);
+    await expect(page.getByRole('heading', { name: '탐지 목록' })).toBeVisible();
+  });
+
+  test('drills through from trend date to dated list', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('text=오늘의 탐지 현황');
+
+    await page.locator('button[aria-label$="탐지 목록 보기"]').first().click();
+    await expect(page).toHaveURL(/\/detections\?date=\d{4}-\d{2}-\d{2}/);
+    await expect(page.getByRole('heading', { name: '탐지 목록' })).toBeVisible();
+  });
+
   test('opens shortcuts cheatsheet on ?', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('text=오늘의 탐지 현황');
@@ -41,13 +65,15 @@ test.describe('Dashboard journey', () => {
     await expect(page.getByRole('dialog')).toContainText('수동 크롤링');
   });
 
-  test('manual trigger surfaces NewDetectionsBadge', async ({ page }) => {
+  test('manual trigger surfaces crawl progress', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('text=오늘의 탐지 현황');
     await page.getByRole('button', { name: /수동 크롤링/ }).click();
     await expect(page.getByRole('dialog', { name: '지금 크롤링하시겠습니까?' })).toBeVisible();
     await page.getByRole('button', { name: '실행' }).click();
-    // since=triggered 응답이 도착하면 Topbar에 "N건 새로 들어옴" 배지 등장.
-    await expect(page.getByText(/건 새로 들어옴$/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('크롤링 중')).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole('dialog', { name: '지금 크롤링하시겠습니까?' }).getByText('38% · bahamut 처리 중'),
+    ).toBeVisible({ timeout: 10_000 });
   });
 });

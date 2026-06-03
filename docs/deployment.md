@@ -228,6 +228,8 @@ REDIS_URL=redis://redis:6379
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_MQ_DB=0
+# detection BRPOPLPUSH 대기보다 길게 설정해야 Redis read timeout으로 consumer가 종료되지 않음
+REDIS_MQ_SOCKET_TIMEOUT_SEC=40
 REDIS_DEDUP_DB=1
 REDIS_RATELIMIT_DB=2
 REDIS_CACHE_DB=3

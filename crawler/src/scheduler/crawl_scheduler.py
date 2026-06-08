@@ -621,7 +621,9 @@ class CrawlPipeline:
             )
 
         _logger.info(
-            "파이프라인 완료: 보드=%d 리스팅발견=%d 리스팅선택=%d P0=%d P1=%d P2=%d P3=%d kw매칭=%d kw미매칭=%d 시도=%d 큐=%d url중복=%d 본문중복=%d 빈=%d 공지=%d 상태=%d 미확인=%d 실패=%d",
+            "파이프라인 완료: 보드=%d 리스팅발견=%d 리스팅선택=%d"
+            " P0=%d P1=%d P2=%d P3=%d kw매칭=%d kw미매칭=%d"
+            " 시도=%d 큐=%d url중복=%d 본문중복=%d 빈=%d 공지=%d 상태=%d 미확인=%d 실패=%d",
             stats.listing_boards,
             stats.listing_discovered_total,
             stats.listing_urls_selected,
@@ -765,7 +767,8 @@ class CrawlPipeline:
         stats.selected_p2 += sum(1 for c in selected_candidates if c.priority_bucket == "P2")
         stats.selected_p3 += sum(1 for c in selected_candidates if c.priority_bucket == "P3")
         _logger.info(
-            "게시판 후보 선택: site=%s board=%s discovered=%d selected=%d P0=%d P1=%d P2=%d P3=%d kw_matched=%d kw_unmatched=%d limit=%d",
+            "게시판 후보 선택: site=%s board=%s discovered=%d selected=%d"
+            " P0=%d P1=%d P2=%d P3=%d kw_matched=%d kw_unmatched=%d limit=%d",
             site_id, board_url,
             listing.discovered_total, len(selected_candidates),
             sum(1 for c in selected_candidates if c.priority_bucket == "P0"),

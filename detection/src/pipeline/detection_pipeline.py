@@ -29,6 +29,22 @@ _SERVICE_NAME = os.environ.get("SERVICE_NAME", "detection")
 _logger = get_logger(__name__)
 
 
+def _classification_images(event: CrawlEvent) -> list[str]:
+    """분류기에 전달할 이미지 후보.
+
+    S3 archive 경로는 현재 presigned URL이 아니면 LLMClient가 스킵한다. 따라서 원본
+    HTTP 이미지 URL을 함께 보존해, S3 업로드가 켜져도 비전 입력이 조용히 사라지지
+    않도록 한다. 순서는 즉시 사용 가능한 원본 URL 우선, 보관 경로 후순위.
+    """
+    images: list[str] = []
+    seen: set[str] = set()
+    for image in [*event.image_urls, *event.s3_image_paths]:
+        if image and image not in seen:
+            images.append(image)
+            seen.add(image)
+    return images
+
+
 class DetectionPipeline:
     def __init__(
         self,
@@ -49,7 +65,7 @@ class DetectionPipeline:
 
         self._cost_cap.check_and_hold()
 
-        images: list[str] = list(event.s3_image_paths or event.image_urls or [])
+        images = _classification_images(event)
 
         response = self._retry_handler.execute_with_retry(
             lambda: self._classifier.classify(

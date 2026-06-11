@@ -37,11 +37,20 @@ class QueueConsumer:
 
     def run_once(self) -> bool:
         """단일 메시지 소비 시도. 메시지 있으면 True, timeout이면 False 반환."""
-        message: str | None = self._redis.brpoplpush(
-            REDIS_KEY_POSTS_QUEUE,
-            REDIS_KEY_POSTS_PROCESSING,
-            timeout=_BRPOPLPUSH_TIMEOUT,
-        )
+        try:
+            message: str | None = self._redis.brpoplpush(
+                REDIS_KEY_POSTS_QUEUE,
+                REDIS_KEY_POSTS_PROCESSING,
+                timeout=_BRPOPLPUSH_TIMEOUT,
+            )
+        except (redis.TimeoutError, redis.ConnectionError) as exc:
+            _logger.warning(
+                "Redis 큐 대기 중 연결 오류 — consumer 루프 유지: %s",
+                exc,
+                extra={"correlation_id": "", "service": _SERVICE_NAME},
+            )
+            return False
+
         if message is None:
             return False
 

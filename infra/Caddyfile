@@ -5,6 +5,14 @@
 #   1. DNS A 레코드 tracker.o-r.kr → EC2 public IP (전파 완료)
 #   2. EC2 보안그룹 인바운드 80, 443 = 0.0.0.0/0 (ACME challenge + 사용자 접속)
 
+{
+    # Chrome 일부 네트워크에서 HTTP/3 asset fetch가 ERR_CONNECTION_RESET으로 끊겨
+    # dashboard JS chunk 로딩에 실패한 사례가 있어 h1/h2만 사용한다.
+    servers {
+        protocols h1 h2
+    }
+}
+
 tracker.o-r.kr {
     # docker network `tracker-net` 안에서 dashboard 컨테이너의 :80으로 reverse proxy.
     # caddy:2-alpine은 기본적으로 컨테이너 시작 시 upstream을 lazy resolve.

@@ -202,11 +202,11 @@ sudo chown root:root /opt/app/secrets
 # 시크릿 파일 — 평문 1줄 (개행 없음)
 echo -n "<openai-api-key>" | sudo tee /opt/app/secrets/openai_api_key >/dev/null
 echo -n "<rds-password>"   | sudo tee /opt/app/secrets/db_password    >/dev/null
-sudo chmod 600 /opt/app/secrets/*
-# detection(UID 1001)이 openai_api_key를 읽어야 하므로 소유자를 1001로 설정.
-# api(Spring Boot)는 root로 실행되므로 db_password는 root:root 유지.
-sudo chown 1001:1001 /opt/app/secrets/openai_api_key
-sudo chown root:root /opt/app/secrets/db_password
+echo -n "<redis-password>" | sudo tee /opt/app/secrets/redis_password >/dev/null
+# /opt/app/secrets 디렉토리 자체가 root 전용(700)이므로 호스트 일반 사용자는 접근 불가.
+# 컨테이너는 appuser(UID 1001)로 실행되며 /run/secrets/*를 읽어야 하므로 파일은 read-only로 둔다.
+sudo chown root:root /opt/app/secrets/*
+sudo chmod 0444 /opt/app/secrets/*
 
 # 비-시크릿 환경 (chmod 600 권장)
 sudo tee /opt/app/.env <<'EOF'
@@ -221,12 +221,15 @@ DB_USER=tracker_user
 DB_SSL_MODE=require
 
 # -------- Redis --------
-# Python 서비스(crawler, detection)는 REDIS_URL 단일 변수를 사용 — compose 내부 호스트네임 `redis`
+# Python 서비스(crawler, detection)는 REDIS_URL 단일 변수를 사용 — compose 내부 호스트네임 `redis`.
+# REDIS_PASSWORD는 /run/secrets/redis_password에서 secret-shim이 주입한다.
 REDIS_URL=redis://redis:6379
 # Spring Boot API는 host/port 별도 사용
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_MQ_DB=0
+# detection BRPOPLPUSH 대기보다 길게 설정해야 Redis read timeout으로 consumer가 종료되지 않음
+REDIS_MQ_SOCKET_TIMEOUT_SEC=40
 REDIS_DEDUP_DB=1
 REDIS_RATELIMIT_DB=2
 REDIS_CACHE_DB=3
@@ -242,12 +245,35 @@ LLM_RATE_LIMIT_CAPACITY=60
 LLM_RATE_LIMIT_REFILL_PER_SEC=1
 LLM_RATE_LIMIT_MAX_WAIT_SEC=120
 
+# -------- Notifications --------
+# 운영에서는 32자 이상 난수 사용. 예: openssl rand -base64 32
+NOTIFICATION_ENCRYPTION_KEY=<notification-encryption-key>
+
 # -------- AWS --------
 AWS_REGION=us-east-1
 S3_BUCKET_NAME=<bucket-name>
 # S3 업로드 활성 여부 (crawler/src/storage.py). 학생 IAM이 Crawler EC2에 IAM Role
 # attach 불가능 → 첫 배포에는 false 권장, IAM Role 확보 후 true로 변경
 ENABLE_S3_UPLOAD=false
+
+# -------- Crawler 운영 profile --------
+# EC2 1대 + RDS 1대 기준. listing 후보 폭은 확보하고 detail fetch는 priority budget으로 제어.
+CRAWL_INTERVAL_MINUTES=60
+MAX_POSTS_PER_BOARD=30
+CRAWL_PRIORITY_BUDGET_ENABLED=true
+CRAWL_P3_DEFAULT_CAP_PER_BOARD=1
+CRAWL_P3_MIXED_CAP_PER_BOARD=5
+CRAWL_P3_52POJIE_CAP_PER_BOARD=1
+CRAWL_DETAIL_FETCH_CONCURRENCY=3
+CRAWL_DETAIL_SOURCE_CONCURRENCY=dcard=1,dcard_online=1,52pojie=1
+CRAWL_DETAIL_FETCH_STAGGER_SECONDS=0.25
+# Dcard/52pojie 차단은 reason 기록 후 통과. retry/cooldown은 운영 기본 off.
+CRAWL_DETAIL_CLOUDFLARE_BACKOFF_RETRIES=0
+CRAWL_DETAIL_CLOUDFLARE_BACKOFF_SECONDS=0
+CRAWL_DETAIL_SOURCE_COOLDOWN_SECONDS=0
+CRAWL_DETAIL_CHALLENGE_COOLDOWN_SECONDS=0
+INTER_SITE_DELAY_SECONDS=15
+INTER_BOARD_DELAY_SECONDS=3
 
 LOG_LEVEL=INFO
 EOF
@@ -257,8 +283,8 @@ sudo chmod 600 /opt/app/.env
 > `SERVICE_NAME`은 compose 파일에서 서비스별로 주입되므로 `.env`에 두지 않습니다.
 >
 > ⚠️ **위 env 템플릿 누락 시 첫 배포 실패 패턴**:
-> - `REDIS_URL` 누락 → crawler/detection가 `redis://localhost:6379` default로 떨어져 docker network 내부 redis 접속 실패. healthcheck 실패 → 자동 롤백.
-> - `/opt/app/secrets/openai_api_key` 누락 또는 소유자가 root:root → detection(UID 1001)이 secret-shim에서 읽지 못해 `OPENAI_API_KEY` 미설정으로 실패. healthcheck 실패 → 자동 롤백. (`sudo chown 1001:1001 /opt/app/secrets/openai_api_key` 필수)
+> - `REDIS_URL` 누락 또는 Redis password 누락 → crawler/detection가 Redis 인증 실패. healthcheck 실패 → 자동 롤백.
+> - `/opt/app/secrets/*` 누락 또는 `0400 root:root`처럼 appuser가 읽을 수 없는 mode → secret-shim이 해당 secret을 건너뜀. healthcheck 실패 → 자동 롤백.
 > - `DB_HOST_PORT` 누락은 default `:5432`로 rescue됨 (subtle bug, 표준 포트만 안전).
 
 ### 2.7 기존 EC2 VARCO → OpenAI 전환
@@ -269,8 +295,8 @@ sudo chmod 600 /opt/app/.env
 ```bash
 # 1) 새 OpenAI secret 작성 (개행 없는 1줄)
 echo -n "<openai-api-key>" | sudo tee /opt/app/secrets/openai_api_key >/dev/null
-sudo chmod 600 /opt/app/secrets/openai_api_key
 sudo chown root:root /opt/app/secrets/openai_api_key
+sudo chmod 0444 /opt/app/secrets/openai_api_key
 
 # 2) /opt/app/.env에서 VARCO_* 항목 제거 후 LLM_* 항목 추가/확인
 sudo nano /opt/app/.env
@@ -294,7 +320,7 @@ fi
 ## 3. 시크릿 추가 / 회전
 
 ### 새 시크릿 추가
-1. EC2: `/opt/app/secrets/<name>` 작성 (chmod 600, owner root).
+1. EC2: `/opt/app/secrets/<name>` 작성 (chmod 0444, owner root:root).
 2. `infra/compose.prod.yml`의 `secrets:` 블록 + 사용 service의 `secrets:` 리스트에 추가.
 3. main 머지 → 자동 배포.
 4. shim이 `<NAME>` 환경변수로 자동 노출 (대문자 변환, dash/dot → underscore).

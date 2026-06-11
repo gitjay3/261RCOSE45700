@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import type {
   CrawlJobStatusResponse,
+  CrawlPipelineStatsResponse,
   CrawlTriggerResponse,
   DetectionListResponse,
   NotificationChannel,
@@ -46,6 +47,7 @@ export const handlers = [
   http.get(`${baseUrl}/detections`, ({ request }) => {
     const url = new URL(request.url);
     const date = url.searchParams.get('date');
+    const range = url.searchParams.get('range');
     const site = url.searchParams.get('site');
     const type = url.searchParams.get('type');
     const lang = url.searchParams.get('lang');
@@ -56,6 +58,12 @@ export const handlers = [
 
     if (date) {
       filtered = filtered.filter((d) => d.detectedAt.startsWith(date));
+    } else if (range === '7d' || range === '30d') {
+      const days = range === '7d' ? 7 : 30;
+      const from = new Date();
+      from.setHours(0, 0, 0, 0);
+      from.setDate(from.getDate() - (days - 1));
+      filtered = filtered.filter((d) => Date.parse(d.detectedAt) >= from.getTime());
     }
     if (site) {
       filtered = filtered.filter((d) => d.siteName === site);
@@ -109,6 +117,32 @@ export const handlers = [
       statusUrl: '/api/crawl/jobs/mock-crawl-job',
     };
     return HttpResponse.json(response, { status: 202 });
+  }),
+
+  // GET /crawl/stats
+  http.get(`${baseUrl}/crawl/stats`, () => {
+    const response: CrawlPipelineStatsResponse = {
+      listingBoards: 14,
+      listingDiscoveredTotal: 182,
+      listingUrlsSelected: 109,
+      listingKeywordMatched: 43,
+      listingKeywordUnmatched: 69,
+      selectedP0: 0,
+      selectedP1: 4,
+      selectedP2: 48,
+      selectedP3: 61,
+      attempted: 98,
+      enqueued: 61,
+      skippedSeenUrl: 14,
+      skippedDedup: 8,
+      skippedEmpty: 3,
+      skippedSticky: 11,
+      skippedBlocked: 2,
+      skippedUnknown: 1,
+      failed: 1,
+      recordedAt: '2026-06-05T03:00:00Z',
+    };
+    return HttpResponse.json(response);
   }),
 
   // GET /crawl/jobs/:jobId

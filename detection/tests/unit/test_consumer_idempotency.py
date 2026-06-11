@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import redis
+
 from detection.src.consumer.queue_consumer import QueueConsumer
 from detection.src.consumer.watchdog import Watchdog
 from shared.config.redis_config import (
@@ -70,6 +72,20 @@ def test_consumer_returns_false_on_timeout():
     result = consumer.run_once()
 
     assert result is False
+
+
+def test_consumer_keeps_loop_on_redis_read_timeout():
+    """Redis read timeout → 프로세스 종료 대신 False 반환"""
+    mock_redis = MagicMock()
+    mock_redis.brpoplpush.side_effect = redis.TimeoutError("Timeout reading from socket")
+    process_fn = MagicMock()
+
+    consumer = QueueConsumer(mock_redis, process_fn)
+    result = consumer.run_once()
+
+    assert result is False
+    process_fn.assert_not_called()
+    mock_redis.lrem.assert_not_called()
 
 
 # ──────────────────────────────── Watchdog ───────────────────────────────────

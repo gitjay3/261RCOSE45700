@@ -252,6 +252,9 @@ jobs:
 
             export IMAGE_TAG REGISTRY_PATH
 
+            # pull 전 오래된 이미지 정리 — 디스크 부족으로 pull 실패하는 경우 방지.
+            "$DOCKER" image prune -a -f --filter "until=48h" || true
+
             # 일시적 GHCR 5xx/rate-limit 대비 3-회 재시도.
             PULL_OK=0
             for i in 1 2 3; do

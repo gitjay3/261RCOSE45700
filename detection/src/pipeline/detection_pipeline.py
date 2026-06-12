@@ -78,6 +78,12 @@ class DetectionPipeline:
 
         use_agentic = self._mode == "agentic" and self._orchestrator is not None
 
+        if self._mode == "agentic" and self._orchestrator is None:
+            _logger.warning(
+                "DETECTION_MODE=agentic이지만 orchestrator가 None — single 모드로 폴백 (DI 설정 확인 필요)",
+                extra={"correlation_id": event.correlation_id, "service": _SERVICE_NAME},
+            )
+
         if use_agentic:
             response, traces, model_version, model_name = self._run_agentic(message, event)
         else:
@@ -96,9 +102,10 @@ class DetectionPipeline:
                 agent_runs=traces,
             )
 
+        actual_mode = "agentic" if use_agentic else "single"
         _logger.info(
             "classification — mode=%s type=%s tier=%s conf=%.3f cost=$%.5f tokens(in/out)=%d/%d image_observed=%s",
-            self._mode, response.type, tier, response.confidence, response.cost_usd,
+            actual_mode, response.type, tier, response.confidence, response.cost_usd,
             response.input_tokens, response.output_tokens, response.image_observed,
             extra={
                 "correlation_id": event.correlation_id,
@@ -106,7 +113,7 @@ class DetectionPipeline:
                 "post_id": event.post_id,
                 "tier": tier,
                 "model_version": model_version,
-                "detection_mode": self._mode,
+                "detection_mode": actual_mode,
             },
         )
 

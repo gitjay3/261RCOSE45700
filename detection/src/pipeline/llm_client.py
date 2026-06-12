@@ -188,12 +188,15 @@ class LLMClient:
             text_resp = self._call(text, images_payload=[], source_id=source_id)
             image_resp = self._call(text, images_payload=image_blocks, source_id=source_id)
             # 이미지 호출이 image_observed=true이면 우선 적용.
-            merged_type = image_resp.type if image_resp.image_observed else text_resp.type
-            merged_conf = max(text_resp.confidence, image_resp.confidence)
+            use_image = image_resp.image_observed
+            merged_type = image_resp.type if use_image else text_resp.type
+            # confidence는 선택된 브랜치의 값만 사용 — 폐기된 호출의 confidence를 섞으면
+            # 선택 근거와 무관한 confidence가 부풀려진다.
+            merged_conf = image_resp.confidence if use_image else text_resp.confidence
             return LLMResponse(
                 type=merged_type,
                 confidence=merged_conf,
-                reason_ko=image_resp.reason_ko if image_resp.image_observed else text_resp.reason_ko,
+                reason_ko=image_resp.reason_ko if use_image else text_resp.reason_ko,
                 translated_text_ko=text_resp.translated_text_ko or image_resp.translated_text_ko,
                 image_observed=image_resp.image_observed,
                 input_tokens=text_resp.input_tokens + image_resp.input_tokens,
@@ -346,13 +349,24 @@ class LLMClient:
 
 
 def _retry_after_from(exc: OpenAIRateLimitError) -> int:
-    """OpenAI RateLimitError에서 Retry-After 헤더 추출. 기본 30s."""
+    """OpenAI RateLimitError에서 Retry-After 추출. 기본 30s.
+
+    OpenAI는 retry-after-ms(밀리초, 비표준)와 retry-after(초, RFC 7231) 두 헤더를 모두 보낼 수 있다.
+    retry-after-ms를 우선 확인하고, 없으면 retry-after를 사용한다. 둘 다 없으면 30s 폴백.
+    """
     response = getattr(exc, "response", None)
     if response is None:
         return 30
     headers = getattr(response, "headers", None) or {}
+    # 밀리초 헤더 우선 (OpenAI SDK 내부 동작과 동일한 우선순위).
+    raw_ms = headers.get("retry-after-ms") or headers.get("Retry-After-Ms")
+    if raw_ms is not None:
+        try:
+            return max(1, int(float(raw_ms) / 1000))
+        except (TypeError, ValueError):
+            pass
     raw = headers.get("Retry-After") or headers.get("retry-after")
     try:
-        return int(raw) if raw is not None else 30
+        return int(float(raw)) if raw is not None else 30
     except (TypeError, ValueError):
         return 30

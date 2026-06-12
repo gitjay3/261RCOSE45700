@@ -149,7 +149,8 @@ class CostCap:
         cost_usd = estimate_cost_usd(model, input_tokens, output_tokens)
         if not self.enabled:
             return cost_usd
-        micro = int(round(cost_usd * 1_000_000))
+        # 비용이 0보다 크면 최소 1 micro-USD로 올림 — 극소 비용의 silent 누락 방지.
+        micro = max(1, int(round(cost_usd * 1_000_000))) if cost_usd > 0 else 0
         if micro <= 0:
             return cost_usd
         key = _today_key()

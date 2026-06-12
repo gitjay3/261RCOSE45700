@@ -138,6 +138,13 @@ class LinkTracer:
         current = url
         with httpx.Client(**client_kwargs) as client:
             for _ in range(_MAX_REDIRECTS + 1):
+                # 2차 방어: 매 hop 직전 SSRF 가드 재검증 — DNS rebinding TOCTOU 완화.
+                # validate_url()이 1차(trace_one)에서 해석한 IP와 여기서 재해석한 IP가
+                # 다를 경우(rebinding 시도) 차단한다.
+                decision = validate_url(current)
+                if not decision.allowed:
+                    return LinkEvidence(url=url, kind="blocked", fetch_status=f"blocked:{decision.reason}")
+
                 with client.stream("GET", current) as resp:
                     # redirect — Location 재검증 후 다음 hop.
                     if resp.is_redirect:
@@ -196,7 +203,13 @@ class LinkTracer:
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8")
             data = json.loads(raw)
-            data["fetch_status"] = "cached"
+            # fetch_status는 원본 그대로 보존 (blocked:private_ip, error:http_404 등).
+            # 캐시 히트 여부는 로그로 기록하고, 이유를 덮어쓰지 않는다.
+            _logger.debug(
+                "linktrace 캐시 hit — kind=%s status=%s",
+                data.get("kind"), data.get("fetch_status"),
+                extra={"correlation_id": "", "service": _SERVICE_NAME, "url": url},
+            )
             return LinkEvidence(**data)
         except Exception as exc:  # noqa: BLE001 — 캐시 장애/손상 엔트리는 miss로 강등, fetch 계속
             _logger.warning(

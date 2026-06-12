@@ -87,6 +87,7 @@ services:
     env_file: /opt/app/.env
     environment:
       SERVICE_NAME: detection
+      DETECTION_MODE: agentic
     secrets:
       - openai_api_key
       - db_password

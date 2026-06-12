@@ -448,10 +448,49 @@ function StageRow({ run, index, total }: { run: AgentRun; index: number; total: 
   );
 }
 
+function EmptyAgentRunTrace({ detectionId }: { detectionId: number }) {
+  return (
+    <section className="overflow-hidden rounded-lg border bg-card">
+      <div className="border-b px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold text-foreground">
+            AI 검증 과정
+          </h2>
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+            로그 없음
+          </span>
+          <a
+            href={`/api/detections/${detectionId}/agent-runs`}
+            className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground no-underline hover:text-foreground"
+            title="원본 처리 로그"
+            target="_blank"
+            rel="noreferrer"
+          >
+            원본 로그
+            <ExternalLink className="size-3.5" />
+          </a>
+        </div>
+      </div>
+      <div className="px-4 py-4" style={{ background: 'var(--bg-sunk)' }}>
+        <div className="rounded-md border p-4" style={{ background: 'var(--bg-elev)', borderColor: 'var(--border-1)' }}>
+          <p className="text-sm font-semibold text-foreground">
+            이 탐지는 단계별 검증 로그가 저장되어 있지 않습니다.
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            이전 방식으로 처리된 탐지이거나, agentic 검증 모드가 켜지기 전에 저장된 결과입니다.
+            새로 처리되는 탐지부터 게시글 정리, AI 판단, 외부 링크 확인 과정이 표시됩니다.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function AgentRunTrace({ detectionId }: { detectionId: number }) {
   const { data, isLoading } = useAgentRunsQuery(detectionId);
 
-  if (isLoading || !data || data.length === 0) return null;
+  if (isLoading || !data) return null;
+  if (data.length === 0) return <EmptyAgentRunTrace detectionId={detectionId} />;
   const linkRun = data.find((run) => run.stage === 'link_trace');
   const riskyLinks = linksFromRun(linkRun).filter((link) => link.is_distribution_site).length;
 

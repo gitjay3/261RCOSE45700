@@ -37,6 +37,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return withCorrelationId(pd, request);
     }
 
+    @ExceptionHandler(CrawlTriggerUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleCrawlTriggerUnavailable(
+            CrawlTriggerUnavailableException ex,
+            HttpServletRequest request) {
+        var pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "크롤러가 수동 트리거를 받을 수 없는 상태입니다.");
+        pd.setTitle("Crawl Trigger Unavailable");
+        pd.setProperty("errorCode", "CRAWL_TRIGGER_UNAVAILABLE");
+        return withCorrelationId(pd, request);
+    }
+
     @ExceptionHandler(NotificationResourceNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleNotificationResourceNotFound(
             NotificationResourceNotFoundException ex,

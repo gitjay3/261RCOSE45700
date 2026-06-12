@@ -1,6 +1,7 @@
 package com.tracker.api.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tracker.api.exception.CrawlTriggerUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.data.redis.core.HashOperations;
@@ -12,6 +13,7 @@ import java.time.Duration;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,6 +35,7 @@ class CrawlTriggerServiceTest {
     @Test
     void trigger_initializesJobAndPublishesJsonCommand() {
         when(stringRedisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(stringRedisTemplate.convertAndSend(eq("crawl:trigger"), anyString())).thenReturn(1L);
         var service = new CrawlTriggerService(stringRedisTemplate, new ObjectMapper());
 
         String jobId = service.trigger("cid-1234");
@@ -49,14 +52,18 @@ class CrawlTriggerServiceTest {
     }
 
     @Test
-    void trigger_acceptsZeroSubscribersAsPublishCommandAccepted() {
+    void trigger_marksJobSkippedWhenNoCrawlerSubscriber() {
         when(stringRedisTemplate.opsForHash()).thenReturn(hashOperations);
         when(stringRedisTemplate.convertAndSend(eq("crawl:trigger"), anyString())).thenReturn(0L);
         var service = new CrawlTriggerService(stringRedisTemplate, new ObjectMapper());
 
-        service.trigger("cid-0000");
+        assertThatThrownBy(() -> service.trigger("cid-0000"))
+                .isInstanceOf(CrawlTriggerUnavailableException.class);
 
         verify(stringRedisTemplate).convertAndSend(eq("crawl:trigger"), anyString());
+        verify(hashOperations).putAll(anyString(), argThat(map ->
+                "skipped".equals(map.get("status"))
+                        && "크롤러 트리거 리스너가 응답하지 않습니다.".equals(map.get("message"))));
     }
 
     @Test

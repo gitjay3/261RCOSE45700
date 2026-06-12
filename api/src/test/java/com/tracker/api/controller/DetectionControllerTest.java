@@ -2,6 +2,7 @@ package com.tracker.api.controller;
 
 import com.tracker.api.dto.DetectionListResponse;
 import com.tracker.api.dto.DetectionResponse;
+import com.tracker.api.exception.CrawlTriggerUnavailableException;
 import com.tracker.api.exception.DetectionNotFoundException;
 import com.tracker.api.dto.CrawlJobStatusResponse;
 import com.tracker.api.dto.CrawlPipelineStatsResponse;
@@ -179,6 +180,18 @@ class DetectionControllerTest {
                                 .andExpect(header().string("X-Correlation-ID", "test-cid-1234"));
 
                 verify(crawlTriggerService).trigger("test-cid-1234");
+        }
+
+        @Test
+        void postCrawlTrigger_whenCrawlerUnavailable_returns503() throws Exception {
+                when(crawlTriggerService.trigger("test-cid-1234"))
+                                .thenThrow(new CrawlTriggerUnavailableException("job-1234"));
+
+                mockMvc.perform(post("/api/crawl/trigger")
+                                .header("X-Correlation-ID", "test-cid-1234"))
+                                .andExpect(status().isServiceUnavailable())
+                                .andExpect(jsonPath("$.errorCode").value("CRAWL_TRIGGER_UNAVAILABLE"))
+                                .andExpect(header().string("X-Correlation-ID", "test-cid-1234"));
         }
 
         @Test

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tracker.api.dto.CrawlJobStatusResponse;
 import com.tracker.api.dto.CrawlPipelineStatsResponse;
 import com.tracker.api.exception.CrawlJobNotFoundException;
+import com.tracker.api.exception.CrawlTriggerUnavailableException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -47,8 +48,20 @@ public class CrawlTriggerService {
         ));
         stringRedisTemplate.expire(key, CRAWL_JOB_TTL);
 
-        // Redis PUBLISH may return 0 when no crawler is subscribed; Story 4.2 treats the command as accepted.
-        stringRedisTemplate.convertAndSend(CRAWL_TRIGGER_CHANNEL, triggerPayload(jobId, correlationId, requestedAt));
+        Long subscribers = stringRedisTemplate.convertAndSend(
+                CRAWL_TRIGGER_CHANNEL,
+                triggerPayload(jobId, correlationId, requestedAt));
+        if (subscribers == null || subscribers == 0L) {
+            String finishedAt = Instant.now().toString();
+            stringRedisTemplate.opsForHash().putAll(key, Map.ofEntries(
+                    Map.entry("status", "skipped"),
+                    Map.entry("message", "크롤러 트리거 리스너가 응답하지 않습니다."),
+                    Map.entry("updatedAt", finishedAt),
+                    Map.entry("finishedAt", finishedAt)
+            ));
+            stringRedisTemplate.expire(key, CRAWL_JOB_TTL);
+            throw new CrawlTriggerUnavailableException(jobId);
+        }
 
         return jobId;
     }

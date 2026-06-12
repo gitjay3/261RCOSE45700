@@ -42,9 +42,7 @@ public class DetectionService {
                 page,
                 size,
                 Sort.by(
-                        Sort.Order.asc("tier"),
                         Sort.Order.desc("detectedAt"),
-                        Sort.Order.desc("confidence"),
                         Sort.Order.desc("id")));
 
         Page<com.tracker.api.domain.Detection> resultPage =

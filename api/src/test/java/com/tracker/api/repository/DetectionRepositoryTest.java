@@ -54,7 +54,7 @@ class DetectionRepositoryTest {
     }
 
     @Test
-    void findFiltered_ordersByActionPriorityThenLatestDetection() {
+    void findFiltered_ordersByLatestDetectionFirst() {
         persistDetection("tailstar.net", "매크로_판매", "ko", "T2", 0.99,
                 Instant.parse("2026-04-24T14:32:00Z"));
         persistDetection("tailstar.net", "핵_치트", "ko", "T1", 0.80,
@@ -74,17 +74,15 @@ class DetectionRepositoryTest {
                         0,
                         20,
                         Sort.by(
-                                Sort.Order.asc("tier"),
                                 Sort.Order.desc("detectedAt"),
-                                Sort.Order.desc("confidence"),
                                 Sort.Order.desc("id"))));
 
         assertThat(result.getContent())
                 .extracting(Detection::getTier, Detection::getConfidence, Detection::getDetectedAt)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("T1", 0.75, Instant.parse("2026-04-24T14:33:00Z")),
-                        org.assertj.core.groups.Tuple.tuple("T1", 0.80, Instant.parse("2026-04-24T14:31:00Z")),
-                        org.assertj.core.groups.Tuple.tuple("T2", 0.99, Instant.parse("2026-04-24T14:32:00Z")));
+                        org.assertj.core.groups.Tuple.tuple("T2", 0.99, Instant.parse("2026-04-24T14:32:00Z")),
+                        org.assertj.core.groups.Tuple.tuple("T1", 0.80, Instant.parse("2026-04-24T14:31:00Z")));
     }
 
     private void persistDetection(

@@ -155,11 +155,9 @@ function generateMockDetections(trend: { date: string; count: number }[]): Detec
     }
   });
 
-  // 조치 우선순위순: T1→T4, 같은 tier 안에서는 최신 탐지와 신뢰도로 안정 정렬.
+  // 탐지 목록 기본 정렬: 최근 탐지부터 위에서 아래로 표시.
   detections.sort((a, b) =>
-    a.tier.localeCompare(b.tier) ||
     Date.parse(b.detectedAt) - Date.parse(a.detectedAt) ||
-    b.confidence - a.confidence ||
     b.id - a.id
   );
 

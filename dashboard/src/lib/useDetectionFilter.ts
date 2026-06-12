@@ -4,14 +4,14 @@ import {
   detectionFilterToParams,
   isFilterActive,
 } from './detectionFilter';
-import type { DetectionDateRange, DetectionFilter, DetectionType, Language } from '@/types/api';
+import type { DetectionDateRange, DetectionFilter, DetectionType, Language, Tier } from '@/types/api';
 
 /**
  * URL search params <-> DetectionFilter 양방향 sync.
  *
  * - filter는 searchParams에서 파생 (URL이 single source of truth)
  * - updateFilter / resetFilters는 useTransition으로 wrap — fetch 동안 이전 화면 유지
- * - hasActiveFilter는 date/range/site/type/lang 중 하나라도 설정됐는지
+ * - hasActiveFilter는 date/range/site/type/lang/tier 중 하나라도 설정됐는지
  *
  * 페이지 사이즈는 size 파라미터로 받아 URL에 노출하지 않음 (page만 URL 상태).
  */
@@ -27,8 +27,9 @@ export function useDetectionFilter(pageSize: number) {
     const type =
       (searchParams.get('type') as DetectionType | null) ?? undefined;
     const lang = (searchParams.get('lang') as Language | null) ?? undefined;
+    const tier = (searchParams.get('tier') as Tier | null) ?? undefined;
     const page = Number(searchParams.get('page') ?? '0');
-    return { date, range: date ? undefined : range, site, type, lang, page, size: pageSize };
+    return { date, range: date ? undefined : range, site, type, lang, tier, page, size: pageSize };
   }, [searchParams, pageSize]);
 
   const updateFilter = (next: Partial<DetectionFilter>, resetPage = true) => {

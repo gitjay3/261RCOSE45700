@@ -229,9 +229,9 @@ function getDetectionsForTrend(trend: readonly { date: string; count: number }[]
 
 const STATS_BASE = buildStatsBase(MOCK_DETECTIONS);
 
-export function buildStatsResponse(period?: 'weekly' | 'monthly'): StatsResponse {
-  if (!period) return STATS_BASE;
-  const trend = period === 'monthly' ? trend30 : trend7;
+export function buildStatsResponse(days?: number): StatsResponse {
+  if (!days) return STATS_BASE;
+  const trend = generateTrend(days);
   return {
     ...buildStatsBase(getDetectionsForTrend(trend)),
     trend,

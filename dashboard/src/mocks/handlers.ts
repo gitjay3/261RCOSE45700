@@ -23,10 +23,24 @@ function maskWebhookUrl(value: string) {
 }
 
 export const handlers = [
-  // GET /stats?period=weekly|monthly
+  // GET /stats?days=N
   http.get(`${baseUrl}/stats`, ({ request }) => {
     const url = new URL(request.url);
     const period = url.searchParams.get('period');
+    const daysParam = url.searchParams.get('days');
+    const days = daysParam ? Number(daysParam) : undefined;
+    if (days !== undefined && (!Number.isFinite(days) || days < 1 || days > 365)) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Invalid days',
+          status: 400,
+          detail: `days must be between 1 and 365, got '${daysParam}'`,
+          errorCode: 'INVALID_FILTER_PARAM',
+        },
+        { status: 400 },
+      );
+    }
     if (period && period !== 'weekly' && period !== 'monthly') {
       return HttpResponse.json(
         {
@@ -40,7 +54,7 @@ export const handlers = [
       );
     }
     return HttpResponse.json(
-      buildStatsResponse(period as 'weekly' | 'monthly' | null ?? undefined),
+      buildStatsResponse(days ?? (period === 'monthly' ? 30 : period === 'weekly' ? 7 : undefined)),
     );
   }),
 
@@ -52,6 +66,7 @@ export const handlers = [
     const site = url.searchParams.get('site');
     const type = url.searchParams.get('type');
     const lang = url.searchParams.get('lang');
+    const tier = url.searchParams.get('tier');
     const page = Number(url.searchParams.get('page') ?? '0');
     const size = Number(url.searchParams.get('size') ?? '20');
 
@@ -59,8 +74,8 @@ export const handlers = [
 
     if (date) {
       filtered = filtered.filter((d) => d.detectedAt.startsWith(date));
-    } else if (range === '7d' || range === '30d') {
-      const days = range === '7d' ? 7 : 30;
+    } else if (range) {
+      const days = Number(range.toLowerCase().endsWith('d') ? range.slice(0, -1) : range);
       const from = new Date();
       from.setHours(0, 0, 0, 0);
       from.setDate(from.getDate() - (days - 1));
@@ -74,6 +89,9 @@ export const handlers = [
     }
     if (lang) {
       filtered = filtered.filter((d) => d.language === lang);
+    }
+    if (tier) {
+      filtered = filtered.filter((d) => d.tier === tier);
     }
 
     const totalElements = filtered.length;

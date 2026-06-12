@@ -4,7 +4,7 @@ import { POLLING_QUERY_OPTIONS } from './queryDefaults';
 import type { CrawlPipelineStatsResponse, StatsPeriod, StatsResponse } from '@/types/api';
 
 async function fetchStats(period?: StatsPeriod): Promise<StatsResponse> {
-  const url = period ? `/stats?period=${period}` : '/stats';
+  const url = period ? `/stats?days=${period}` : '/stats';
   const response = await apiClient.get<StatsResponse>(url);
   return response.data;
 }

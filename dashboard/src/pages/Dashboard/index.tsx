@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, CalendarDays } from 'lucide-react';
 import { LineChart } from '@/components/charts/LineChart';
 import { ChartCard } from '@/components/tracker/ChartCard';
+import { RangeDaysInput } from '@/components/tracker/RangeDaysInput';
 import { RecentAlertList } from '@/components/tracker/RecentAlertList';
 import { getTypeLabel } from '@/components/tracker/labels';
 import { useDetectionsSuspenseQuery } from '@/api/detections';
@@ -14,13 +15,14 @@ import {
   typeDistributionToSeries,
 } from '@/lib/statsView';
 import { detectionFilterToParams } from '@/lib/detectionFilter';
+import { daysToRange } from '@/lib/rangeDays';
 import { formatRelativeTime } from '@/lib/time';
 import type { Detection, DetectionFilter, StatsPeriod, Tier } from '@/types/api';
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const [period, setPeriod] = useState<StatsPeriod>('weekly');
-  const selectedRange = period === 'weekly' ? '7d' : '30d';
+  const [period, setPeriod] = useState<StatsPeriod>(7);
+  const selectedRange = daysToRange(period);
   // dataUpdatedAt이 60s polling마다 갱신 → TanStack Query subscription이 자동 re-render
   // 유발. ticker 불필요. 자정 롤오버도 다음 polling tick(<60s)에 자연 반영.
   const { data, dataUpdatedAt } = useStatsSuspenseQuery(period);
@@ -136,8 +138,8 @@ export function DashboardPage() {
 
         <section style={{ marginBottom: 'var(--pad-section)' }}>
           <ChartCard
-            title={period === 'weekly' ? '주간 탐지 추이' : '월간 탐지 추이'}
-            subtitle="포인트 클릭 시 해당 날짜 탐지 목록으로 이동"
+                title={`최근 ${period}일 탐지 추이`}
+                subtitle="포인트 클릭 시 해당 날짜 탐지 목록으로 이동"
             empty={trendData.length === 0}
             emptyMessage="기간 추이 데이터 없음"
           >
@@ -159,14 +161,9 @@ function PeriodControl({
   value: StatsPeriod;
   onChange: (value: StatsPeriod) => void;
 }) {
-  const options: { value: StatsPeriod; label: string }[] = [
-    { value: 'weekly', label: '최근 7일' },
-    { value: 'monthly', label: '최근 30일' },
-  ];
-
   return (
     <div
-      className="inline-flex h-9 items-center rounded-md border p-1"
+      className="inline-flex h-9 items-center rounded-md border"
       style={{
         background: 'var(--bg-elev)',
         borderColor: 'var(--border-1)',
@@ -181,25 +178,13 @@ function PeriodControl({
         <CalendarDays className="size-3.5" aria-hidden="true" />
         기간
       </span>
-      <div className="ml-1 flex items-center gap-1">
-        {options.map((option) => {
-          const active = value === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              aria-pressed={active}
-              className="h-7 rounded-[4px] px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-              style={{
-                background: active ? 'var(--accent)' : 'transparent',
-                color: active ? 'var(--on-accent)' : 'var(--fg-2)',
-              }}
-            >
-              {option.label}
-            </button>
-          );
-        })}
+      <div className="flex h-full items-center gap-1 px-2 text-xs font-semibold" style={{ color: 'var(--fg-2)' }}>
+        <RangeDaysInput
+          value={value}
+          onCommit={onChange}
+          ariaLabel="대시보드 기간 일수"
+          className="h-full border-0 px-0"
+        />
       </div>
     </div>
   );

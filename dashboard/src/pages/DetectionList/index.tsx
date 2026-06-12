@@ -32,12 +32,14 @@ import { DetectionCard } from '@/components/tracker/DetectionCard';
 import { DetectionRow } from '@/components/tracker/DetectionRow';
 import { EmptyState } from '@/components/tracker/EmptyState';
 import { LANG_OPTIONS, TYPE_OPTIONS } from '@/components/tracker/labels';
+import { RangeDaysInput } from '@/components/tracker/RangeDaysInput';
 import { PageContainer } from '@/layouts/PageContainer';
 import { useDetectionFilter } from '@/lib/useDetectionFilter';
 import { useShortcut } from '@/lib/shortcuts';
 import { detectionFilterOptions, type FilterSelectOption } from '@/lib/filterOptions';
+import { daysToRange, rangeToDays } from '@/lib/rangeDays';
 import { cn } from '@/lib/utils';
-import type { DetectionDateRange, DetectionFilter, DetectionType, Language } from '@/types/api';
+import type { DetectionFilter, DetectionType, Language, Tier } from '@/types/api';
 
 const PAGE_SIZE = 20;
 
@@ -234,16 +236,14 @@ function FilterBar(props: FilterBarProps) {
 }
 
 function DesktopFilterBar({ filter, onChange, onReset, active }: FilterBarProps) {
-  const { rangeOptions, siteOptions, typeOptions, langOptions } = detectionFilterOptions();
+  const { siteOptions, typeOptions, langOptions, tierOptions } = detectionFilterOptions();
 
   return (
     <div className="bg-card hidden flex-wrap items-center gap-2 rounded-lg border p-3 md:flex">
-      <FilterSelect
-        value={filter.range ?? ALL_VALUE}
-        allLabel={filter.date ? '지정 날짜' : '전체 기간'}
-        options={rangeOptions}
-        onChange={(v) => onChange({ range: v === ALL_VALUE ? undefined : (v as DetectionDateRange) })}
-        triggerClassName="w-[150px]"
+      <RangeDaysFilter
+        value={filter.range}
+        disabled={Boolean(filter.date)}
+        onChange={(range) => onChange({ range })}
       />
       <FilterSelect
         value={filter.site ?? ALL_VALUE}
@@ -258,6 +258,13 @@ function DesktopFilterBar({ filter, onChange, onReset, active }: FilterBarProps)
         options={typeOptions}
         onChange={(v) => onChange({ type: v === ALL_VALUE ? undefined : (v as DetectionType) })}
         triggerClassName="w-[160px]"
+      />
+      <FilterSelect
+        value={filter.tier ?? ALL_VALUE}
+        allLabel="모든 위험도"
+        options={tierOptions}
+        onChange={(v) => onChange({ tier: v === ALL_VALUE ? undefined : (v as Tier) })}
+        triggerClassName="w-[150px]"
       />
       <FilterSelect
         value={filter.lang ?? ALL_VALUE}
@@ -302,10 +309,12 @@ function FilterChip({
 }
 
 function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) {
-  const { rangeOptions, siteOptions, typeOptions, langOptions } = detectionFilterOptions();
+  const { siteOptions, typeOptions, langOptions, tierOptions } = detectionFilterOptions();
 
   const typeLabel = TYPE_OPTIONS.find((t) => t.value === filter.type)?.label;
   const langLabel = LANG_OPTIONS.find((l) => l.value === filter.lang)?.label;
+  const tierLabel = tierOptions.find((t) => t.value === filter.tier)?.label;
+  const rangeDays = rangeToDays(filter.range);
 
   return (
     <div className="bg-card flex flex-wrap items-center gap-2 rounded-lg border p-3 md:hidden">
@@ -319,7 +328,7 @@ function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) 
                 className="ml-1 inline-flex size-4 items-center justify-center rounded-full text-[10px] font-semibold"
                 style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
               >
-                {[filter.site, filter.type, filter.lang].filter(Boolean).length}
+                {[filter.range, filter.site, filter.type, filter.tier, filter.lang].filter(Boolean).length}
               </span>
             )}
           </Button>
@@ -332,11 +341,21 @@ function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) 
             </DrawerDescription>
           </DrawerHeader>
           <div className="flex flex-col gap-3 px-4 pb-2">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-fg-3 text-xs font-medium uppercase tracking-wide">
+                기간
+              </span>
+              <RangeDaysFilter
+                value={filter.range}
+                disabled={Boolean(filter.date)}
+                onChange={(range) => onChange({ range })}
+              />
+            </div>
             {(
               [
                 { label: '사이트', options: siteOptions, value: filter.site, onChange: (v: string) => onChange({ site: v === ALL_VALUE ? undefined : v }) },
-                { label: '기간',   options: rangeOptions, value: filter.range, onChange: (v: string) => onChange({ range: v === ALL_VALUE ? undefined : (v as DetectionDateRange) }) },
                 { label: '유형',   options: typeOptions,  value: filter.type, onChange: (v: string) => onChange({ type: v === ALL_VALUE ? undefined : (v as DetectionType) }) },
+                { label: '위험도', options: tierOptions,  value: filter.tier, onChange: (v: string) => onChange({ tier: v === ALL_VALUE ? undefined : (v as Tier) }) },
                 { label: '언어',   options: langOptions,  value: filter.lang, onChange: (v: string) => onChange({ lang: v === ALL_VALUE ? undefined : (v as Language) }) },
               ] as const
             ).map(({ label, options, value, onChange: onRowChange }) => (
@@ -379,7 +398,7 @@ function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) 
       )}
       {filter.range && (
         <FilterChip
-          label={rangeOptions.find((r) => r.value === filter.range)?.label ?? filter.range}
+          label={`최근 ${rangeDays}일`}
           onClear={() => onChange({ range: undefined })}
         />
       )}
@@ -389,6 +408,12 @@ function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) 
           onClear={() => onChange({ type: undefined })}
         />
       )}
+      {filter.tier && tierLabel && (
+        <FilterChip
+          label={tierLabel}
+          onClear={() => onChange({ tier: undefined })}
+        />
+      )}
       {filter.lang && langLabel && (
         <FilterChip
           label={langLabel}
@@ -396,6 +421,28 @@ function MobileFilterBar({ filter, onChange, onReset, active }: FilterBarProps) 
         />
       )}
     </div>
+  );
+}
+
+function RangeDaysFilter({
+  value,
+  disabled = false,
+  onChange,
+}: {
+  value: string | undefined;
+  disabled?: boolean;
+  onChange: (range: ReturnType<typeof daysToRange>) => void;
+}) {
+  const days = rangeToDays(value);
+
+  return (
+    <RangeDaysInput
+      value={days}
+      disabled={disabled}
+      onCommit={(nextDays) => onChange(daysToRange(nextDays))}
+      ariaLabel="최근 기간 일수"
+      className="h-10 md:h-9"
+    />
   );
 }
 

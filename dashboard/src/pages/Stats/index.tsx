@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useStatsSuspenseQuery, useCrawlPipelineStatsSuspenseQuery } from '@/api/stats';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart } from '@/components/charts/BarChart';
 import { LineChart } from '@/components/charts/LineChart';
 import { PieChart } from '@/components/charts/PieChart';
 import { ChartCard } from '@/components/tracker/ChartCard';
 import { EmptyState } from '@/components/tracker/EmptyState';
+import { RangeDaysInput } from '@/components/tracker/RangeDaysInput';
 import { PageContainer } from '@/layouts/PageContainer';
 import {
   langDistributionToSeries,
@@ -16,7 +16,7 @@ import {
 import type { StatsPeriod } from '@/types/api';
 
 export function StatsPage() {
-  const [period, setPeriod] = useState<StatsPeriod>('weekly');
+  const [period, setPeriod] = useState<StatsPeriod>(7);
   const { data } = useStatsSuspenseQuery(period);
   const { data: crawlStats } = useCrawlPipelineStatsSuspenseQuery();
 
@@ -43,20 +43,12 @@ export function StatsPage() {
         >
           통계
         </h1>
-        <Tabs
-          value={period}
-          onValueChange={(v) => setPeriod(v as StatsPeriod)}
-        >
-          <TabsList>
-            <TabsTrigger value="weekly">주간</TabsTrigger>
-            <TabsTrigger value="monthly">월간</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <PeriodDaysInput value={period} onChange={setPeriod} />
       </header>
 
       <ChartCard
-        title={period === 'weekly' ? '주간 탐지 추이' : '월간 탐지 추이'}
-        subtitle={`최근 ${period === 'weekly' ? '7' : '30'}일 일별 탐지 건수`}
+        title={`최근 ${period}일 탐지 추이`}
+        subtitle={`최근 ${period}일 일별 탐지 건수`}
         empty={trendEmpty}
         emptyMessage="해당 기간에 탐지 데이터가 없습니다"
       >
@@ -128,7 +120,7 @@ export function StatsPage() {
         <EmptyState
           variant="filter-empty"
           title="해당 기간에 데이터가 없습니다"
-          message={`${period === 'weekly' ? '주간' : '월간'} 기간 동안의 탐지 데이터가 비어 있습니다.`}
+          message={`최근 ${period}일 동안의 탐지 데이터가 비어 있습니다.`}
         />
       )}
 
@@ -156,6 +148,22 @@ export function StatsPage() {
         </div>
       </ChartCard>
     </PageContainer>
+  );
+}
+
+function PeriodDaysInput({
+  value,
+  onChange,
+}: {
+  value: StatsPeriod;
+  onChange: (value: StatsPeriod) => void;
+}) {
+  return (
+    <RangeDaysInput
+      value={value}
+      onCommit={onChange}
+      ariaLabel="통계 기간 일수"
+    />
   );
 }
 

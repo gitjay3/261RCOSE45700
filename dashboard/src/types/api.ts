@@ -11,7 +11,7 @@ export type DetectionType =
 
 export type Language = 'ko' | 'zh-CN' | 'zh-TW';
 export type Tier = 'T1' | 'T2' | 'T3' | 'T4';
-export type DetectionDateRange = '7d' | '30d';
+export type DetectionDateRange = `${number}d`;
 
 export interface Detection {
   id: number;
@@ -85,6 +85,7 @@ export interface DetectionFilter {
   site?: string;
   type?: DetectionType;
   lang?: Language;
+  tier?: Tier;
   page?: number;
   size?: number;
 }
@@ -113,7 +114,7 @@ export interface CrawlJobStatusResponse {
   finishedAt: string;
 }
 
-export type StatsPeriod = 'weekly' | 'monthly';
+export type StatsPeriod = number;
 
 export interface CrawlPipelineStatsResponse {
   listingBoards: number;

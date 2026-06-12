@@ -1,5 +1,6 @@
 import { LANG_OPTIONS, TYPE_OPTIONS } from '@/components/tracker/labels';
 import { KNOWN_SOURCES } from './sources';
+import type { Tier } from '@/types/api';
 
 export interface FilterSelectOption {
   value: string;
@@ -8,11 +9,14 @@ export interface FilterSelectOption {
 }
 
 export function detectionFilterOptions() {
+  const tierOptions: { value: Tier; label: string }[] = [
+    { value: 'T1', label: 'T1 긴급' },
+    { value: 'T2', label: 'T2 높음' },
+    { value: 'T3', label: 'T3 보통' },
+    { value: 'T4', label: 'T4 낮음' },
+  ];
+
   return {
-    rangeOptions: [
-      { value: '7d', label: '최근 7일' },
-      { value: '30d', label: '최근 30일' },
-    ],
     siteOptions: KNOWN_SOURCES.map((source) => ({
       value: source,
       label: source,
@@ -26,5 +30,6 @@ export function detectionFilterOptions() {
       value: lang.value,
       label: lang.label,
     })),
+    tierOptions,
   } satisfies Record<string, FilterSelectOption[]>;
 }

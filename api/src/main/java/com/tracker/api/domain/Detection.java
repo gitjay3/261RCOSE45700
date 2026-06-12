@@ -35,7 +35,8 @@ public class Detection {
     @Column(name = "translated_text", columnDefinition = "TEXT")
     private String translatedText;
 
-    @Column(name = "model_version", nullable = false, length = 50)
+    // V11 마이그레이션으로 TEXT 전환됨 (Bedrock ARN > 100자)
+    @Column(name = "model_version", nullable = false, columnDefinition = "text")
     private String modelVersion;
 
     @Column(name = "detected_at", nullable = false)

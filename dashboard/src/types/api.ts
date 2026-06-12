@@ -189,3 +189,23 @@ export interface NotificationTestResponse {
   responseCode: number | null;
   errorMessage: string | null;
 }
+
+export interface LinkEvidence {
+  url: string;
+  kind: 'web' | 'messenger' | 'file_direct_link' | 'blocked' | 'error';
+  fetch_status: string;
+  page_title: string | null;
+  is_distribution_site: boolean;
+  indicators: string[];
+}
+
+export interface AgentRun {
+  id: number;
+  stage: 'normalize' | 'triage' | 'image' | 'link_trace' | 'synthesize';
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  latencyMs: number | null;
+  output: Record<string, unknown> | null;
+}

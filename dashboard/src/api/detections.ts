@@ -1,5 +1,6 @@
 import {
   queryOptions,
+  skipToken,
   useMutation,
   useQuery,
   useQueryClient,
@@ -10,6 +11,7 @@ import { POLLING_QUERY_OPTIONS } from './queryDefaults';
 import { statsQueries } from './stats';
 import { detectionFilterToParams } from '@/lib/detectionFilter';
 import type {
+  AgentRun,
   CrawlJobStatusResponse,
   CrawlTriggerResponse,
   Detection,
@@ -32,6 +34,13 @@ async function fetchDetection(id: number): Promise<Detection> {
   return response.data;
 }
 
+async function fetchAgentRuns(detectionId: number): Promise<AgentRun[]> {
+  const response = await apiClient.get<AgentRun[]>(
+    `/detections/${detectionId}/agent-runs`,
+  );
+  return response.data;
+}
+
 // TanStack Query v5 queryOptions 팩토리 — 키 일관성 + 같은 파일 hooks에서만 사용.
 const detectionQueries = {
   all: () => ['detections'] as const,
@@ -49,6 +58,12 @@ const detectionQueries = {
       queryKey: [...detectionQueries.details(), id] as const,
       queryFn: () => fetchDetection(id),
       staleTime: 60_000,
+    }),
+  agentRuns: (id: number | undefined) =>
+    queryOptions({
+      queryKey: [...detectionQueries.details(), id, 'agent-runs'] as const,
+      queryFn: id !== undefined ? () => fetchAgentRuns(id) : skipToken,
+      staleTime: 300_000,
     }),
 };
 
@@ -102,4 +117,8 @@ export function useCrawlJobStatusQuery(jobId: string | null) {
     refetchInterval: 2_000,
     staleTime: 1_000,
   });
+}
+
+export function useAgentRunsQuery(detectionId: number | undefined) {
+  return useQuery(detectionQueries.agentRuns(detectionId));
 }

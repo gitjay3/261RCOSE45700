@@ -6,6 +6,7 @@ import { useDetectionQuery } from '@/api/detections';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AgentRunTrace } from '@/components/tracker/AgentRunTrace';
 import { BilingualPanel } from '@/components/tracker/BilingualPanel';
 import { ConfidenceBadge } from '@/components/tracker/ConfidenceBadge';
 import { TypeIcon } from '@/components/tracker/TypeIcon';
@@ -110,6 +111,8 @@ export function DetectionDetailPage() {
           <p className="text-foreground text-sm leading-relaxed">{data.reason}</p>
         </div>
       </section>
+
+      <AgentRunTrace detectionId={data.id} />
 
       <BilingualPanel
         originalText={data.rawText}

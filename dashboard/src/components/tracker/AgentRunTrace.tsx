@@ -1,14 +1,49 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import {
+  AlertTriangle,
+  Brain,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  FileText,
+  ImageIcon,
+  Link2,
+} from 'lucide-react';
 import { useAgentRunsQuery } from '@/api/detections';
-import type { AgentRun, LinkEvidence } from '@/types/api';
+import { getTypeLabel } from '@/components/tracker/labels';
+import type { AgentRun, DetectionType, LinkEvidence } from '@/types/api';
 
-const STAGE_LABEL: Record<string, string> = {
-  normalize: '정규화',
-  triage: '1차 분류',
-  image: '이미지 분석',
-  link_trace: '링크 추적',
-  synthesize: '최종 합성',
+const STAGE_META: Record<AgentRun['stage'], {
+  icon: typeof FileText;
+  label: string;
+  title: string;
+}> = {
+  normalize: {
+    icon: FileText,
+    label: '정리',
+    title: '본문과 링크를 정리했습니다',
+  },
+  triage: {
+    icon: Brain,
+    label: '판단',
+    title: 'AI가 게시글 유형을 먼저 판단했습니다',
+  },
+  image: {
+    icon: ImageIcon,
+    label: '이미지',
+    title: '이미지 증거가 있는지 확인했습니다',
+  },
+  link_trace: {
+    icon: Link2,
+    label: '링크',
+    title: '외부 링크가 위험 사이트로 이어지는지 확인했습니다',
+  },
+  synthesize: {
+    icon: CheckCircle2,
+    label: '결론',
+    title: '단계별 증거를 최종 판단으로 정리했습니다',
+  },
 };
 
 function latencyText(ms: number | null) {
@@ -16,55 +51,194 @@ function latencyText(ms: number | null) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
+function percent(value: unknown) {
+  return typeof value === 'number' ? `${Math.round(value * 100)}%` : '-';
+}
+
+function detectionTypeLabel(value: unknown) {
+  return typeof value === 'string' ? getTypeLabel(value as DetectionType) : '-';
+}
+
+function linksFromRun(run: AgentRun | undefined): LinkEvidence[] {
+  const links = run?.output?.links;
+  return Array.isArray(links) ? (links as LinkEvidence[]) : [];
+}
+
+function extractedLinksFromRun(run: AgentRun | undefined): string[] {
+  const links = run?.output?.links;
+  return Array.isArray(links) ? (links as string[]) : [];
+}
+
+function fetchStatusLabel(status: string) {
+  if (status === 'ok') return '접속 확인';
+  if (status.startsWith('skipped:messenger')) return '메신저 링크라 열람 생략';
+  if (status.startsWith('blocked')) return '안전 정책으로 차단';
+  if (status.startsWith('error:http_404')) return '페이지 없음';
+  if (status.startsWith('error')) return '접속 실패';
+  return status;
+}
+
+const dangerSurface = 'color-mix(in oklch, var(--crit) 14%, var(--bg-elev))';
+const dangerBorder = 'color-mix(in oklch, var(--crit) 45%, var(--border-1))';
+const dangerMuted = 'color-mix(in oklch, var(--crit) 18%, var(--bg-elev))';
+const dangerText = 'color-mix(in oklch, var(--crit) 82%, var(--fg))';
+
 function KindBadge({ kind }: { kind: LinkEvidence['kind'] }) {
-  const map: Record<string, string> = {
-    web: 'bg-green-100 text-green-800',
-    messenger: 'bg-blue-100 text-blue-800',
-    file_direct_link: 'bg-red-100 text-red-800',
-    blocked: 'bg-orange-100 text-orange-800',
-    error: 'bg-gray-100 text-gray-600',
-  };
   const label: Record<string, string> = {
-    web: '웹페이지',
-    messenger: '메신저',
-    file_direct_link: '파일직링크',
-    blocked: '차단',
-    error: '오류',
+    web: '일반 웹 링크',
+    messenger: '메신저 채널',
+    file_direct_link: '파일 다운로드 링크',
+    blocked: '열람 차단',
+    error: '확인 오류',
   };
   return (
-    <span className={`rounded px-1.5 py-0.5 font-mono text-xs ${map[kind] ?? 'bg-gray-100 text-gray-600'}`}>
-      {label[kind] ?? kind}
+    <span
+      className="rounded px-1.5 py-0.5 text-xs font-medium"
+      style={{
+        background: 'var(--bg-sunk)',
+        border: '1px solid var(--border-1)',
+        color: 'var(--fg-2)',
+      }}
+    >
+      링크 유형: {label[kind] ?? kind}
     </span>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: string;
+  tone?: 'default' | 'danger' | 'success';
+}) {
+  const toneClass = {
+    default: 'text-foreground',
+    danger: '',
+    success: 'text-fg',
+  }[tone];
+
+  return (
+    <div
+      className="rounded-md border px-3 py-2"
+      style={{
+        background: tone === 'danger' ? dangerSurface : 'var(--bg-elev)',
+        borderColor: tone === 'danger' ? dangerBorder : 'var(--border-1)',
+      }}
+    >
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <p
+        className={`mt-0.5 text-sm font-semibold ${toneClass}`}
+        style={tone === 'danger' ? { color: dangerText } : undefined}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StageSummary({ data }: { data: AgentRun[] }) {
+  const normalizeRun = data.find((run) => run.stage === 'normalize');
+  const triageRun = data.find((run) => run.stage === 'triage');
+  const linkRun = data.find((run) => run.stage === 'link_trace');
+  const extractedLinks = extractedLinksFromRun(normalizeRun);
+  const checkedLinks = linksFromRun(linkRun);
+  const riskyLinks = checkedLinks.filter((link) => link.is_distribution_site);
+  const type = detectionTypeLabel(triageRun?.output?.type);
+  const confidence = percent(triageRun?.output?.confidence);
+
+  return (
+    <div className="border-b px-4 py-4" style={{ background: 'var(--bg-sunk)' }}>
+      <div className="grid gap-2 sm:grid-cols-4">
+        <SummaryItem label="AI 판단" value={type} />
+        <SummaryItem label="신뢰도" value={confidence} />
+        <SummaryItem label="본문 링크" value={`${extractedLinks.length}개`} />
+        <SummaryItem
+          label="위험 링크"
+          value={`${riskyLinks.length}개`}
+          tone={riskyLinks.length > 0 ? 'danger' : 'success'}
+        />
+      </div>
+      {riskyLinks.length > 0 ? (
+        <div
+          className="mt-3 rounded-md border p-3"
+          style={{ background: dangerSurface, borderColor: dangerBorder }}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" style={{ color: dangerText }} aria-hidden />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold" style={{ color: dangerText }}>
+                가장 중요한 근거: 외부 링크 {riskyLinks.length}개에서 배포·판매 정황을 찾았습니다.
+              </p>
+              <p className="mt-1 break-all font-mono text-xs" style={{ color: dangerText }}>
+                {riskyLinks[0].page_title ?? riskyLinks[0].url}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-md border p-3" style={{ background: 'var(--bg-elev)', borderColor: 'var(--border-1)' }}>
+          <p className="text-sm font-medium text-foreground">
+            확인된 외부 링크에서 직접적인 배포·판매 정황은 발견되지 않았습니다.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
 function LinkEvidenceCard({ ev }: { ev: LinkEvidence }) {
   return (
-    <div className={`rounded border p-3 text-xs ${ev.is_distribution_site ? 'border-red-300 bg-red-50' : 'border-border bg-background'}`}>
-      <div className="flex items-start gap-2">
+    <div
+      className="rounded-md border p-3 text-xs"
+      style={{
+        background: ev.is_distribution_site ? dangerSurface : 'var(--bg-elev)',
+        borderColor: ev.is_distribution_site ? dangerBorder : 'var(--border-1)',
+      }}
+    >
+      <div className="flex flex-wrap items-start gap-2">
         <KindBadge kind={ev.kind} />
+        {ev.is_distribution_site && (
+          <span
+            className="rounded px-1.5 py-0.5 text-xs font-semibold"
+            style={{ background: dangerMuted, border: `1px solid ${dangerBorder}`, color: dangerText }}
+          >
+            위험 근거
+          </span>
+        )}
         <span className="text-muted-foreground min-w-0 flex-1 break-all font-mono">
           {ev.url}
         </span>
-        {ev.is_distribution_site && (
-          <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
-            배포사이트
-          </span>
-        )}
       </div>
+      <p
+        className={`mt-2 text-sm font-medium ${ev.is_distribution_site ? '' : 'text-foreground'}`}
+        style={ev.is_distribution_site ? { color: dangerText } : undefined}
+      >
+        {ev.is_distribution_site
+          ? '배포·판매 정황이 있는 링크입니다'
+          : '직접적인 배포 정황은 확인되지 않았습니다'}
+      </p>
       {ev.page_title && (
-        <p className="text-foreground mt-1.5 font-medium">{ev.page_title}</p>
+        <p className="text-foreground mt-1.5">{ev.page_title}</p>
       )}
       {ev.indicators.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap gap-1">
           {ev.indicators.map((ind) => (
-            <span key={ind} className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">
+            <span
+              key={ind}
+              className="rounded px-1.5 py-0.5 font-mono"
+              style={{ background: 'var(--bg-sunk)', color: 'var(--fg-2)' }}
+            >
               {ind}
             </span>
           ))}
         </div>
       )}
-      <p className="text-muted-foreground mt-1 font-mono">{ev.fetch_status}</p>
+      <p className="text-muted-foreground mt-2 font-mono">
+        확인 상태: {fetchStatusLabel(ev.fetch_status)}
+      </p>
     </div>
   );
 }
@@ -73,13 +247,18 @@ function NormalizeDetail({ output }: { output: Record<string, unknown> }) {
   const links = output.links as string[] | undefined;
   const removedChars = output.removed_char_count as number | undefined;
   return (
-    <div className="text-muted-foreground mt-2 space-y-1 text-xs">
+    <div className="text-muted-foreground mt-3 space-y-2 text-xs">
       {removedChars !== undefined && removedChars > 0 && (
-        <p>정규화로 제거된 문자: <span className="text-foreground font-mono">{removedChars}자</span></p>
+        <p>
+          숨김 문자·깨진 문자처럼 판단을 방해할 수 있는 글자{' '}
+          <span className="text-foreground font-mono">{removedChars}자</span>를 정리했습니다.
+        </p>
       )}
       {links && links.length > 0 ? (
         <div>
-          <p className="mb-1">추출된 링크 {links.length}개:</p>
+          <p className="mb-1">
+            본문에서 외부 링크 <span className="text-foreground font-mono">{links.length}개</span>를 찾았습니다.
+          </p>
           <div className="space-y-0.5">
             {links.map((url) => (
               <p key={url} className="text-foreground break-all font-mono">{url}</p>
@@ -87,7 +266,7 @@ function NormalizeDetail({ output }: { output: Record<string, unknown> }) {
           </div>
         </div>
       ) : (
-        <p>링크 없음</p>
+        <p>본문에서 외부 링크는 발견되지 않았습니다.</p>
       )}
     </div>
   );
@@ -95,11 +274,15 @@ function NormalizeDetail({ output }: { output: Record<string, unknown> }) {
 
 function TriageDetail({ output }: { output: Record<string, unknown> }) {
   return (
-    <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-      <span>분류: <span className="text-foreground font-medium">{String(output.type ?? '-')}</span></span>
-      <span>신뢰도: <span className="text-foreground font-mono">{typeof output.confidence === 'number' ? (output.confidence * 100).toFixed(0) : '-'}%</span></span>
-      {Boolean(output.needs_link_trace) && <span className="text-amber-600 font-medium">링크추적 요청</span>}
-      {Boolean(output.needs_image) && <span className="text-amber-600 font-medium">이미지분석 요청</span>}
+    <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      <span>
+        AI는 이 게시글을{' '}
+        <span className="text-foreground font-medium">{detectionTypeLabel(output.type)}</span>
+        로 판단했습니다.
+      </span>
+      <span>신뢰도 <span className="text-foreground font-mono">{percent(output.confidence)}</span></span>
+      {Boolean(output.needs_link_trace) && <span className="font-medium text-amber-600">외부 링크 확인 필요</span>}
+      {Boolean(output.needs_image) && <span className="font-medium text-amber-600">이미지 확인 필요</span>}
       {Boolean(output.game_context) && (
         <span className="w-full">게임 컨텍스트: <span className="text-foreground">{String(output.game_context)}</span></span>
       )}
@@ -107,11 +290,47 @@ function TriageDetail({ output }: { output: Record<string, unknown> }) {
   );
 }
 
+function GenericDetail({ output }: { output: Record<string, unknown> }) {
+  const summary = output.summary ?? output.reason ?? output.result ?? output.decision;
+  if (typeof summary === 'string' && summary.trim().length > 0) {
+    return <p className="text-muted-foreground mt-3 text-xs leading-relaxed">{summary}</p>;
+  }
+
+  const entries = Object.entries(output).filter(([, value]) => value !== null && value !== undefined);
+  if (entries.length === 0) {
+    return <p className="text-muted-foreground mt-3 text-xs">표시할 세부 결과가 없습니다.</p>;
+  }
+
+  return (
+    <dl className="text-muted-foreground mt-3 grid gap-1 text-xs sm:grid-cols-[120px_1fr]">
+      {entries.map(([key, value]) => (
+        <div key={key} className="contents">
+          <dt className="font-mono">{key}</dt>
+          <dd className="text-foreground min-w-0 break-words">
+            {typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+              ? String(value)
+              : JSON.stringify(value)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function LinkTraceDetail({ output }: { output: Record<string, unknown> }) {
   const links = output.links as LinkEvidence[] | undefined;
-  if (!links || links.length === 0) return <p className="text-muted-foreground mt-2 text-xs">추적된 링크 없음</p>;
+  if (!links || links.length === 0) return <p className="text-muted-foreground mt-3 text-xs">확인할 외부 링크가 없습니다.</p>;
+  const risky = links.filter((ev) => ev.is_distribution_site).length;
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-3 space-y-2">
+      <p
+        className={`text-xs font-medium ${risky > 0 ? '' : 'text-muted-foreground'}`}
+        style={risky > 0 ? { color: dangerText } : undefined}
+      >
+        {risky > 0
+          ? `외부 링크 ${links.length}개 중 ${risky}개에서 배포·판매 정황을 찾았습니다.`
+          : `외부 링크 ${links.length}개를 확인했지만 배포 정황은 확인되지 않았습니다.`}
+      </p>
       {links.map((ev) => (
         <LinkEvidenceCard key={ev.url} ev={ev} />
       ))}
@@ -119,53 +338,113 @@ function LinkTraceDetail({ output }: { output: Record<string, unknown> }) {
   );
 }
 
-function StageRow({ run }: { run: AgentRun }) {
-  const [open, setOpen] = useState(run.stage === 'link_trace');
-  const label = STAGE_LABEL[run.stage] ?? run.stage;
+function stageResult(run: AgentRun) {
+  if (!run.output) return '처리 결과가 없습니다.';
+  if (run.stage === 'normalize') {
+    const links = Array.isArray(run.output.links) ? run.output.links.length : 0;
+    const removed = typeof run.output.removed_char_count === 'number' ? run.output.removed_char_count : 0;
+    return `외부 링크 ${links}개 추출 · 방해 문자 ${removed}자 정리`;
+  }
+  if (run.stage === 'triage') {
+    return `${detectionTypeLabel(run.output.type)} · 신뢰도 ${percent(run.output.confidence)}`;
+  }
+  if (run.stage === 'link_trace') {
+    const links = Array.isArray(run.output.links) ? (run.output.links as LinkEvidence[]) : [];
+    const risky = links.filter((ev) => ev.is_distribution_site).length;
+    return risky > 0
+      ? `위험 링크 ${risky}개 확인`
+      : `확인한 ${links.length}개 링크에서 직접 배포 정황 없음`;
+  }
+  const summary = run.output.summary ?? run.output.reason ?? run.output.result ?? run.output.decision;
+  return typeof summary === 'string' && summary.trim().length > 0
+    ? summary
+    : '세부 결과를 접힌 영역에서 확인할 수 있습니다.';
+}
+
+function StageRow({ run, index, total }: { run: AgentRun; index: number; total: number }) {
+  const links = run.stage === 'link_trace' && run.output?.links
+    ? (run.output.links as LinkEvidence[])
+    : [];
+  const hasRisk = links.some((link) => link.is_distribution_site);
+  const [open, setOpen] = useState(run.stage === 'link_trace' && hasRisk);
+  const meta = STAGE_META[run.stage];
+  const Icon = meta.icon;
   const latency = latencyText(run.latencyMs);
   const hasOutput = run.output !== null;
 
   return (
-    <div className="border-b last:border-b-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50"
-        disabled={!hasOutput}
-      >
-        <span className="text-muted-foreground w-4 shrink-0">
-          {hasOutput ? (
-            open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />
-          ) : (
-            <span className="size-3.5 inline-block" />
-          )}
-        </span>
-        <span className="text-foreground text-sm font-medium">{label}</span>
-        {run.model && (
-          <span className="text-muted-foreground rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-            {run.model}
-          </span>
-        )}
-        <span className="ml-auto flex shrink-0 items-center gap-3">
-          {run.inputTokens > 0 && (
-            <span className="text-muted-foreground font-mono text-xs">
-              {run.inputTokens + run.outputTokens}tok
-            </span>
-          )}
-          {latency && (
-            <span className="text-muted-foreground font-mono text-xs">{latency}</span>
-          )}
-        </span>
-      </button>
-
-      {open && run.output && (
-        <div className="px-10 pb-4">
-          {run.stage === 'normalize' && <NormalizeDetail output={run.output} />}
-          {run.stage === 'triage' && <TriageDetail output={run.output} />}
-          {run.stage === 'link_trace' && <LinkTraceDetail output={run.output} />}
-        </div>
+    <li className="relative grid grid-cols-[32px_1fr] gap-3 pb-4 last:pb-0">
+      {index < total - 1 && (
+        <span className="absolute left-4 top-8 h-[calc(100%-32px)] w-px bg-border" aria-hidden />
       )}
-    </div>
+      <div
+        className="z-10 flex size-8 items-center justify-center rounded-full border"
+        style={{
+          background: hasRisk ? dangerSurface : 'var(--bg-elev)',
+          borderColor: hasRisk ? dangerBorder : 'var(--border-2)',
+          color: hasRisk ? dangerText : 'var(--fg-3)',
+        }}
+      >
+        {hasRisk ? <AlertTriangle className="size-4" aria-hidden /> : <CheckCircle2 className="size-4" aria-hidden />}
+      </div>
+      <div
+        className="rounded-md border"
+        style={{
+          background: 'var(--bg-elev)',
+          borderColor: hasRisk ? dangerBorder : 'var(--border-1)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-muted/50"
+          disabled={!hasOutput}
+          aria-expanded={open}
+        >
+          <span className="mt-0.5 rounded bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
+            {index + 1}
+          </span>
+          <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">{meta.label}</span>
+              <span className="text-sm text-foreground">{meta.title}</span>
+              {hasRisk && (
+                <span
+                  className="rounded px-1.5 py-0.5 text-xs font-semibold"
+                  style={{ background: dangerMuted, border: `1px solid ${dangerBorder}`, color: dangerText }}
+                >
+                  주의 필요
+                </span>
+              )}
+            </span>
+            <span className="mt-1 block text-xs text-muted-foreground">{stageResult(run)}</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
+            {latency && <span className="hidden font-mono text-xs sm:inline">{latency}</span>}
+            {hasOutput ? (
+              open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />
+            ) : null}
+          </span>
+        </button>
+
+        {open && run.output && (
+          <div className="border-t px-4 pb-4">
+            {run.stage === 'normalize' && <NormalizeDetail output={run.output} />}
+            {run.stage === 'triage' && <TriageDetail output={run.output} />}
+            {run.stage === 'link_trace' && <LinkTraceDetail output={run.output} />}
+            {(run.stage === 'image' || run.stage === 'synthesize') && <GenericDetail output={run.output} />}
+            {(run.model || run.inputTokens > 0 || latency) && (
+              <p className="mt-3 font-mono text-[11px] text-muted-foreground">
+                기술 로그: {run.model ?? 'LLM 미사용'}
+                {run.inputTokens > 0 ? ` · ${run.inputTokens + run.outputTokens}tok` : ''}
+                {latency ? ` · ${latency}` : ''}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -173,29 +452,51 @@ export function AgentRunTrace({ detectionId }: { detectionId: number }) {
   const { data, isLoading } = useAgentRunsQuery(detectionId);
 
   if (isLoading || !data || data.length === 0) return null;
+  const linkRun = data.find((run) => run.stage === 'link_trace');
+  const riskyLinks = linksFromRun(linkRun).filter((link) => link.is_distribution_site).length;
 
   return (
-    <section className="bg-card overflow-hidden rounded-lg border">
-      <div className="border-b px-4 py-3 flex items-center gap-2">
-        <h2 className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-          파이프라인 추적
-        </h2>
-        <span className="text-muted-foreground font-mono text-xs">
-          {data.length}단계
-        </span>
-        <a
-          href={`/api/detections/${detectionId}/agent-runs`}
-          className="text-muted-foreground hover:text-foreground ml-auto"
-          title="raw JSON"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <ExternalLink className="size-3.5" />
-        </a>
+    <section className="overflow-hidden rounded-lg border bg-card">
+      <div className="border-b px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold text-foreground">
+            AI 검증 과정
+          </h2>
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+            {data.length}단계
+          </span>
+          {riskyLinks > 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold"
+              style={{ background: dangerMuted, border: `1px solid ${dangerBorder}`, color: dangerText }}
+            >
+              <AlertTriangle className="size-3" aria-hidden />
+              위험 링크 {riskyLinks}개
+            </span>
+          )}
+          <a
+            href={`/api/detections/${detectionId}/agent-runs`}
+            className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground no-underline hover:text-foreground"
+            title="원본 처리 로그"
+            target="_blank"
+            rel="noreferrer"
+          >
+            원본 로그
+            <ExternalLink className="size-3.5" />
+          </a>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          먼저 결론을 보고, 필요한 단계만 펼쳐서 근거와 원본 로그를 확인하세요.
+        </p>
       </div>
-      {data.map((run) => (
-        <StageRow key={run.id} run={run} />
-      ))}
+
+      <StageSummary data={data} />
+
+      <ol className="p-4">
+        {data.map((run, index) => (
+          <StageRow key={run.id} run={run} index={index} total={data.length} />
+        ))}
+      </ol>
     </section>
   );
 }

@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, CalendarDays } from 'lucide-react';
 import { LineChart } from '@/components/charts/LineChart';
 import { ChartCard } from '@/components/tracker/ChartCard';
-import { EmptyState } from '@/components/tracker/EmptyState';
 import { RecentAlertList } from '@/components/tracker/RecentAlertList';
 import { getTypeLabel } from '@/components/tracker/labels';
 import { useDetectionsSuspenseQuery } from '@/api/detections';
@@ -41,7 +40,6 @@ export function DashboardPage() {
   const langData = langDistributionToSeries(data.langDistribution);
   const hotspots = buildHotspots(detectionData.content);
 
-  const isEmpty = data.todayCount === 0;
   const todayDate = useMemo(
     () => new Date(dataUpdatedAt).toLocaleDateString('en-CA'),
     [dataUpdatedAt],
@@ -83,83 +81,73 @@ export function DashboardPage() {
         </span>
       </div>
 
-      {isEmpty ? (
-        <EmptyState
-          variant="healthy"
-          title="오늘 탐지된 게시글이 없습니다"
-          message="시스템 정상 작동 중 · 다음 크롤링 주기에 다시 확인하세요"
-        />
-      ) : (
-        <>
-          <Hero
-            count={data.todayCount}
-            delta={data.deltaFromYesterday}
-            freshness={freshness}
-            onToday={() => openDetections({ date: todayDate })}
-          />
+      <Hero
+        count={data.todayCount}
+        delta={data.deltaFromYesterday}
+        freshness={freshness}
+        onToday={() => openDetections({ date: todayDate })}
+      />
 
-          <RecentAlertList />
+      <RecentAlertList />
 
-          <section
-            className="border-t"
-            style={{
-              borderColor: 'var(--border-1)',
-              paddingTop: 'var(--pad-section-head)',
-            }}
-          >
-            <div
-              className="mb-4 flex flex-wrap items-end justify-between gap-3"
+      <section
+        className="border-t"
+        style={{
+          borderColor: 'var(--border-1)',
+          paddingTop: 'var(--pad-section-head)',
+        }}
+      >
+        <div
+          className="mb-4 flex flex-wrap items-end justify-between gap-3"
+        >
+          <div className="flex flex-col gap-1">
+            <h2
+              className="m-0 font-semibold"
+              style={{
+                color: 'var(--fg)',
+                fontSize: 'var(--text-lg)',
+                lineHeight: 'var(--lh-snug)',
+              }}
             >
-              <div className="flex flex-col gap-1">
-                <h2
-                  className="m-0 font-semibold"
-                  style={{
-                    color: 'var(--fg)',
-                    fontSize: 'var(--text-lg)',
-                    lineHeight: 'var(--lh-snug)',
-                  }}
-                >
-                  기간별 탐지
-                </h2>
-                <span
-                  className="text-xs"
-                  style={{ color: 'var(--fg-3)' }}
-                >
-                  선택한 기간 기준으로 필터와 추이를 함께 표시
-                </span>
-              </div>
-              <PeriodControl value={period} onChange={setPeriod} />
-            </div>
+              기간별 탐지
+            </h2>
+            <span
+              className="text-xs"
+              style={{ color: 'var(--fg-3)' }}
+            >
+              선택한 기간 기준으로 필터와 추이를 함께 표시
+            </span>
+          </div>
+          <PeriodControl value={period} onChange={setPeriod} />
+        </div>
 
-            <section style={{ marginBottom: 'var(--pad-section)' }}>
-              <HotspotCard
-                data={hotspots}
-                typeData={typeData}
-                siteData={siteData}
-                langData={langData}
-                onSelect={(entry) =>
-                  openDetections({ type: entry.type, site: entry.site, range: selectedRange })
-                }
-                onFilter={(filter) => openDetections({ ...filter, range: selectedRange })}
-              />
-            </section>
+        <section style={{ marginBottom: 'var(--pad-section)' }}>
+          <HotspotCard
+            data={hotspots}
+            typeData={typeData}
+            siteData={siteData}
+            langData={langData}
+            onSelect={(entry) =>
+              openDetections({ type: entry.type, site: entry.site, range: selectedRange })
+            }
+            onFilter={(filter) => openDetections({ ...filter, range: selectedRange })}
+          />
+        </section>
 
-            <section style={{ marginBottom: 'var(--pad-section)' }}>
-              <ChartCard
-                title={period === 'weekly' ? '주간 탐지 추이' : '월간 탐지 추이'}
-                subtitle="포인트 클릭 시 해당 날짜 탐지 목록으로 이동"
-                empty={trendData.length === 0}
-                emptyMessage="기간 추이 데이터 없음"
-              >
-                <LineChart
-                  data={trendData}
-                  onSelect={(entry) => entry.date && openDetections({ date: entry.date })}
-                />
-              </ChartCard>
-            </section>
-          </section>
-        </>
-      )}
+        <section style={{ marginBottom: 'var(--pad-section)' }}>
+          <ChartCard
+            title={period === 'weekly' ? '주간 탐지 추이' : '월간 탐지 추이'}
+            subtitle="포인트 클릭 시 해당 날짜 탐지 목록으로 이동"
+            empty={trendData.length === 0}
+            emptyMessage="기간 추이 데이터 없음"
+          >
+            <LineChart
+              data={trendData}
+              onSelect={(entry) => entry.date && openDetections({ date: entry.date })}
+            />
+          </ChartCard>
+        </section>
+      </section>
     </PageContainer>
   );
 }

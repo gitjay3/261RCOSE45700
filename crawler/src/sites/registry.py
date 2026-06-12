@@ -205,6 +205,28 @@ _TW_HEADERS = {
 
 
 # ──────────────────────────────────────────────
+# Dcard listing JS: JSON-LD(SocialMediaPosting)에서 url→headline 맵을 만들어
+# <a> title 속성에 주입. crawl4ai가 link["title"]로 제목을 가져올 수 있게 됨.
+# Dcard <a> 태그 내부엔 <time>1d</time>만 있어 link["text"]로는 제목 불가.
+# ──────────────────────────────────────────────
+_DCARD_LD_TITLE_JS = """
+(() => {
+  const titleMap = {};
+  document.querySelectorAll('script[type="application/ld+json"]').forEach(s => {
+    try {
+      const d = JSON.parse(s.textContent);
+      if (d['@type'] === 'SocialMediaPosting' && d.url && d.headline) {
+        titleMap[d.url] = d.headline;
+      }
+    } catch(e) {}
+  });
+  document.querySelectorAll('a[href]').forEach(a => {
+    if (titleMap[a.href]) { a.title = titleMap[a.href]; }
+  });
+})();
+"""
+
+# ──────────────────────────────────────────────
 # NC 게임 키워드 — 혼합 보드의 제목 필터에 사용 (한·중번·중간·영)
 # ──────────────────────────────────────────────
 _NC_GAME_KEYWORDS: list[str] = [
@@ -339,10 +361,9 @@ SITES: dict[str, SiteConfig] = {
         ],
         post_url_pattern=r"https://www\.dcard\.tw/f/game/p/\d+",
         image_filter=_dcard_image_filter,
-        # /f/game listing 은 article selector 로 회수되지만, detail page 에 같은 wait_for 를
-        # 재사용하면 실제 smoke 에서 timeout. /f/online 과 동일하게 selector 의존을 끊는다.
         delay_before_return_html=3.0,
         wait_until=_dcard_wait_until(),
+        js_code=[_DCARD_LD_TITLE_JS],
         simulate_user=_env_enabled("CRAWL_DCARD_SIMULATE_USER"),
         override_navigator=_env_enabled("CRAWL_DCARD_OVERRIDE_NAVIGATOR"),
         page_timeout=45_000,
@@ -350,7 +371,7 @@ SITES: dict[str, SiteConfig] = {
         headers=_TW_HEADERS,
         title_keywords=_NC_GAME_KEYWORDS,
         enabled=True,
-        note="React SPA. selector 의존 제거 — title_keywords 는 priority feature.",
+        note="React SPA. JSON-LD title 주입으로 keyword 매칭 활성화.",
     ),
 
     "dcard_online": SiteConfig(
@@ -361,11 +382,9 @@ SITES: dict[str, SiteConfig] = {
         ],
         post_url_pattern=r"https://www\.dcard\.tw/f/[A-Za-z0-9_-]+/p/\d+",
         image_filter=_dcard_image_filter,
-        # Dcard React 클래스가 CSS module 해시 (PostList_entry_*) 라 selector 매번 깨짐.
-        # /f/online 은 현재 게시글 링크를 내지 않음 — 線上遊戲 topic 으로 이동.
-        # topic/listing 모두 DOM 의존 끊고 hydration 시간만 대기.
         delay_before_return_html=3.0,
         wait_until=_dcard_wait_until(),
+        js_code=[_DCARD_LD_TITLE_JS],
         simulate_user=_env_enabled("CRAWL_DCARD_SIMULATE_USER"),
         override_navigator=_env_enabled("CRAWL_DCARD_OVERRIDE_NAVIGATOR"),
         page_timeout=45_000,
@@ -373,7 +392,7 @@ SITES: dict[str, SiteConfig] = {
         headers=_TW_HEADERS,
         title_keywords=_NC_GAME_KEYWORDS,
         enabled=True,
-        note="線上遊戲 topic. 여러 forum post URL 을 수집. selector 의존 제거.",
+        note="線上遊戲 topic. JSON-LD title 주입으로 keyword 매칭 활성화.",
     ),
 
     # ── 대만 Bahamut — NC 게임 8개 보드 (모두 순수 NC, title_keywords 불필요) ──

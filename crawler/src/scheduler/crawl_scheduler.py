@@ -363,7 +363,7 @@ def _extract_post_url_candidates(
     for link in links:
         full = link.get("href") or ""
         href = full.split("?")[0]
-        link_title = link.get("text") or link.get("title") or ""
+        link_title = link.get("title") or link.get("text") or ""
         candidate_url = (
             full if compiled.match(full) else href if compiled.match(href) else None
         )

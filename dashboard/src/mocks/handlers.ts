@@ -90,10 +90,9 @@ export const handlers = [
     return HttpResponse.json(response);
   }),
 
-  // GET /detections/:id/agent-runs — agentic 파이프라인 추적 (짝수 id는 agentic, 홀수는 single)
+  // GET /detections/:id/agent-runs — agentic 파이프라인 추적 모크
   http.get(`${baseUrl}/detections/:id/agent-runs`, ({ params }) => {
     const id = Number(params.id);
-    if (id % 2 !== 0) return HttpResponse.json([]);
 
     const runs: AgentRun[] = [
       {

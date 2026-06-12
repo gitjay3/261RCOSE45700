@@ -1,7 +1,9 @@
 package com.tracker.api.controller;
 
+import com.tracker.api.dto.AgentRunResponse;
 import com.tracker.api.dto.DetectionListResponse;
 import com.tracker.api.dto.DetectionResponse;
+import java.util.List;
 import com.tracker.api.service.DetectionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -51,6 +53,18 @@ public class DetectionController {
             HttpServletRequest request) {
 
         var result = detectionService.getDetectionById(id);
+        return ResponseEntity.ok()
+                .header("X-Correlation-ID", resolveCorrelationId(request))
+                .body(result);
+    }
+
+    @GetMapping("/detections/{id}/agent-runs")
+    @Operation(summary = "탐지 파이프라인 추적 조회", description = "agentic 모드 탐지의 스테이지별 trace 반환. single 모드면 빈 배열.")
+    public ResponseEntity<List<AgentRunResponse>> getAgentRuns(
+            @PathVariable Long id,
+            HttpServletRequest request) {
+
+        var result = detectionService.getAgentRuns(id);
         return ResponseEntity.ok()
                 .header("X-Correlation-ID", resolveCorrelationId(request))
                 .body(result);

@@ -1,9 +1,11 @@
 package com.tracker.api.service;
 
+import com.tracker.api.dto.AgentRunResponse;
 import com.tracker.api.dto.DetectionListResponse;
 import com.tracker.api.dto.DetectionResponse;
 import com.tracker.api.exception.DetectionNotFoundException;
 import com.tracker.api.exception.InvalidFilterParamException;
+import com.tracker.api.repository.AgentRunRepository;
 import com.tracker.api.repository.DetectionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,12 +17,14 @@ import org.springframework.util.StringUtils;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class DetectionService {
 
     private final DetectionRepository detectionRepository;
+    private final AgentRunRepository agentRunRepository;
 
     @Transactional(readOnly = true)
     public DetectionListResponse getDetections(
@@ -74,6 +78,17 @@ public class DetectionService {
         return detectionRepository.findByIdFetched(id)
                 .map(DetectionResponse::from)
                 .orElseThrow(() -> new DetectionNotFoundException(id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<AgentRunResponse> getAgentRuns(Long detectionId) {
+        if (!detectionRepository.existsById(detectionId)) {
+            throw new DetectionNotFoundException(detectionId);
+        }
+        return agentRunRepository.findByDetectionIdOrderByCreatedAtAsc(detectionId)
+                .stream()
+                .map(AgentRunResponse::from)
+                .toList();
     }
 
 }

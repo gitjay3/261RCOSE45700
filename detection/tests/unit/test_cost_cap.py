@@ -66,3 +66,57 @@ def test_estimate_cost_fallback_to_gpt4o() -> None:
     cost_known = estimate_cost_usd("gpt-4o", 1000, 500)
     cost_unknown = estimate_cost_usd("아직-출시-안된-모델", 1000, 500)
     assert cost_known == pytest.approx(cost_unknown, rel=1e-9)
+
+
+@pytest.mark.parametrize(
+    "model, in_rate, out_rate",
+    [
+        ("gpt-4o-mini", 0.150, 0.600),
+        ("o4-mini", 0.550, 2.200),
+        ("claude-opus-4-8", 5.00, 25.00),
+        ("claude-sonnet-4-6", 3.00, 15.00),
+        ("claude-haiku-4-5", 1.00, 5.00),
+        ("claude-fable-5", 10.00, 50.00),
+        ("deepseek-chat", 0.14, 0.28),
+        ("deepseek-v4-pro", 0.435, 0.87),
+        ("gemini-2.5-pro", 1.25, 10.00),
+        ("gemini-2.5-flash", 0.30, 2.50),
+    ],
+)
+def test_multi_provider_pricing(model: str, in_rate: float, out_rate: float) -> None:
+    # 1M in + 1M out → input_rate + output_rate (USD).
+    cost = estimate_cost_usd(model, 1_000_000, 1_000_000)
+    assert cost == pytest.approx(in_rate + out_rate, rel=1e-9)
+
+
+def test_unknown_model_warns_once_then_estimates(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 미등록 모델 → fallback 추정 + 모델당 1회 경고.
+    cost_cap_module._warned_unknown_models.discard("totally-unknown-llm")
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        cost_cap_module._logger, "warning",
+        lambda msg, *a, **k: warnings.append(msg % a if a else msg),
+    )
+    c1 = estimate_cost_usd("totally-unknown-llm", 1000, 500)
+    c2 = estimate_cost_usd("totally-unknown-llm", 1000, 500)
+    assert c1 == pytest.approx(c2)
+    assert c1 == pytest.approx(estimate_cost_usd("gpt-4o", 1000, 500))  # fallback 단가
+    assert len(warnings) == 1  # 모델당 1회만 경고
+
+
+def test_pricing_override_via_env_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 인라인 JSON 오버라이드로 신모델 추가 + 기존 모델 단가 변경 (코드 수정 없이).
+    monkeypatch.setenv(
+        "LLM_PRICING_OVERRIDES_JSON",
+        '{"my-future-model": {"input": 1.0, "output": 2.0}, "gpt-4o": {"input": 9.9, "output": 9.9}}',
+    )
+    import importlib
+    reloaded = importlib.reload(cost_cap_module)
+    try:
+        assert reloaded.PRICING["my-future-model"] == {"input": 1.0, "output": 2.0}
+        assert reloaded.PRICING["gpt-4o"] == {"input": 9.9, "output": 9.9}
+        # 오버라이드 안 한 모델은 베이스 단가 유지.
+        assert reloaded.PRICING["claude-opus-4-8"] == {"input": 5.00, "output": 25.00}
+    finally:
+        monkeypatch.delenv("LLM_PRICING_OVERRIDES_JSON", raising=False)
+        importlib.reload(cost_cap_module)  # 전역 PRICING 원복

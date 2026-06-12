@@ -28,7 +28,7 @@ class StatsControllerTest {
         var langItem = new StatsResponse.LangDistributionItem("zh-CN", 4L);
         var response = new StatsResponse(10L, 2L,
                 List.of(typeItem), List.of(siteItem), List.of(langItem), List.of(), List.of());
-        when(statsService.getStats(null)).thenReturn(response);
+        when(statsService.getStats(null, null)).thenReturn(response);
 
         mockMvc.perform(get("/api/stats"))
                 .andExpect(status().isOk())
@@ -46,31 +46,31 @@ class StatsControllerTest {
     void getStats_withPeriodWeekly_returnsTrend() throws Exception {
         var trendItem = new StatsResponse.TrendItem("2026-04-30", 5L);
         var response = new StatsResponse(10L, 2L, List.of(), List.of(), List.of(), List.of(trendItem), List.of());
-        when(statsService.getStats("weekly")).thenReturn(response);
+        when(statsService.getStats("weekly", null)).thenReturn(response);
 
         mockMvc.perform(get("/api/stats").param("period", "weekly"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.trend[0].date").value("2026-04-30"))
                 .andExpect(jsonPath("$.trend[0].count").value(5));
 
-        verify(statsService).getStats("weekly");
+        verify(statsService).getStats("weekly", null);
     }
 
     @Test
-    void getStats_withPeriodMonthly_returnsTrend() throws Exception {
+    void getStats_withDays_returnsTrend() throws Exception {
         var response = new StatsResponse(10L, 2L, List.of(), List.of(), List.of(), List.of(), List.of());
-        when(statsService.getStats("monthly")).thenReturn(response);
+        when(statsService.getStats(null, 14)).thenReturn(response);
 
-        mockMvc.perform(get("/api/stats").param("period", "monthly"))
+        mockMvc.perform(get("/api/stats").param("days", "14"))
                 .andExpect(status().isOk());
 
-        verify(statsService).getStats("monthly");
+        verify(statsService).getStats(null, 14);
     }
 
     @Test
     void getStats_withInvalidPeriod_returnsBadRequest() throws Exception {
-        when(statsService.getStats("daily"))
-                .thenThrow(new InvalidFilterParamException("period는 weekly 또는 monthly만 허용됩니다."));
+        when(statsService.getStats("daily", null))
+                .thenThrow(new InvalidFilterParamException("days는 1~365 사이 숫자만 허용됩니다."));
 
         mockMvc.perform(get("/api/stats").param("period", "daily"))
                 .andExpect(status().isBadRequest())

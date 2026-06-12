@@ -101,10 +101,10 @@ class StatsServiceTest {
     }
 
     @Test
-    void getStats_weekly_fillsZeroCountTrendDays() {
+    void getStats_days_fillsZeroCountTrendDays() {
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
         when(cacheRedisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.get("cache:detections:stats:weekly")).thenReturn(null);
+        when(valueOps.get("cache:detections:stats:days:14")).thenReturn(null);
         when(statsRepository.countToday(any(LocalDate.class))).thenReturn(5L);
         when(statsRepository.countYesterday(any(LocalDate.class))).thenReturn(4L);
         when(statsRepository.findTypeDistributionRaw(any(Instant.class), any(Instant.class)))
@@ -116,16 +116,36 @@ class StatsServiceTest {
         when(statsRepository.findTrendRaw(any(Instant.class), any(Instant.class)))
                 .thenReturn(List.<Object[]>of(new Object[]{today, 5L}));
 
-        StatsResponse result = statsService.getStats("weekly");
+        StatsResponse result = statsService.getStats(null, 14);
 
-        assertThat(result.trend()).hasSize(7);
-        assertThat(result.trend().getFirst().date()).isEqualTo(today.minusDays(6).toString());
+        assertThat(result.trend()).hasSize(14);
+        assertThat(result.trend().getFirst().date()).isEqualTo(today.minusDays(13).toString());
         assertThat(result.trend().getFirst().count()).isZero();
         assertThat(result.trend().getLast().date()).isEqualTo(today.toString());
         assertThat(result.trend().getLast().count()).isEqualTo(5L);
         verify(statsRepository).findTypeDistributionRaw(
-                eq(today.minusDays(6).atStartOfDay().toInstant(ZoneOffset.UTC)),
+                eq(today.minusDays(13).atStartOfDay().toInstant(ZoneOffset.UTC)),
                 eq(today.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)));
-        verify(valueOps).set(eq("cache:detections:stats:weekly"), any(String.class), eq(Duration.ofSeconds(60)));
+        verify(valueOps).set(eq("cache:detections:stats:days:14"), any(String.class), eq(Duration.ofSeconds(60)));
+    }
+
+    @Test
+    void getStats_weeklyPeriodRemainsBackwardCompatible() {
+        when(cacheRedisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("cache:detections:stats:days:7")).thenReturn(null);
+        when(statsRepository.countToday(any(LocalDate.class))).thenReturn(5L);
+        when(statsRepository.countYesterday(any(LocalDate.class))).thenReturn(4L);
+        when(statsRepository.findTypeDistributionRaw(any(Instant.class), any(Instant.class)))
+                .thenReturn(List.of());
+        when(statsRepository.findSiteDistributionRaw(any(Instant.class), any(Instant.class)))
+                .thenReturn(List.of());
+        when(statsRepository.findLangDistributionRaw(any(Instant.class), any(Instant.class)))
+                .thenReturn(List.of());
+        when(statsRepository.findTrendRaw(any(Instant.class), any(Instant.class)))
+                .thenReturn(List.of());
+
+        StatsResponse result = statsService.getStats("weekly");
+
+        assertThat(result.trend()).hasSize(7);
     }
 }

@@ -40,7 +40,7 @@ class DetectionControllerTest {
                 var mockDetection = new DetectionResponse(1L, true, "매크로_판매", "T2", 0.95,
                                 "이유", "원문", null, "http://example.com", "tailstar.net", "zh-CN",
                                 "2026-04-24T14:30:00Z");
-                when(detectionService.getDetections(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                when(detectionService.getDetections(any(), any(), any(), any(), any(), any(), eq(0), eq(20)))
                                 .thenReturn(new DetectionListResponse(List.of(mockDetection), 0, 20, 1L));
 
                 mockMvc.perform(get("/api/detections"))
@@ -55,7 +55,7 @@ class DetectionControllerTest {
 
         @Test
         void getDetections_emptyResult_returns200() throws Exception {
-                when(detectionService.getDetections(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                when(detectionService.getDetections(any(), any(), any(), any(), any(), any(), eq(0), eq(20)))
                                 .thenReturn(new DetectionListResponse(List.of(), 0, 20, 0L));
 
                 mockMvc.perform(get("/api/detections"))
@@ -88,6 +88,7 @@ class DetectionControllerTest {
                                 eq("tailstar.net"),
                                 eq("매크로_판매"),
                                 eq("ko"),
+                                eq("T2"),
                                 eq(1),
                                 eq(10)))
                                 .thenReturn(new DetectionListResponse(List.of(), 1, 10, 0L));
@@ -97,6 +98,7 @@ class DetectionControllerTest {
                                 .param("site", "tailstar.net")
                                 .param("type", "매크로_판매")
                                 .param("lang", "ko")
+                                .param("tier", "T2")
                                 .param("page", "1")
                                 .param("size", "10"))
                                 .andExpect(status().isOk());
@@ -107,6 +109,7 @@ class DetectionControllerTest {
                                 "tailstar.net",
                                 "매크로_판매",
                                 "ko",
+                                "T2",
                                 1,
                                 10);
         }
@@ -115,7 +118,8 @@ class DetectionControllerTest {
         void getDetections_passesRangeParameterToService() throws Exception {
                 when(detectionService.getDetections(
                                 eq(null),
-                                eq("7d"),
+                                eq("14d"),
+                                eq(null),
                                 eq(null),
                                 eq(null),
                                 eq(null),
@@ -123,10 +127,10 @@ class DetectionControllerTest {
                                 eq(20)))
                                 .thenReturn(new DetectionListResponse(List.of(), 0, 20, 0L));
 
-                mockMvc.perform(get("/api/detections").param("range", "7d"))
+                mockMvc.perform(get("/api/detections").param("range", "14d"))
                                 .andExpect(status().isOk());
 
-                verify(detectionService).getDetections(null, "7d", null, null, null, 0, 20);
+                verify(detectionService).getDetections(null, "14d", null, null, null, null, 0, 20);
         }
 
         @Test

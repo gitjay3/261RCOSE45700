@@ -28,7 +28,7 @@ public class DetectionController {
     private final DetectionService detectionService;
 
     @GetMapping("/detections")
-    @Operation(summary = "탐지 목록 조회", description = "confidence >= 0.70 필터 항상 적용. tier 오름차순 후 탐지시각/신뢰도/id 내림차순 정렬.")
+    @Operation(summary = "탐지 목록 조회", description = "confidence >= 0.70 필터 항상 적용. 탐지시각/id 내림차순 정렬.")
     public ResponseEntity<DetectionListResponse> getDetections(
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -36,11 +36,12 @@ public class DetectionController {
             @RequestParam(required = false) String site,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String lang,
+            @RequestParam(required = false) String tier,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             HttpServletRequest request) {
 
-        var result = detectionService.getDetections(date, range, site, type, lang, page, size);
+        var result = detectionService.getDetections(date, range, site, type, lang, tier, page, size);
         return ResponseEntity.ok()
                 .header("X-Correlation-ID", resolveCorrelationId(request))
                 .body(result);

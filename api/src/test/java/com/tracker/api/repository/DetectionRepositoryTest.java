@@ -42,6 +42,7 @@ class DetectionRepositoryTest {
                 "tailstar.net",
                 "매크로_판매",
                 "ko",
+                null,
                 PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "confidence")));
 
         assertThat(result.getTotalElements()).isEqualTo(1);
@@ -70,6 +71,7 @@ class DetectionRepositoryTest {
                 null,
                 null,
                 null,
+                null,
                 PageRequest.of(
                         0,
                         20,
@@ -83,6 +85,29 @@ class DetectionRepositoryTest {
                         org.assertj.core.groups.Tuple.tuple("T1", 0.75, Instant.parse("2026-04-24T14:33:00Z")),
                         org.assertj.core.groups.Tuple.tuple("T2", 0.99, Instant.parse("2026-04-24T14:32:00Z")),
                         org.assertj.core.groups.Tuple.tuple("T1", 0.80, Instant.parse("2026-04-24T14:31:00Z")));
+    }
+
+    @Test
+    void findFiltered_appliesTierFilter() {
+        persistDetection("tailstar.net", "매크로_판매", "ko", "T2", 0.95,
+                Instant.parse("2026-04-24T14:30:00Z"));
+        persistDetection("tailstar.net", "핵_치트", "ko", "T1", 0.96,
+                Instant.parse("2026-04-24T14:31:00Z"));
+        entityManager.flush();
+        entityManager.clear();
+
+        var result = detectionRepository.findFiltered(
+                null,
+                null,
+                null,
+                null,
+                null,
+                "T1",
+                PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "detectedAt")));
+
+        assertThat(result.getContent())
+                .extracting(Detection::getTier)
+                .containsExactly("T1");
     }
 
     private void persistDetection(

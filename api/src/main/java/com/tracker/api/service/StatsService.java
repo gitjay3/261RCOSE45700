@@ -24,6 +24,9 @@ import java.util.stream.IntStream;
 @Service
 public class StatsService {
 
+    private static final int MIN_PERIOD_DAYS = 1;
+    private static final int MAX_PERIOD_DAYS = 365;
+
     private final StatsRepository statsRepository;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate cacheRedisTemplate;
@@ -38,8 +41,13 @@ public class StatsService {
 
     @Transactional(readOnly = true)
     public StatsResponse getStats(String period) {
-        String normalizedPeriod = normalizePeriod(period);
-        String cacheKey = buildCacheKey(normalizedPeriod);
+        return getStats(period, null);
+    }
+
+    @Transactional(readOnly = true)
+    public StatsResponse getStats(String period, Integer days) {
+        Integer normalizedDays = normalizeDays(period, days);
+        String cacheKey = buildCacheKey(normalizedDays);
 
         try {
             String cached = cacheRedisTemplate.opsForValue().get(cacheKey);
@@ -50,7 +58,7 @@ public class StatsService {
             log.warn("Redis cache read failed for key '{}': {}", cacheKey, e.getMessage());
         }
 
-        StatsResponse response = buildStats(normalizedPeriod, LocalDate.now(ZoneOffset.UTC));
+        StatsResponse response = buildStats(normalizedDays, LocalDate.now(ZoneOffset.UTC));
 
         try {
             String json = objectMapper.writeValueAsString(response);
@@ -62,11 +70,11 @@ public class StatsService {
         return response;
     }
 
-    StatsResponse buildStats(String period, LocalDate today) {
+    StatsResponse buildStats(Integer days, LocalDate today) {
         long todayCount = statsRepository.countToday(today);
         long yesterdayCount = statsRepository.countYesterday(today);
         long delta = todayCount - yesterdayCount;
-        TimeRange periodRange = resolvePeriodRange(period, today);
+        TimeRange periodRange = resolvePeriodRange(days, today);
 
         var typeDistributionRows = periodRange == null
                 ? statsRepository.findTypeDistributionRaw()
@@ -92,7 +100,7 @@ public class StatsService {
                 .map(row -> new StatsResponse.LangDistributionItem((String) row[0], ((Number) row[1]).longValue()))
                 .toList();
 
-        List<StatsResponse.TrendItem> trend = buildTrend(period, today);
+        List<StatsResponse.TrendItem> trend = buildTrend(days, today);
 
         var sourceHealth = statsRepository.findSourceHealthRaw().stream()
                 .map(row -> new StatsResponse.SourceHealthItem(
@@ -103,29 +111,18 @@ public class StatsService {
         return new StatsResponse(todayCount, delta, typeDistribution, siteDistribution, langDistribution, trend, sourceHealth);
     }
 
-    private List<StatsResponse.TrendItem> buildTrend(String period, LocalDate today) {
-        if ("weekly".equals(period)) {
-            TimeRange range = resolvePeriodRange(period, today);
-            return toTrendItems(statsRepository.findTrendRaw(range.from(), range.to()), today.minusDays(6), 7);
-        } else if ("monthly".equals(period)) {
-            TimeRange range = resolvePeriodRange(period, today);
-            return toTrendItems(statsRepository.findTrendRaw(range.from(), range.to()), today.minusDays(29), 30);
-        }
-        return List.of();
+    private List<StatsResponse.TrendItem> buildTrend(Integer days, LocalDate today) {
+        if (days == null) return List.of();
+
+        TimeRange range = resolvePeriodRange(days, today);
+        return toTrendItems(statsRepository.findTrendRaw(range.from(), range.to()), today.minusDays(days - 1L), days);
     }
 
-    private TimeRange resolvePeriodRange(String period, LocalDate today) {
-        if ("weekly".equals(period)) {
-            return new TimeRange(
-                    today.minusDays(6).atStartOfDay().toInstant(ZoneOffset.UTC),
-                    today.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC));
-        }
-        if ("monthly".equals(period)) {
-            return new TimeRange(
-                    today.minusDays(29).atStartOfDay().toInstant(ZoneOffset.UTC),
-                    today.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC));
-        }
-        return null;
+    private TimeRange resolvePeriodRange(Integer days, LocalDate today) {
+        if (days == null) return null;
+        return new TimeRange(
+                today.minusDays(days - 1L).atStartOfDay().toInstant(ZoneOffset.UTC),
+                today.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC));
     }
 
     private List<StatsResponse.TrendItem> toTrendItems(List<Object[]> rows, LocalDate fromDate, int days) {
@@ -144,8 +141,8 @@ public class StatsService {
                 .toList();
     }
 
-    private String buildCacheKey(String period) {
-        return "cache:detections:stats" + (period != null ? ":" + period : "");
+    private String buildCacheKey(Integer days) {
+        return "cache:detections:stats" + (days != null ? ":days:" + days : "");
     }
 
     private static Instant toInstant(Object value) {
@@ -157,17 +154,26 @@ public class StatsService {
         throw new IllegalStateException("Unexpected timestamp type: " + value.getClass());
     }
 
-    private String normalizePeriod(String period) {
+    private Integer normalizeDays(String period, Integer days) {
+        if (days != null) {
+            return validateDays(days);
+        }
         if (period == null || period.isBlank()) {
             return null;
         }
 
         String normalized = period.trim();
-        if ("weekly".equals(normalized) || "monthly".equals(normalized)) {
-            return normalized;
-        }
+        if ("weekly".equals(normalized)) return 7;
+        if ("monthly".equals(normalized)) return 30;
 
-        throw new InvalidFilterParamException("period는 weekly 또는 monthly만 허용됩니다.");
+        throw new InvalidFilterParamException("days는 1~365 사이 숫자만 허용됩니다.");
+    }
+
+    private Integer validateDays(int days) {
+        if (days >= MIN_PERIOD_DAYS && days <= MAX_PERIOD_DAYS) {
+            return days;
+        }
+        throw new InvalidFilterParamException("days는 1~365 사이 숫자만 허용됩니다.");
     }
 
     private record TimeRange(Instant from, Instant to) {}

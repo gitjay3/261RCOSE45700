@@ -23,12 +23,13 @@ public class StatsController {
 
     @GetMapping("/stats")
     @Operation(summary = "탐지 통계 조회",
-               description = "오늘 탐지 현황 및 유형/사이트/언어별 분포. period=weekly|monthly 로 추이 포함.")
+               description = "오늘 탐지 현황 및 유형/사이트/언어별 분포. days=1~365 로 최근 N일 추이 포함.")
     public ResponseEntity<StatsResponse> getStats(
             @RequestParam(required = false) String period,
+            @RequestParam(required = false) Integer days,
             HttpServletRequest request) {
 
-        StatsResponse stats = statsService.getStats(period);
+        StatsResponse stats = statsService.getStats(period, days);
         String correlationId = request.getHeader("X-Correlation-ID");
         return ResponseEntity.ok()
                 .header("X-Correlation-ID",

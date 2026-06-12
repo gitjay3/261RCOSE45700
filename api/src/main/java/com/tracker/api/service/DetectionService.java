@@ -23,12 +23,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DetectionService {
 
+    private static final int MIN_RANGE_DAYS = 1;
+    private static final int MAX_RANGE_DAYS = 365;
+
     private final DetectionRepository detectionRepository;
     private final AgentRunRepository agentRunRepository;
 
     @Transactional(readOnly = true)
     public DetectionListResponse getDetections(
-            LocalDate date, String range, String site, String type, String lang, int page, int size) {
+            LocalDate date, String range, String site, String type, String lang, String tier, int page, int size) {
 
         Instant fromTime = resolveFromTime(date, range);
         Instant toTime   = date != null ? date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant() : null;
@@ -37,6 +40,7 @@ public class DetectionService {
         String siteParam = StringUtils.hasText(site) ? site : null;
         String typeParam = StringUtils.hasText(type) ? type : null;
         String langParam = StringUtils.hasText(lang) ? lang : null;
+        String tierParam = StringUtils.hasText(tier) ? tier : null;
 
         var pageable = PageRequest.of(
                 page,
@@ -46,7 +50,7 @@ public class DetectionService {
                         Sort.Order.desc("id")));
 
         Page<com.tracker.api.domain.Detection> resultPage =
-                detectionRepository.findFiltered(fromTime, toTime, siteParam, typeParam, langParam, pageable);
+                detectionRepository.findFiltered(fromTime, toTime, siteParam, typeParam, langParam, tierParam, pageable);
 
         var content = resultPage.getContent().stream()
                 .map(DetectionResponse::from)
@@ -64,11 +68,26 @@ public class DetectionService {
         }
 
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        return switch (range) {
-            case "7d" -> today.minusDays(6).atStartOfDay(ZoneOffset.UTC).toInstant();
-            case "30d" -> today.minusDays(29).atStartOfDay(ZoneOffset.UTC).toInstant();
-            default -> throw new InvalidFilterParamException("range는 7d 또는 30d만 허용됩니다.");
-        };
+        int days = parseRangeDays(range);
+        return today.minusDays(days - 1L).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    private int parseRangeDays(String range) {
+        String normalized = range.trim().toLowerCase();
+        String rawDays = normalized.endsWith("d")
+                ? normalized.substring(0, normalized.length() - 1)
+                : normalized;
+
+        try {
+            int days = Integer.parseInt(rawDays);
+            if (days >= MIN_RANGE_DAYS && days <= MAX_RANGE_DAYS) {
+                return days;
+            }
+        } catch (NumberFormatException ignored) {
+            // fall through to consistent API error
+        }
+
+        throw new InvalidFilterParamException("range는 1d~365d 형식만 허용됩니다.");
     }
 
     @Transactional(readOnly = true)

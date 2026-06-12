@@ -22,6 +22,7 @@ public interface DetectionRepository extends JpaRepository<Detection, Long> {
             AND (cast(:site     as String)  IS NULL OR s.siteName = :site)
             AND (cast(:type     as String)  IS NULL OR d.type = :type)
             AND (cast(:lang     as String)  IS NULL OR p.language = :lang)
+            AND (cast(:tier     as String)  IS NULL OR d.tier = :tier)
             """,
             countQuery = """
             SELECT COUNT(d) FROM Detection d
@@ -33,6 +34,7 @@ public interface DetectionRepository extends JpaRepository<Detection, Long> {
             AND (cast(:site     as String)  IS NULL OR s.siteName = :site)
             AND (cast(:type     as String)  IS NULL OR d.type = :type)
             AND (cast(:lang     as String)  IS NULL OR p.language = :lang)
+            AND (cast(:tier     as String)  IS NULL OR d.tier = :tier)
             """)
     Page<Detection> findFiltered(
             @Param("fromTime") Instant fromTime,
@@ -40,6 +42,7 @@ public interface DetectionRepository extends JpaRepository<Detection, Long> {
             @Param("site")     String site,
             @Param("type")     String type,
             @Param("lang")     String lang,
+            @Param("tier")     String tier,
             Pageable pageable);
 
     @Query("""

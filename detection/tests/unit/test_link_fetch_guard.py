@@ -100,3 +100,55 @@ def test_content_type_text_allowed() -> None:
     assert not is_disallowed_content_type("text/html; charset=utf-8")
     assert not is_disallowed_content_type("text/plain")
     assert not is_disallowed_content_type(None)
+
+
+def test_content_type_xhtml_xml_allowed() -> None:
+    # application/xhtml+xml 은 허용 목록의 유일한 application/* 타입.
+    assert not is_disallowed_content_type("application/xhtml+xml")
+    assert not is_disallowed_content_type("application/xhtml+xml; charset=utf-8")
+
+
+def test_empty_string_blocked() -> None:
+    decision = validate_url("")
+    assert not decision.allowed
+    assert decision.reason == "empty url"
+
+
+def test_non_string_blocked() -> None:
+    decision = validate_url(None)  # type: ignore[arg-type]
+    assert not decision.allowed
+    assert decision.reason == "empty url"
+
+
+def test_no_hostname_blocked() -> None:
+    decision = validate_url("http:///path")
+    assert not decision.allowed
+    assert "hostname" in decision.reason
+
+
+def test_bracketed_ipv4_returns_invalid_url() -> None:
+    # Python 3.14+: urlsplit("http://[127.0.0.1]/") raises ValueError — guard가 GuardDecision(False) 반환.
+    decision = validate_url("http://[127.0.0.1]/")
+    assert not decision.allowed
+    assert decision.reason == "invalid url"
+
+
+def test_http_on_https_port_blocked(fake_dns) -> None:
+    fake_dns["api.example"] = ["93.184.216.34"]
+    decision = validate_url("http://api.example:443/")
+    assert not decision.allowed
+    assert "port not allowed" in decision.reason
+
+
+def test_https_on_http_port_blocked(fake_dns) -> None:
+    fake_dns["api.example"] = ["93.184.216.34"]
+    decision = validate_url("https://api.example:80/")
+    assert not decision.allowed
+    assert "port not allowed" in decision.reason
+
+
+def test_explicit_default_port_allowed(fake_dns) -> None:
+    # http:80 과 https:443 은 스킴 기본 포트이므로 명시해도 허용.
+    fake_dns["good.example"] = ["93.184.216.34"]
+    assert validate_url("http://good.example:80/").allowed
+    assert validate_url("https://good.example:443/").allowed

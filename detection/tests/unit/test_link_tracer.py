@@ -111,7 +111,8 @@ def test_cache_hit_skips_second_fetch(redis_client, allow_public_dns) -> None:
 
     assert len(calls) == 1  # 두 번째는 캐시 hit — fetch 0회
     assert first[0].fetch_status == "ok"
-    assert second[0].fetch_status == "cached"
+    # 캐시 히트 시 원본 fetch_status 보존 ("cached"로 덮어쓰지 않음 — blocked:... 등 증거 유실 방지).
+    assert second[0].fetch_status == "ok"
     assert second[0].kind == first[0].kind
 
 
@@ -140,6 +141,51 @@ def test_caps_links_per_post(redis_client, allow_public_dns) -> None:
     evidence = tracer.trace(urls)
     assert len(evidence) == MAX_LINKS_PER_POST  # 최대 3개만
     assert len(calls) == MAX_LINKS_PER_POST
+
+
+def test_too_many_redirects_returns_error(redis_client, allow_public_dns) -> None:
+    # 매 hop 마다 302를 반환하면 _MAX_REDIRECTS+1 회 후 error:too_many_redirects.
+    hop = {"n": 0}
+
+    def _always_redirect(request: httpx.Request) -> httpx.Response:
+        hop["n"] += 1
+        return httpx.Response(302, headers={"location": f"https://good.example/hop{hop['n']}"})
+
+    tracer = _tracer(redis_client, _always_redirect)
+    [ev] = tracer.trace(["https://good.example/start"])
+    assert ev.kind == "error"
+    assert ev.fetch_status == "error:too_many_redirects"
+
+
+def test_blocked_url_is_cached(redis_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    # SSRF 차단 결과가 캐시에 저장되어 두 번째 호출은 fetch 없이 캐시에서 반환.
+    monkeypatch.setattr(guard_mod, "_resolve_all_ips", lambda host: ["10.0.0.1"])
+    calls: list[str] = []
+    tracer = _tracer(redis_client, lambda r: httpx.Response(200), calls)
+
+    first = tracer.trace(["https://internal.example/x"])
+    second = tracer.trace(["https://internal.example/x"])
+
+    assert first[0].kind == "blocked"
+    assert second[0].kind == "blocked"
+    assert calls == []  # HTTP transport 호출 0회 — 첫 번째도 SSRF 가드에서 차단됨
+
+
+def test_cache_get_exception_treated_as_miss(
+    redis_client, allow_public_dns, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Redis.get 이 예외를 던지면 캐시 miss로 강등하고 fetch를 계속해야 한다.
+    html = b"<html><title>p</title><body>content</body></html>"
+    tracer = _tracer(redis_client, _html_handler(html))
+
+    def _failing_get(key):
+        raise Exception("redis connection lost")
+
+    monkeypatch.setattr(redis_client, "get", _failing_get)
+
+    [ev] = tracer.trace(["https://good.example/page"])
+    assert ev.kind == "web"
+    assert ev.fetch_status == "ok"
 
 
 def test_proxy_env_used(redis_client, allow_public_dns, monkeypatch: pytest.MonkeyPatch) -> None:

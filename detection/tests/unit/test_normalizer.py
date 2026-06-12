@@ -71,3 +71,27 @@ def test_mixed_language_text_preserved() -> None:
     assert "外掛" in result.text
     assert "私服" in result.text
     assert "hack" in result.text
+
+
+def test_removed_char_count_nonzero_when_zero_width_stripped() -> None:
+    # U+200B (zero-width space) 1자 삽입 → removed_char_count ≥ 1.
+    dirty = "핵​치트"
+    result = normalize(dirty)
+    assert result.removed_char_count >= 1
+
+
+def test_removed_char_count_zero_for_clean_text() -> None:
+    result = normalize("정상적인 게시글입니다")
+    assert result.removed_char_count == 0
+
+
+def test_extract_links_strips_cjk_trailing_period() -> None:
+    # URL 뒤 한중일 마침표(。)는 URL의 일부가 아니므로 제거.
+    links = extract_links("다운로드 https://evil.example/hack。")
+    assert links == ["https://evil.example/hack"]
+
+
+def test_extract_links_strips_cjk_trailing_comma() -> None:
+    # URL 뒤에 한중일 쉼표(，)가 있고 이후 공백으로 분리되면 쉼표를 제거.
+    links = extract_links("링크 https://evil.example/x， 다음 텍스트")
+    assert links == ["https://evil.example/x"]

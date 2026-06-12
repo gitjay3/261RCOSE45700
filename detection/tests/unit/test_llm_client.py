@@ -143,6 +143,104 @@ def test_send_images_false_falls_back_to_text_only() -> None:
     assert not any(b.get("type") == "image_url" for b in content)
 
 
+def test_split_text_image_image_branch_wins_when_observed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_SEND_IMAGES", "true")
+    monkeypatch.setenv("LLM_SPLIT_TEXT_IMAGE", "true")
+
+    mock_openai = MagicMock()
+    text_resp = _make_openai_response(_classification_payload(type="기타", confidence=0.60))
+    image_resp = _make_openai_response(
+        _classification_payload(type="핵_치트", confidence=0.95, image_observed=True),
+        prompt_tokens=120, completion_tokens=50,
+    )
+    mock_openai.chat.completions.create.side_effect = [text_resp, image_resp]
+
+    client = LLMClient(client=mock_openai)
+    response = client.classify("게시글", images=["https://example.com/screenshot.jpg"])
+
+    assert response.type == "핵_치트"
+    assert response.confidence == pytest.approx(0.95)
+    assert response.image_observed is True
+    # 두 호출의 토큰 합산.
+    assert response.input_tokens == 100 + 120
+    assert response.output_tokens == 40 + 50
+    assert mock_openai.chat.completions.create.call_count == 2
+
+
+def test_split_text_image_text_branch_wins_when_not_observed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_SEND_IMAGES", "true")
+    monkeypatch.setenv("LLM_SPLIT_TEXT_IMAGE", "true")
+
+    mock_openai = MagicMock()
+    text_resp = _make_openai_response(_classification_payload(type="계정_거래", confidence=0.88))
+    image_resp = _make_openai_response(
+        _classification_payload(type="기타", confidence=0.50, image_observed=False)
+    )
+    mock_openai.chat.completions.create.side_effect = [text_resp, image_resp]
+
+    client = LLMClient(client=mock_openai)
+    response = client.classify("게시글", images=["https://example.com/screenshot.jpg"])
+
+    assert response.type == "계정_거래"
+    assert response.confidence == pytest.approx(0.88)
+    assert mock_openai.chat.completions.create.call_count == 2
+
+
+def test_all_s3_images_fall_back_to_text_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_SEND_IMAGES", "true")
+
+    mock_openai = MagicMock()
+    mock_openai.chat.completions.create.return_value = _make_openai_response(_classification_payload())
+
+    client = LLMClient(client=mock_openai)
+    client.classify("텍스트", images=["s3://bucket/key.jpg"])
+
+    # s3:// 는 _resolve_image_url 이 None 반환 → image_blocks 비어있음 → 텍스트 only 단일 호출.
+    assert mock_openai.chat.completions.create.call_count == 1
+    content = mock_openai.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+    assert not any(b.get("type") == "image_url" for b in content)
+
+
+def test_retry_after_ms_header_takes_priority_over_retry_after() -> None:
+    import httpx as _httpx
+    from openai import RateLimitError as OpenAIRateLimitError
+    from detection.src.pipeline.llm_client import _retry_after_from
+
+    real_response = _httpx.Response(
+        status_code=429,
+        headers={"retry-after-ms": "3000", "Retry-After": "999"},
+        request=_httpx.Request("POST", "https://api.openai.com/v1/chat/completions"),
+    )
+    exc = OpenAIRateLimitError(message="429", response=real_response, body=None)
+    # ms 헤더 우선: 3000ms → 3s (Retry-After: 999 는 무시).
+    assert _retry_after_from(exc) == 3
+
+
+def test_run_structured_invalid_json_raises_value_error() -> None:
+    mock_openai = MagicMock()
+    mock_openai.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="not-valid-json"))],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+    )
+
+    client = LLMClient(client=mock_openai)
+    with pytest.raises(ValueError, match="JSON 파싱"):
+        client.run_structured(
+            system_prompt="시스템",
+            user_text="게시글",
+            schema=CLASSIFICATION_SCHEMA,
+            schema_name="test_schema",
+            model="gpt-4o",
+        )
+
+
+def test_missing_api_key_raises_runtime_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # client=None 경로: placeholder 키면 RuntimeError (실수로 배포되는 것을 조기에 차단).
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-REPLACE-placeholder")
+    with pytest.raises(RuntimeError, match="placeholder"):
+        LLMClient()
+
+
 def test_rate_limit_retries_after_sleep_then_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     import httpx
     from openai import RateLimitError as OpenAIRateLimitError

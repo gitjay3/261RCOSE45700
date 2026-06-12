@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import detection.src.pipeline.detection_pipeline as pipeline_module
 from detection.src.pipeline.detection_pipeline import DetectionPipeline, _classification_images
 from shared.models.crawl_event import CrawlEvent

@@ -56,7 +56,12 @@ class AgentOrchestrator:
             release = datetime.now(timezone.utc).strftime("%Y-%m")
         return f"agentic:v1:{self._triage.model}:{release}"
 
-    def run(self, raw_text: str, correlation_id: str = "") -> tuple[LLMResponse, list[AgentRunTrace]]:
+    def run(
+        self,
+        raw_text: str,
+        correlation_id: str = "",
+        language: str | None = None,
+    ) -> tuple[LLMResponse, list[AgentRunTrace]]:
         traces: list[AgentRunTrace] = []
 
         # S0 normalize ($0, LLM 없음).
@@ -69,7 +74,7 @@ class AgentOrchestrator:
 
         # S1 triage (gpt-4o-mini, 전 게시글).
         t1 = time.perf_counter()
-        triage = self._triage.run(normalized.text)
+        triage = self._triage.run(normalized.text, language=language)
         triage_latency = _now_ms(t1)
         traces.append(AgentRunTrace(
             stage="triage", model=self._triage.model,

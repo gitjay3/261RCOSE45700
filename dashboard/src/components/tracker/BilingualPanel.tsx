@@ -10,8 +10,8 @@ interface BilingualPanelProps {
 }
 
 /**
- * Tracker 시그니처 인터랙션 — 원문/번역 side-by-side. 한국어이거나 번역이 없으면
- * 단일 컬럼. 폰트는 `lang` 속성으로 CSS 측에서 자동 매칭(zh-CN/zh-TW 시스템 스택).
+ * Tracker 시그니처 인터랙션 — 원문/번역 side-by-side. 번역이 없으면 단일 컬럼.
+ * 폰트는 `lang` 속성으로 CSS 측에서 자동 매칭(zh-CN/zh-TW 시스템 스택).
  */
 export function BilingualPanel({
   originalText,
@@ -19,7 +19,8 @@ export function BilingualPanel({
   translatedText,
   className,
 }: BilingualPanelProps) {
-  const isMonolingual = translatedText === null || originalLang === 'ko';
+  const normalizedTranslation = translatedText?.trim() ?? '';
+  const isMonolingual = normalizedTranslation.length === 0;
   const originalHeading = `원문 (${getLangLabel(originalLang)})`;
 
   if (isMonolingual) {
@@ -45,7 +46,7 @@ export function BilingualPanel({
       </div>
       <div className="p-6">
         <PanelHeading>번역 (한국어)</PanelHeading>
-        <PanelText lang="ko">{translatedText}</PanelText>
+        <PanelText lang="ko">{normalizedTranslation}</PanelText>
       </div>
     </section>
   );

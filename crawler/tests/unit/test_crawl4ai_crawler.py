@@ -346,7 +346,7 @@ class TestCrawl4AICrawlerSiteOptions:
         patcher, MockCrawler = _patch_crawler(mock_result)
         try:
             crawler = Crawl4AICrawler(output_dir=str(tmp_path))
-            user_agent = "Mozilla/5.0 FlareSolverr-UA"
+            user_agent = "Mozilla/5.0 (custom-ua-test)"
             await crawler.fetch(
                 self._URL,
                 correlation_id=self._CID,

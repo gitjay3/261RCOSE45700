@@ -270,6 +270,23 @@ jobs:
               exit 3
             fi
 
+            # 크롤링 도중 배포 시 컨테이너 교체로 크롤이 mid-stream에서 죽는 것을 방지.
+            # crawler:running key(TTL 3600s)가 있으면 현재 크롤 사이클이 진행 중.
+            # tracker-redis 컨테이너의 redis-cli로 확인 (redis password는 /run/secrets/ 마운트).
+            # 최대 30분 대기 후 타임아웃 — 이후엔 강제 교체 (다음 시작 시 orphan cleanup).
+            DRAIN_DEADLINE=$(( $($DATE +%s) + 1800 ))
+            while [ $($DATE +%s) -lt $DRAIN_DEADLINE ]; do
+              IS_RUNNING=$("$DOCKER" exec tracker-redis \
+                sh -c 'redis-cli --no-auth-warning -a "$(cat /run/secrets/redis_password)" \
+                  GET crawler:running 2>/dev/null || true' 2>/dev/null || true)
+              if [ -z "$IS_RUNNING" ] || [ "$IS_RUNNING" = "" ]; then
+                $ECHO "crawler idle — 배포 진행"
+                break
+              fi
+              $ECHO "crawler:running 감지 — 크롤 완료 대기 중..."
+              $SLEEP 10
+            done
+
             $DCOMPOSE -f /opt/app/compose.prod.yml up -d --remove-orphans
 
             # crawler start_period=90s + 콜드 부팅 여유를 고려해 deadline 180s.
@@ -278,7 +295,7 @@ jobs:
             while [ $($DATE +%s) -lt $DEADLINE ]; do
               $SLEEP 3
               ALL_OK=1
-              for SVC in redis crawler detection api dashboard caddy; do
+              for SVC in redis tor crawler detection api dashboard caddy; do
                 CID=$($DCOMPOSE -f /opt/app/compose.prod.yml ps -q "$SVC" || true)
                 if [ -z "$CID" ]; then ALL_OK=0; break; fi
                 STATUS=$("$DOCKER" inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CID" 2>/dev/null || $ECHO unknown)
@@ -332,7 +349,7 @@ jobs:
             while [ $($DATE +%s) -lt $RB_DEADLINE ]; do
               $SLEEP 3
               RB_OK=1
-              for SVC in redis crawler detection api dashboard caddy; do
+              for SVC in redis tor crawler detection api dashboard caddy; do
                 CID=$($DCOMPOSE -f /opt/app/compose.prod.yml ps -q "$SVC" || true)
                 if [ -z "$CID" ]; then RB_OK=0; break; fi
                 STATUS=$("$DOCKER" inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CID" 2>/dev/null || $ECHO unknown)

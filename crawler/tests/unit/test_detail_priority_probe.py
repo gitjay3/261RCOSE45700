@@ -35,14 +35,14 @@ def _candidate(
 def test_choose_probe_candidates_selected_only_uses_dry_run_selection_and_dedupes():
     candidates = [
         _candidate(
-            site_id="dcard",
+            site_id="ptt_mobile_game",
             url="https://example.com/high",
             selected=True,
             bucket="P2",
             score=30,
         ),
         _candidate(
-            site_id="dcard",
+            site_id="ptt_mobile_game",
             url="https://example.com/high",
             selected=True,
             bucket="P2",
@@ -83,7 +83,7 @@ def test_choose_probe_candidates_default_probe_can_include_unselected_high_prior
             score=50,
         ),
         _candidate(
-            site_id="dcard",
+            site_id="ptt_mobile_game",
             url="https://example.com/selected-low",
             selected=True,
             bucket="P3",
@@ -150,15 +150,12 @@ async def test_probe_site_batch_uses_fetch_many_with_site_options():
     assert kwargs["concurrency"] >= 1
 
 
-def test_probe_concurrency_defaults_keep_dcard_serial():
-    assert _probe_concurrency_for_site("dcard") == 1
-    assert _probe_concurrency_for_site("dcard_online") == 1
+def test_probe_concurrency_defaults_keep_sensitive_sources_serial():
+    assert _probe_concurrency_for_site("52pojie") == 1
     assert _probe_concurrency_for_site("inven_maple") >= 2
 
 
 def test_probe_group_parallelism_excludes_sensitive_sources():
-    assert _can_parallelize_site_group("dcard") is False
-    assert _can_parallelize_site_group("dcard_online") is False
     assert _can_parallelize_site_group("52pojie") is False
     assert _can_parallelize_site_group("inven_maple") is True
 
@@ -171,10 +168,10 @@ def test_probe_fast_mode_does_not_override_source_concurrency(monkeypatch):
     monkeypatch.setattr(probe_module, "_PROBE_SOURCE_CONCURRENCY_OVERRIDES", {})
 
     assert probe_module._probe_concurrency_for_site("inven_maple") >= 2
-    assert probe_module._probe_concurrency_for_site("dcard") == 1
+    assert probe_module._probe_concurrency_for_site("52pojie") == 1
 
 
-async def test_probe_site_batch_keeps_dcard_on_single_fetch_path():
+async def test_probe_site_batch_keeps_sensitive_source_on_single_fetch_path():
     class FakeCrawler:
         def __init__(self) -> None:
             self.fetch_calls = []
@@ -184,8 +181,8 @@ async def test_probe_site_batch_keeps_dcard_on_single_fetch_path():
             self.fetch_calls.append((url, kwargs))
             return CrawlResult(
                 url=url,
-                raw_markdown="Dcard 게시글 본문입니다. " * 20,
-                fit_markdown="Dcard 게시글 본문입니다. " * 20,
+                raw_markdown="52pojie 게시글 본문입니다. " * 20,
+                fit_markdown="52pojie 게시글 본문입니다. " * 20,
             )
 
         async def fetch_many(self, urls, **kwargs):
@@ -194,15 +191,15 @@ async def test_probe_site_batch_keeps_dcard_on_single_fetch_path():
 
     candidates = [
         _candidate(
-            site_id="dcard",
-            url="https://www.dcard.tw/f/game/p/1",
+            site_id="52pojie",
+            url="https://www.52pojie.cn/thread-1-1-1.html",
             selected=True,
             bucket="P3",
             score=5,
         ),
         _candidate(
-            site_id="dcard",
-            url="https://www.dcard.tw/f/game/p/2",
+            site_id="52pojie",
+            url="https://www.52pojie.cn/thread-2-1-1.html",
             selected=True,
             bucket="P3",
             score=5,
@@ -210,57 +207,11 @@ async def test_probe_site_batch_keeps_dcard_on_single_fetch_path():
     ]
     crawler = FakeCrawler()
 
-    rows = await _probe_site_batch(crawler, "dcard", candidates)
+    rows = await _probe_site_batch(crawler, "52pojie", candidates)
 
     assert len(rows) == 2
     assert len(crawler.fetch_calls) == 2
     assert crawler.fetch_many_calls == []
-
-
-async def test_probe_site_batch_can_reuse_dcard_session(monkeypatch):
-    from crawler.scripts import detail_priority_probe as probe_module
-
-    monkeypatch.setattr(probe_module, "_DCARD_SESSION_REUSE", True)
-    monkeypatch.setattr(probe_module, "_DCARD_SESSION_ID_PREFIX", "test-session")
-    monkeypatch.setattr(probe_module, "_DCARD_SESSION_SOURCES", {"dcard"})
-
-    class FakeCrawler:
-        def __init__(self) -> None:
-            self.fetch_calls = []
-
-        async def fetch(self, url, **kwargs):
-            self.fetch_calls.append((url, kwargs))
-            return CrawlResult(
-                url=url,
-                raw_markdown="Dcard 게시글 본문입니다. " * 20,
-                fit_markdown="Dcard 게시글 본문입니다. " * 20,
-            )
-
-    candidates = [
-        _candidate(
-            site_id="dcard",
-            url="https://www.dcard.tw/f/game/p/1",
-            selected=True,
-            bucket="P3",
-            score=5,
-        ),
-        _candidate(
-            site_id="dcard",
-            url="https://www.dcard.tw/f/game/p/2",
-            selected=True,
-            bucket="P3",
-            score=5,
-        ),
-    ]
-    crawler = FakeCrawler()
-
-    rows = await _probe_site_batch(crawler, "dcard", candidates)
-
-    assert len(rows) == 2
-    assert [
-        kwargs["session_id"]
-        for _, kwargs in crawler.fetch_calls
-    ] == ["test-session-dcard", "test-session-dcard"]
 
 
 async def test_probe_site_batch_can_apply_source_cooldown(monkeypatch):
@@ -273,7 +224,7 @@ async def test_probe_site_batch_can_apply_source_cooldown(monkeypatch):
 
     monkeypatch.setattr(probe_module, "_DELAY_SECONDS", 0.0)
     monkeypatch.setattr(probe_module, "_PROBE_SOURCE_COOLDOWN_SECONDS", 7.0)
-    monkeypatch.setattr(probe_module, "_PROBE_SOURCE_COOLDOWN_SOURCES", {"dcard"})
+    monkeypatch.setattr(probe_module, "_PROBE_SOURCE_COOLDOWN_SOURCES", {"52pojie"})
     monkeypatch.setattr(probe_module, "_PROBE_CHALLENGE_COOLDOWN_SECONDS", 0.0)
     monkeypatch.setattr(probe_module.asyncio, "sleep", fake_sleep)
 
@@ -281,28 +232,28 @@ async def test_probe_site_batch_can_apply_source_cooldown(monkeypatch):
         async def fetch(self, url, **kwargs):
             return CrawlResult(
                 url=url,
-                raw_markdown="Dcard 게시글 본문입니다. " * 20,
-                fit_markdown="Dcard 게시글 본문입니다. " * 20,
+                raw_markdown="52pojie 게시글 본문입니다. " * 20,
+                fit_markdown="52pojie 게시글 본문입니다. " * 20,
             )
 
     candidates = [
         _candidate(
-            site_id="dcard",
-            url="https://www.dcard.tw/f/game/p/1",
+            site_id="52pojie",
+            url="https://www.52pojie.cn/thread-1-1-1.html",
             selected=True,
             bucket="P3",
             score=5,
         ),
         _candidate(
-            site_id="dcard",
-            url="https://www.dcard.tw/f/game/p/2",
+            site_id="52pojie",
+            url="https://www.52pojie.cn/thread-2-1-1.html",
             selected=True,
             bucket="P3",
             score=5,
         ),
     ]
 
-    rows = await _probe_site_batch(FakeCrawler(), "dcard", candidates)
+    rows = await _probe_site_batch(FakeCrawler(), "52pojie", candidates)
 
     assert len(rows) == 2
     assert sleeps == [7.0]
@@ -318,7 +269,7 @@ async def test_probe_site_batch_can_apply_challenge_cooldown(monkeypatch):
 
     monkeypatch.setattr(probe_module, "_DELAY_SECONDS", 0.0)
     monkeypatch.setattr(probe_module, "_PROBE_SOURCE_COOLDOWN_SECONDS", 0.0)
-    monkeypatch.setattr(probe_module, "_PROBE_SOURCE_COOLDOWN_SOURCES", {"dcard"})
+    monkeypatch.setattr(probe_module, "_PROBE_SOURCE_COOLDOWN_SOURCES", {"52pojie"})
     monkeypatch.setattr(probe_module, "_PROBE_CHALLENGE_COOLDOWN_SECONDS", 11.0)
     monkeypatch.setattr(probe_module, "_PROBE_CLOUDFLARE_BACKOFF_RETRIES", 0)
     monkeypatch.setattr(probe_module.asyncio, "sleep", fake_sleep)
@@ -335,28 +286,28 @@ async def test_probe_site_batch_can_apply_challenge_cooldown(monkeypatch):
                 )
             return CrawlResult(
                 url=url,
-                raw_markdown="Dcard 게시글 본문입니다. " * 20,
-                fit_markdown="Dcard 게시글 본문입니다. " * 20,
+                raw_markdown="52pojie 게시글 본문입니다. " * 20,
+                fit_markdown="52pojie 게시글 본문입니다. " * 20,
             )
 
     candidates = [
         _candidate(
-            site_id="dcard",
-            url="https://www.dcard.tw/f/game/p/1",
+            site_id="52pojie",
+            url="https://www.52pojie.cn/thread-1-1-1.html",
             selected=True,
             bucket="P3",
             score=5,
         ),
         _candidate(
-            site_id="dcard",
-            url="https://www.dcard.tw/f/game/p/2",
+            site_id="52pojie",
+            url="https://www.52pojie.cn/thread-2-1-1.html",
             selected=True,
             bucket="P3",
             score=5,
         ),
     ]
 
-    rows = await _probe_site_batch(FakeCrawler(), "dcard", candidates)
+    rows = await _probe_site_batch(FakeCrawler(), "52pojie", candidates)
 
     assert rows[0]["ok"] is False
     assert rows[1]["ok"] is True

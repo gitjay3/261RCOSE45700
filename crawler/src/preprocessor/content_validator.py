@@ -133,28 +133,6 @@ def validate_ptt(markdown: str, url: str) -> PostValidation:
     return PostValidation(True, "real", "PTT 4헤더 완전 + 일반 글")
 
 
-_DCARD_POST_URL_RE = re.compile(r"https://www\.dcard\.tw/f/[A-Za-z0-9_-]+/p/\d+")
-_DCARD_BODY_MIN_LEN = 300
-
-
-def validate_dcard(markdown: str, url: str) -> PostValidation:
-    """Dcard: 사용자 글은 보통 ## #카테고리 형태로 시작 + 작성시간(전/昨天/今天) 마커."""
-    g = _generic_guard(markdown)
-    if g:
-        return g
-    has_category = ("## #" in markdown) or any(
-        f"#{cat}" in markdown for cat in ("閒聊", "問題", "情報", "心得", "討論", "求助")
-    )
-    has_time = any(t in markdown for t in ("前 ", "昨天", "今天", " 小時前", " 分鐘前"))
-    if has_category and has_time:
-        return PostValidation(True, "real", "Dcard 카테고리+시간 마커")
-    if has_category:
-        return PostValidation(True, "real", "Dcard 카테고리 마커 (시간 누락은 허용)")
-    if _DCARD_POST_URL_RE.match(url) and len(markdown.strip()) >= _DCARD_BODY_MIN_LEN:
-        return PostValidation(True, "real", "Dcard 게시글 URL + 충분한 본문 길이")
-    return PostValidation(False, "unknown", "Dcard 카테고리/시간 마커 미발견")
-
-
 _BAHAMUT_OFFICIAL_MARKERS: tuple[str, ...] = (
     "巴哈姆特 30 週年", "巴哈姆特30週年", "30 週年站聚",
     "官方公告", "巴哈姆特官方", "活動辦法", "活動公告",
@@ -261,13 +239,11 @@ SITE_VALIDATORS: dict[str, ContentValidator] = {
     "tieba": validate_tieba,
 }
 
-# 같은 family(ptt_*/dcard_*/bahamut_*/inven_*) 가 같은 검증자를 공유.
+# 같은 family(ptt_*/bahamut_*/inven_*) 가 같은 검증자를 공유.
 # SITES 에 보드 추가될 때마다 SITE_VALIDATORS 를 손댈 필요 없게 한다.
 PREFIX_VALIDATORS: list[tuple[str, ContentValidator]] = [
     ("ptt_", validate_ptt),
     ("ptt", validate_ptt),            # 'ptt' (Lineage) 자체
-    ("dcard_", validate_dcard),
-    ("dcard", validate_dcard),
     ("bahamut_", validate_bahamut),
     ("bahamut", validate_bahamut),
     ("inven_", validate_inven),

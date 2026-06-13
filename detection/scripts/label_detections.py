@@ -52,8 +52,6 @@ SOURCE_ID_TO_GAME: dict[str, str] = {
     "bahamut_tl": "tl",
     # 혼합 모바일/온라인 (NC 키워드 필터)
     "ptt_mobile_game": "mixed_mobile",
-    "dcard": "mixed_mobile",
-    "dcard_online": "mixed_mobile",
     # 크래킹/리버싱 포럼
     "52pojie": "cracking_forum",
 }

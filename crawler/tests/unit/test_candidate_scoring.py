@@ -75,8 +75,8 @@ def test_pojie_intro_navigation_title_is_not_p2():
 
 def test_title_unmatched_mixed_board_is_sampling_candidate_not_drop():
     result = score_listing_candidate(
-        site_id="dcard",
-        board_url="https://www.dcard.tw/f/game",
+        site_id="ptt_mobile_game",
+        board_url="https://www.ptt.cc/bbs/Mobile-game/index.html",
         title="最近設定分享",
         keyword_matched=False,
         has_title_keywords=True,

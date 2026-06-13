@@ -75,8 +75,6 @@ class TestOperationalDefaults:
         assert scheduler_module._P3_52POJIE_CAP_PER_BOARD == 1
         assert scheduler_module._DETAIL_FETCH_CONCURRENCY == 3
         assert scheduler_module._DETAIL_FETCH_SOURCE_CONCURRENCY == {
-            "dcard": 1,
-            "dcard_online": 1,
             "52pojie": 1,
             "bahamut_lineage": 1,
             "bahamut_lineage_m": 1,

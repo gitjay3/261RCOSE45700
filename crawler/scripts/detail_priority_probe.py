@@ -96,7 +96,7 @@ _PROBE_CLOUDFLARE_BACKOFF_SOURCES = {
     item.strip()
     for item in os.environ.get(
         "DETAIL_PROBE_CLOUDFLARE_BACKOFF_SOURCES",
-        os.environ.get("CRAWL_DETAIL_CLOUDFLARE_BACKOFF_SOURCES", "dcard,dcard_online"),
+        os.environ.get("CRAWL_DETAIL_CLOUDFLARE_BACKOFF_SOURCES", ""),
     ).split(",")
     if item.strip()
 }
@@ -111,7 +111,7 @@ _PROBE_SOURCE_COOLDOWN_SOURCES = {
     item.strip()
     for item in os.environ.get(
         "DETAIL_PROBE_SOURCE_COOLDOWN_SOURCES",
-        os.environ.get("CRAWL_DETAIL_SOURCE_COOLDOWN_SOURCES", "dcard,dcard_online"),
+        os.environ.get("CRAWL_DETAIL_SOURCE_COOLDOWN_SOURCES", ""),
     ).split(",")
     if item.strip()
 }
@@ -122,25 +122,8 @@ _PROBE_CHALLENGE_COOLDOWN_SECONDS = max(
         os.environ.get("CRAWL_DETAIL_CHALLENGE_COOLDOWN_SECONDS", "0"),
     )),
 )
-_DCARD_SESSION_REUSE = os.environ.get("CRAWL_DCARD_SESSION_REUSE", "").lower() in (
-    "1",
-    "true",
-    "yes",
-)
-_DCARD_SESSION_ID_PREFIX = os.environ.get(
-    "CRAWL_DCARD_SESSION_ID_PREFIX",
-    "dcard-detail",
-)
-_DCARD_SESSION_SOURCES = {
-    item.strip()
-    for item in os.environ.get(
-        "CRAWL_DCARD_SESSION_SOURCES",
-        "dcard,dcard_online",
-    ).split(",")
-    if item.strip()
-}
 _PROBE_SOURCE_CONCURRENCY = os.environ.get("DETAIL_PROBE_SOURCE_CONCURRENCY")
-_SENSITIVE_GROUP_SOURCES = {"dcard", "dcard_online", "52pojie"}
+_SENSITIVE_GROUP_SOURCES = {"52pojie"}
 _MAX_BODY_CHARS = int(os.environ.get("DETAIL_PROBE_MAX_BODY_CHARS", "1200"))
 _SELECTED_ONLY = os.environ.get("DETAIL_PROBE_SELECTED_ONLY", "").lower() in (
     "1",
@@ -148,7 +131,7 @@ _SELECTED_ONLY = os.environ.get("DETAIL_PROBE_SELECTED_ONLY", "").lower() in (
     "yes",
 )
 
-_MIXED_SOURCES = {"dcard", "dcard_online", "ptt_mobile_game"}
+_MIXED_SOURCES = {"ptt_mobile_game"}
 
 _SIGNAL_PATTERNS: dict[str, re.Pattern[str]] = {
     "high_risk": re.compile(
@@ -386,18 +369,9 @@ async def _sleep_after_probe_row(site_id: str, row: dict, *, has_next: bool) -> 
     await asyncio.sleep(delay)
 
 
-def _session_id_for_candidate(cand: ProbeCandidate) -> str | None:
-    if not _DCARD_SESSION_REUSE or cand.site_id not in _DCARD_SESSION_SOURCES:
-        return None
-    normalized_site = cand.site_id.replace("_", "-")
-    return f"{_DCARD_SESSION_ID_PREFIX}-{normalized_site}"
-
-
 async def _probe_one(
     crawler: Crawl4AICrawler,
     cand: ProbeCandidate,
-    *,
-    session_id: str | None = None,
 ) -> dict:
     site = SITES[cand.site_id]
     options = CrawlOptions.from_site(site)
@@ -410,7 +384,6 @@ async def _probe_one(
                     cand.url,
                     correlation_id=generate(),
                     download_images=False,
-                    session_id=session_id,
                     **options.fetch_kwargs(),
                 )
                 break
@@ -537,11 +510,7 @@ async def _probe_site_batch(
     if site_concurrency <= 1:
         rows: list[dict] = []
         for idx, cand in enumerate(candidates):
-            row = await _probe_one(
-                crawler,
-                cand,
-                session_id=_session_id_for_candidate(cand),
-            )
+            row = await _probe_one(crawler, cand)
             rows.append(row)
             await _sleep_after_probe_row(
                 site_id,

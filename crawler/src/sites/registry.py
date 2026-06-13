@@ -8,7 +8,7 @@
 
 타겟 (FR1):
   inven_maple, inven_lineage_classic (KR) — 인벤 자유게시판 두 곳
-  ptt, dcard, bahamut (TW)               — 대만 BBS / Dcard / 巴哈姆特
+  ptt, bahamut (TW)                      — 대만 BBS / 巴哈姆特
   52pojie, nga, tieba (CN)                — 중국 크랙·게임·百度貼吧
 
 검색엔진형(sogou/bing/baidu/duckduckgo_cn/bilibili/github/reddit/facebook)은
@@ -25,10 +25,6 @@ from dataclasses import dataclass, field  # noqa: F401
 
 def _env_enabled(name: str) -> bool:
     return os.environ.get(name, "").lower() in ("1", "true", "yes")
-
-
-def _dcard_wait_until() -> str | None:
-    return "load" if _env_enabled("CRAWL_DCARD_WAIT_UNTIL_LOAD") else None
 
 
 # ──────────────────────────────────────────────
@@ -114,7 +110,7 @@ class SiteConfig:
     )                                                   # URL → post_id (기본: 마지막 경로 세그먼트)
     # ── 사이트별 fetch 옵션 ──
     cookies: list[dict] | None = None                   # AsyncWebCrawler.arun(cookies=...) 로 전달
-    wait_for: str | None = None                         # CrawlerRunConfig.wait_for (Dcard 등 SPA)
+    wait_for: str | None = None                         # CrawlerRunConfig.wait_for
     headers: dict[str, str] | None = None               # CrawlerRunConfig.headers (User-Agent 등)
     page_timeout: int | None = None                     # ms 단위. None → Crawl4AICrawler 기본값
     proxy: dict | None = None                           # CrawlerRunConfig.proxy_config
@@ -124,7 +120,7 @@ class SiteConfig:
     js_code: list[str] | None = None
     delay_before_return_html: float | None = None
     # ── 공식 권장 모던 옵션 (crawl4ai >= 0.8) ──
-    scan_full_page: bool = False                        # 무한스크롤 자동 회수 (Dcard 등)
+    scan_full_page: bool = False                        # 무한스크롤 자동 회수
     scroll_delay: float | None = None                   # scan_full_page 시 스크롤 간격(초)
     virtual_scroll_config: dict | None = None           # 가상 스크롤 컨테이너 (Twitter/IG식)
     wait_until: str | None = None                       # "networkidle" / "domcontentloaded"
@@ -164,12 +160,6 @@ def _inven_image_filter(img: dict) -> bool:
         ("upload2.inven.co.kr/upload" in src or "upload3.inven.co.kr/upload" in src)
         and "/bbs/" in src
     )
-
-
-def _dcard_image_filter(img: dict) -> bool:
-    """Dcard: images.dcard.tw 또는 megapx.dcard.tw 도메인만 허용."""
-    src = img.get("src", "")
-    return "dcard.tw" in src and ("images." in src or "megapx." in src)
 
 
 def _bahamut_image_filter(img: dict) -> bool:
@@ -213,28 +203,6 @@ _TW_HEADERS = {
     "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
 }
 
-
-# ──────────────────────────────────────────────
-# Dcard listing JS: JSON-LD(SocialMediaPosting)에서 url→headline 맵을 만들어
-# <a> title 속성에 주입. crawl4ai가 link["title"]로 제목을 가져올 수 있게 됨.
-# Dcard <a> 태그 내부엔 <time>1d</time>만 있어 link["text"]로는 제목 불가.
-# ──────────────────────────────────────────────
-_DCARD_LD_TITLE_JS = """
-(() => {
-  const titleMap = {};
-  document.querySelectorAll('script[type="application/ld+json"]').forEach(s => {
-    try {
-      const d = JSON.parse(s.textContent);
-      if (d['@type'] === 'SocialMediaPosting' && d.url && d.headline) {
-        titleMap[d.url] = d.headline;
-      }
-    } catch(e) {}
-  });
-  document.querySelectorAll('a[href]').forEach(a => {
-    if (titleMap[a.href]) { a.title = titleMap[a.href]; }
-  });
-})();
-"""
 
 # ──────────────────────────────────────────────
 # NC 게임 키워드 — 혼합 보드의 제목 필터에 사용 (한·중번·중간·영)
@@ -361,51 +329,6 @@ SITES: dict[str, SiteConfig] = {
         prev_page_link_text="上頁",
         enabled=True,
         note="혼합 보드. NC 게임 제목 매칭 후보를 우선 fetch — 미매칭 후보도 보존.",
-    ),
-
-    # ── 대만 Dcard — 일반 게임 + 온라인게임 (둘 다 혼합) ─────────────────
-    "dcard": SiteConfig(
-        name="Dcard (game)",
-        description="Dcard 게임 일반 게시판 — NC 키워드로 필터",
-        board_urls=[
-            "https://www.dcard.tw/f/game",
-        ],
-        post_url_pattern=r"https://www\.dcard\.tw/f/game/p/\d+",
-        image_filter=_dcard_image_filter,
-        delay_before_return_html=3.0,
-        wait_until=_dcard_wait_until(),
-        js_code=[_DCARD_LD_TITLE_JS],
-        simulate_user=_env_enabled("CRAWL_DCARD_SIMULATE_USER"),
-        override_navigator=_env_enabled("CRAWL_DCARD_OVERRIDE_NAVIGATOR"),
-        page_timeout=45_000,
-        max_retries=1,
-        headers=_TW_HEADERS,
-        title_keywords=_NC_GAME_KEYWORDS,
-        use_flaresolverr=True,
-        enabled=True,
-        note="React SPA. Cloudflare Bot Management → FlareSolverr로 우회, JSON-LD 파싱.",
-    ),
-
-    "dcard_online": SiteConfig(
-        name="Dcard (topic: 線上遊戲)",
-        description="Dcard 線上遊戲 topic — 여러 forum 의 온라인게임 글 집계",
-        board_urls=[
-            "https://www.dcard.tw/topics/%E7%B7%9A%E4%B8%8A%E9%81%8A%E6%88%B2",
-        ],
-        post_url_pattern=r"https://www\.dcard\.tw/f/[A-Za-z0-9_-]+/p/\d+",
-        image_filter=_dcard_image_filter,
-        delay_before_return_html=3.0,
-        wait_until=_dcard_wait_until(),
-        js_code=[_DCARD_LD_TITLE_JS],
-        simulate_user=_env_enabled("CRAWL_DCARD_SIMULATE_USER"),
-        override_navigator=_env_enabled("CRAWL_DCARD_OVERRIDE_NAVIGATOR"),
-        page_timeout=45_000,
-        max_retries=1,
-        headers=_TW_HEADERS,
-        title_keywords=_NC_GAME_KEYWORDS,
-        use_flaresolverr=True,
-        enabled=True,
-        note="線上遊戲 topic. Cloudflare Bot Management → FlareSolverr로 우회, JSON-LD 파싱.",
     ),
 
     # ── 대만 Bahamut — NC 게임 8개 보드 (모두 순수 NC, title_keywords 불필요) ──

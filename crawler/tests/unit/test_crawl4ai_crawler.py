@@ -191,7 +191,7 @@ class TestCrawl4AICrawlerFetch:
 
 
 class TestCrawl4AICrawlerSiteOptions:
-    """PTT/Dcard/Tieba 차단 해제용 사이트별 fetch 옵션 전파 검증."""
+    """PTT/Tieba 등 사이트별 fetch 옵션 전파 검증."""
 
     _URL = "https://www.ptt.cc/bbs/C_Chat/M.123.html"
     _CID = "test-opts-001"
@@ -302,11 +302,11 @@ class TestCrawl4AICrawlerSiteOptions:
                 self._URL,
                 correlation_id=self._CID,
                 download_images=False,
-                session_id="dcard-detail-dcard",
+                session_id="detail-session",
             )
             mock_instance = MockCrawler.return_value.__aenter__.return_value
             run_config = mock_instance.arun.call_args.kwargs["config"]
-            assert run_config.session_id == "dcard-detail-dcard"
+            assert run_config.session_id == "detail-session"
         finally:
             patcher.stop()
 

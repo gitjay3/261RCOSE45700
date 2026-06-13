@@ -21,8 +21,6 @@ class CandidateScore:
 _SOURCE_RISK: dict[str, int] = {
     "52pojie": 20,
     "ptt_mobile_game": 8,
-    "dcard": 6,
-    "dcard_online": 6,
 }
 
 _HIGH_RISK_TERMS = (

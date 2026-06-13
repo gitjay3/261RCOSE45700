@@ -18,11 +18,11 @@
 
 Tracker는 게임 커뮤니티에 올라오는 핵·치트, 사설서버, 불법 프로그램 배포, 계정 거래, 매크로 판매 등 약관 위반 가능성이 높은 게시글을 자동으로 수집·분류하고 운영자가 빠르게 확인할 수 있게 하는 모노레포 프로젝트입니다.
 
-크롤러가 8개 커뮤니티를 주기적으로 순회하고, OpenAI 멀티모달 LLM 기반 탐지 파이프라인이 다국어 게시글을 번역·분류해 RDS에 저장합니다. React 대시보드는 신뢰도 0.70 이상 탐지 결과, 기간별 Hotspots, 상세 근거, 알림 연동을 제공합니다.
+크롤러가 13개 enabled 커뮤니티와 GitHub API를 주기적으로 순회하고, OpenAI 멀티모달 LLM 기반 탐지 파이프라인이 다국어 게시글을 번역·분류해 RDS에 저장합니다. React 대시보드는 신뢰도 0.70 이상 탐지 결과, 기간별 Hotspots, 상세 근거, 알림 연동을 제공합니다.
 
 ## 주요 기능
 
-- 한국·중국·대만 게임 커뮤니티 8개 사이트 크롤링
+- 한국·중국·대만 게임 커뮤니티 13개 enabled 사이트 + GitHub API 크롤링
 - OpenAI 멀티모달 LLM 기반 불법 게시글 분류와 근거 생성
 - 조치 우선순위와 최신 탐지 기준의 탐지 목록/상세 화면
 - 최근 7일/30일 기준 Hotspots, Quick filters, 탐지 추이
@@ -40,7 +40,7 @@ Community sites
   -> React dashboard
 ```
 
-운영 환경은 단일 EC2에서 Redis, crawler, detection, API, dashboard, Caddy를 Docker Compose로 실행합니다. 자세한 구조와 운영 결정은 [Architecture](https://github.com/byungju0/261RCOSE45700/wiki/Architecture-Overview)와 [docs/deployment.md](docs/deployment.md)를 참고하세요.
+운영 환경은 단일 EC2에서 Redis, Tor, FlareSolverr, crawler, detection, API, dashboard, Caddy 8개 컨테이너를 Docker Compose로 실행합니다. 자세한 구조와 운영 결정은 [Architecture](https://github.com/byungju0/261RCOSE45700/wiki/Architecture-Overview)와 [docs/deployment.md](docs/deployment.md)를 참고하세요.
 
 ## 기술 스택
 

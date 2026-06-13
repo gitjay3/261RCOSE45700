@@ -22,7 +22,7 @@ pip install -r requirements.txt
 playwright install chromium
 
 # 4) 단위/통합 테스트 (mock, 인터넷 불필요)
-pytest -q                                          # 183 passed 예상
+pytest -q                                          # 190 passed 예상
 
 # 5) ruff 린트
 ruff check crawler/ shared/ scripts/
@@ -50,8 +50,9 @@ crawler/                         # 이 디렉터리 (monorepo 루트의 crawler/
 │   ├── queue/                   # redis_publisher
 │   ├── scheduler/               # crawl_scheduler (CrawlPipeline + APScheduler),
 │   │                            # trigger_listener, candidate_scoring, crawl_job_progress
-│   └── sites/                   # registry — SiteConfig + SITES dict
-└── tests/                       # unit + integration (183건)
+│   ├── sites/                   # registry — SiteConfig + SITES dict (13 enabled)
+│   └── sources/                 # GitHubSource — GitHub REST API 검색 통합
+└── tests/                       # unit + integration (190건)
 
 # shared/  ← monorepo 루트에 위치 (../shared/)
 #   crawl_event, redis_config, logger, interfaces/llm 등 공용
@@ -129,7 +130,7 @@ Validator는 prefix dispatch — `my_new_*` 같은 family 추가 시 `content_va
 
 ## 다음 단계
 
-- [ ] 검색엔진형 추상화 (`SearchEngineConfig`) + github 첫 도전
+- [x] GitHub REST API 소스 통합 (`crawler/src/sources/github_source.py`) — done
 - [ ] detection 서비스 연동 smoke 확대 (OpenAI 멀티모달 LLM)
 - [ ] 중국 IP 프록시 인프라 (nga/tieba/baidu/sogou)
 

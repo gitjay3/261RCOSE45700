@@ -144,7 +144,6 @@ class SiteConfig:
     # 동적 이전 페이지 탐색: link.text 에 이 문자열이 포함된 링크를 다음 board_url 로 사용.
     # PTT 上頁 처럼 URL 을 미리 알 수 없는 파일시스템 기반 pagination 에 사용.
     prev_page_link_text: str | None = None
-    use_flaresolverr: bool = False                       # Cloudflare Bot Management 우회 (FlareSolverr 컨테이너 필요)
     enabled: bool = True
     note: str = ""                                      # 접근 제한·특이사항
 

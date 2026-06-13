@@ -32,6 +32,7 @@ from crawler.src.scheduler.crawl_job_progress import (
 )
 from crawler.src.scheduler.trigger_listener import TriggerListener
 from crawler.src.sites.registry import SiteConfig, get_enabled_sites
+from crawler.src.sources.github_source import GitHubSource, GitHubSourceStats
 from crawler.src.storage import PostStorage
 from shared.config.redis_config import (
     REDIS_DEDUP_DB,
@@ -55,11 +56,10 @@ _PRIORITY_BUDGET_ENABLED = os.environ.get(
 _P3_DEFAULT_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_DEFAULT_CAP_PER_BOARD", "1"))
 _P3_MIXED_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_MIXED_CAP_PER_BOARD", "5"))
 _P3_52POJIE_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_52POJIE_CAP_PER_BOARD", "1"))
-_MIXED_PRIORITY_SOURCES = frozenset({"dcard", "dcard_online", "ptt_mobile_game"})
+_MIXED_PRIORITY_SOURCES = frozenset({"ptt_mobile_game"})
 _DETAIL_FETCH_CONCURRENCY = max(1, int(os.environ.get("CRAWL_DETAIL_FETCH_CONCURRENCY", "3")))
 _DETAIL_FETCH_SOURCE_CONCURRENCY_DEFAULT = (
-    "dcard=1,dcard_online=1,52pojie=1,"
-    "bahamut_lineage=1,bahamut_lineage_m=1,bahamut_lineage_w=1,"
+    "52pojie=1,bahamut_lineage=1,bahamut_lineage_m=1,bahamut_lineage_w=1,"
     "bahamut_lineage_classic=1,bahamut_aion=1,bahamut_aion2=1,"
     "bahamut_bns=1,bahamut_tl=1"
 )
@@ -79,7 +79,7 @@ _DETAIL_CLOUDFLARE_BACKOFF_SOURCES = {
     item.strip()
     for item in os.environ.get(
         "CRAWL_DETAIL_CLOUDFLARE_BACKOFF_SOURCES",
-        "dcard,dcard_online",
+        "",
     ).split(",")
     if item.strip()
 }
@@ -91,7 +91,7 @@ _DETAIL_SOURCE_COOLDOWN_SOURCES = {
     item.strip()
     for item in os.environ.get(
         "CRAWL_DETAIL_SOURCE_COOLDOWN_SOURCES",
-        "dcard,dcard_online",
+        "",
     ).split(",")
     if item.strip()
 }
@@ -523,7 +523,7 @@ _FLARESOLVERR_PORT = os.environ.get("FLARESOLVERR_PORT", "8191")
 def _parse_links_from_flaresolverr_html(html: str) -> list[dict]:
     """FlareSolverr가 반환한 HTML에서 링크 목록 추출.
 
-    JSON-LD SocialMediaPosting 우선 파싱 (Dcard). 없으면 <a href> fallback.
+    JSON-LD SocialMediaPosting 우선 파싱. 없으면 <a href> fallback.
     """
     links: list[dict] = []
     for match in re.finditer(
@@ -622,7 +622,7 @@ async def _fetch_post_urls(
 ) -> ListingResult:
     """게시판 목록 페이지에서 게시글 URL 추출 (stealth 브라우저 + 링크 파싱).
 
-    사이트별 옵션(cookies/wait_for/headers/proxy)으로 PTT over18·Dcard SPA·
+    사이트별 옵션(cookies/wait_for/headers/proxy)으로 PTT over18·
     Tieba 프록시 등 접근 제어를 통과한다.
     """
     if options.use_flaresolverr:
@@ -711,6 +711,13 @@ class PipelineStats:
     skipped_blocked: int = 0         # auth_wall / captcha / error
     skipped_unknown: int = 0         # 검증자가 사용자 글 마커 못 찾음 (보수적 스킵)
     failed: int = 0
+    github_searches: int = 0
+    github_discovered: int = 0
+    github_selected: int = 0
+    github_enqueued: int = 0
+    github_skipped_seen_url: int = 0
+    github_skipped_dedup: int = 0
+    github_failed: int = 0
 
     @property
     def success_rate(self) -> float:
@@ -745,6 +752,7 @@ class CrawlPipeline:
         publisher: RedisPublisher,
         url_dedup: UrlDedupChecker | None = None,
         progress_store: CrawlJobProgressStore | None = None,
+        github_source: GitHubSource | None = None,
     ) -> None:
         self._crawler = crawler
         self._storage = storage
@@ -753,6 +761,7 @@ class CrawlPipeline:
         # 옵션. None 이면 cross-run URL 체크 안 함 (단위 테스트 호환).
         self._url_dedup = url_dedup
         self._progress_store = progress_store
+        self._github_source = github_source
 
     async def run(self, *, job_id: str = "") -> PipelineStats:
         stats = PipelineStats()
@@ -777,10 +786,13 @@ class CrawlPipeline:
                 job_id=job_id,
             )
 
+        await self._process_github_source(stats)
+
         _logger.info(
             "파이프라인 완료: 보드=%d 리스팅발견=%d 리스팅선택=%d"
             " P0=%d P1=%d P2=%d P3=%d kw매칭=%d kw미매칭=%d"
-            " 시도=%d 큐=%d url중복=%d 본문중복=%d 빈=%d 공지=%d 상태=%d 미확인=%d 실패=%d",
+            " 시도=%d 큐=%d url중복=%d 본문중복=%d 빈=%d 공지=%d 상태=%d 미확인=%d 실패=%d"
+            " github검색=%d github발견=%d github선택=%d github큐=%d github실패=%d",
             stats.listing_boards,
             stats.listing_discovered_total,
             stats.listing_urls_selected,
@@ -799,6 +811,11 @@ class CrawlPipeline:
             stats.skipped_blocked,
             stats.skipped_unknown,
             stats.failed,
+            stats.github_searches,
+            stats.github_discovered,
+            stats.github_selected,
+            stats.github_enqueued,
+            stats.github_failed,
             extra={"correlation_id": "", "service": _SERVICE_NAME},
         )
         if self._progress_store is not None:
@@ -821,8 +838,33 @@ class CrawlPipeline:
                 "skippedBlocked": stats.skipped_blocked,
                 "skippedUnknown": stats.skipped_unknown,
                 "failed": stats.failed,
+                "githubSearches": stats.github_searches,
+                "githubDiscovered": stats.github_discovered,
+                "githubSelected": stats.github_selected,
+                "githubEnqueued": stats.github_enqueued,
+                "githubFailed": stats.github_failed,
             })
         return stats
+
+    async def _process_github_source(self, stats: PipelineStats) -> None:
+        if self._github_source is None or not self._github_source.enabled:
+            return
+        github_stats = await self._github_source.run()
+        self._merge_github_stats(stats, github_stats)
+
+    @staticmethod
+    def _merge_github_stats(stats: PipelineStats, github_stats: GitHubSourceStats) -> None:
+        stats.github_searches += github_stats.searches
+        stats.github_discovered += github_stats.discovered
+        stats.github_selected += github_stats.selected
+        stats.github_enqueued += github_stats.enqueued
+        stats.github_skipped_seen_url += github_stats.skipped_seen_url
+        stats.github_skipped_dedup += github_stats.skipped_dedup
+        stats.github_failed += github_stats.failed
+        stats.enqueued += github_stats.enqueued
+        stats.skipped_seen_url += github_stats.skipped_seen_url
+        stats.skipped_dedup += github_stats.skipped_dedup
+        stats.failed += github_stats.failed
 
     async def _process_site(
         self,
@@ -1325,6 +1367,8 @@ class CrawlScheduler:
         dedup_client = redis.from_url(
             redis_url, db=REDIS_DEDUP_DB, decode_responses=True, **auth_kwargs
         )
+        publisher = RedisPublisher(mq_client)
+        dedup = DedupChecker(dedup_client)
 
         # 같은 ZSET 을 파이프라인과 cleanup 잡이 공유해야 하므로 인스턴스 분리 보관.
         self._url_dedup = UrlDedupChecker(dedup_client)
@@ -1332,10 +1376,15 @@ class CrawlScheduler:
         self._pipeline = CrawlPipeline(
             crawler=Crawl4AICrawler(headless=True, output_dir="output/_tmp"),
             storage=PostStorage(),
-            dedup=DedupChecker(dedup_client),
-            publisher=RedisPublisher(mq_client),
+            dedup=dedup,
+            publisher=publisher,
             url_dedup=self._url_dedup,
             progress_store=self._progress_store,
+            github_source=GitHubSource(
+                publisher=publisher,
+                dedup=dedup,
+                url_dedup=self._url_dedup,
+            ),
         )
         # scheduled run + 수동 trigger 동시 실행 방지
         self._run_lock = asyncio.Lock()
@@ -1370,6 +1419,7 @@ class CrawlScheduler:
                 activity = (
                     "CRAWL_COMPLETED",
                     f"{trigger} 크롤링 완료 — 선택 {stats.listing_urls_selected}건"
+                    f" / GitHub 큐 {stats.github_enqueued}건"
                     f" / URL중복 {stats.skipped_seen_url}건"
                     f" / 본문 fetch {stats.attempted}건"
                     f" / 큐 {stats.enqueued}건",

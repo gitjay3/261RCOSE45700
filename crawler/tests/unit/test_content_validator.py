@@ -85,33 +85,6 @@ class TestPttValidator:
 
 
 # ──────────────────────────────────────────────
-# Dcard
-# ──────────────────────────────────────────────
-
-class TestDcardValidator:
-    def test_real_post_with_category_and_time(self):
-        text = "## #閒聊 玩盜版遊戲還找開發者問問題 昨天 06:35 본문 " + "x" * 60
-        v = cv.validate_dcard(text, "")
-        assert v.is_real_user_post is True
-        assert v.kind == "real"
-
-    def test_real_post_with_category_only(self):
-        text = "## #問題 어떻게 풀어요 " + "x" * 60
-        v = cv.validate_dcard(text, "")
-        assert v.is_real_user_post is True
-
-    def test_real_post_with_dcard_post_url_and_body_length(self):
-        text = "狼人殺揪團心得，這篇沒有 Dcard 類別 chrome，但正文很完整。" * 12
-        v = cv.validate_dcard(text, "https://www.dcard.tw/f/werewolf/p/261604959")
-        assert v.is_real_user_post is True
-        assert v.kind == "real"
-
-    def test_no_markers_unknown(self):
-        v = cv.validate_dcard("그냥 일반 텍스트 " * 20, "")
-        assert v.kind == "unknown"
-
-
-# ──────────────────────────────────────────────
 # 바하무트
 # ──────────────────────────────────────────────
 
@@ -212,9 +185,4 @@ class TestDispatcher:
         # ptt_mobile_game 도 PTT 검증자 사용.
         text = "作者foo 看板Mobile-game 標題[閒聊] 천堂M 신규 클래스 후기 時間Mon " + "x" * 60
         v = cv.validate("ptt_mobile_game", text, "")
-        assert v.kind == "real"
-
-    def test_prefix_dispatch_dcard_online(self):
-        text = "## #閒聊 天堂W 신규 캐릭터 후기 昨天 본문 본문 " + "x" * 60
-        v = cv.validate("dcard_online", text, "")
         assert v.kind == "real"

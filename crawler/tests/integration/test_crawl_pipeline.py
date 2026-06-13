@@ -444,22 +444,25 @@ async def test_pipeline_uses_crawler_fetch_many_when_available():
     assert mock_mq.lpush.call_count == 2
 
 
-def test_detail_fetch_concurrency_defaults_keep_dcard_serial():
-    """Dcard/52pojie는 concurrency=3 실측에서 차단 위험이 커 기본 순차 처리한다."""
-    assert detail_fetch_concurrency_for_site("dcard") == 1
-    assert detail_fetch_concurrency_for_site("dcard_online") == 1
+def test_detail_fetch_concurrency_defaults_keep_sensitive_sources_serial():
+    """52pojie/Bahamut은 concurrency=3 실측에서 차단 위험이 커 기본 순차 처리한다."""
     assert detail_fetch_concurrency_for_site("52pojie") == 1
+    assert detail_fetch_concurrency_for_site("bahamut_lineage") == 1
     assert detail_fetch_concurrency_for_site("inven_maple") >= 2
 
 
-async def test_pipeline_keeps_dcard_serial_even_when_fetch_many_available():
-    """Dcard는 fetch_many가 있어도 source override 때문에 순차 fetch로 처리한다."""
-    dcard_site = replace(SITES["dcard"], max_pages=1)
+async def test_pipeline_keeps_52pojie_serial_even_when_fetch_many_available():
+    """52pojie는 fetch_many가 있어도 source override 때문에 순차 fetch로 처리한다."""
+    pojie_site = replace(
+        SITES["52pojie"],
+        board_urls=["https://www.52pojie.cn/forum-16-2.html"],
+        max_pages=1,
+    )
     mock_crawler = AsyncMock()
     mock_crawler.fetch.return_value = CrawlResult(
-        url="https://www.dcard.tw/f/game/p/1",
-        raw_markdown="Dcard 본문입니다. " * 20,
-        fit_markdown="Dcard 본문입니다. " * 20,
+        url="https://www.52pojie.cn/thread-1-1-1.html",
+        raw_markdown="发表于 楼主 复制代码 " + "본문입니다. " * 20,
+        fit_markdown="发表于 楼主 复制代码 " + "본문입니다. " * 20,
         images=[],
         downloaded_images=[],
     )
@@ -482,14 +485,14 @@ async def test_pipeline_keeps_dcard_serial_even_when_fetch_many_available():
         keyword_matched=0,
         keyword_unmatched=2,
         candidates=[
-            PostUrlCandidate("https://www.dcard.tw/f/game/p/1", "잡담 1", False),
-            PostUrlCandidate("https://www.dcard.tw/f/game/p/2", "잡담 2", False),
+            PostUrlCandidate("https://www.52pojie.cn/thread-1-1-1.html", "lineage macro 1", False),
+            PostUrlCandidate("https://www.52pojie.cn/thread-2-1-1.html", "lineage macro 2", False),
         ],
     )
 
     with patch(
         "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
-        return_value={"dcard": dcard_site},
+        return_value={"52pojie": pojie_site},
     ), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=listing,
@@ -500,22 +503,26 @@ async def test_pipeline_keeps_dcard_serial_even_when_fetch_many_available():
     assert mock_crawler.fetch.call_count == 2
 
 
-async def test_pipeline_can_apply_dcard_source_cooldown_between_serial_fetches():
-    """옵션을 켜면 Dcard 상세 요청 사이에 source-level cooldown을 둔다."""
-    dcard_site = replace(SITES["dcard"], max_pages=1)
+async def test_pipeline_can_apply_source_cooldown_between_serial_fetches():
+    """옵션을 켜면 민감 source 상세 요청 사이에 source-level cooldown을 둔다."""
+    pojie_site = replace(
+        SITES["52pojie"],
+        board_urls=["https://www.52pojie.cn/forum-16-2.html"],
+        max_pages=1,
+    )
     mock_crawler = AsyncMock()
     mock_crawler.fetch.side_effect = [
         CrawlResult(
-            url="https://www.dcard.tw/f/game/p/1",
-            raw_markdown="Dcard 첫 번째 본문입니다. " * 20,
-            fit_markdown="Dcard 첫 번째 본문입니다. " * 20,
+            url="https://www.52pojie.cn/thread-1-1-1.html",
+            raw_markdown="发表于 楼主 复制代码 " + "첫 번째 본문입니다. " * 20,
+            fit_markdown="发表于 楼主 复制代码 " + "첫 번째 본문입니다. " * 20,
             images=[],
             downloaded_images=[],
         ),
         CrawlResult(
-            url="https://www.dcard.tw/f/game/p/2",
-            raw_markdown="Dcard 두 번째 본문입니다. " * 20,
-            fit_markdown="Dcard 두 번째 본문입니다. " * 20,
+            url="https://www.52pojie.cn/thread-2-1-1.html",
+            raw_markdown="发表于 楼主 复制代码 " + "두 번째 본문입니다. " * 20,
+            fit_markdown="发表于 楼主 复制代码 " + "두 번째 본문입니다. " * 20,
             images=[],
             downloaded_images=[],
         ),
@@ -539,8 +546,8 @@ async def test_pipeline_can_apply_dcard_source_cooldown_between_serial_fetches()
         keyword_matched=0,
         keyword_unmatched=2,
         candidates=[
-            PostUrlCandidate("https://www.dcard.tw/f/game/p/1", "잡담 1", False),
-            PostUrlCandidate("https://www.dcard.tw/f/game/p/2", "잡담 2", False),
+            PostUrlCandidate("https://www.52pojie.cn/thread-1-1-1.html", "lineage macro 1", False),
+            PostUrlCandidate("https://www.52pojie.cn/thread-2-1-1.html", "lineage macro 2", False),
         ],
     )
     sleeps: list[float] = []
@@ -550,7 +557,7 @@ async def test_pipeline_can_apply_dcard_source_cooldown_between_serial_fetches()
 
     with patch(
         "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
-        return_value={"dcard": dcard_site},
+        return_value={"52pojie": pojie_site},
     ), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=listing,
@@ -561,7 +568,7 @@ async def test_pipeline_can_apply_dcard_source_cooldown_between_serial_fetches()
     ), patch.object(
         scheduler_module,
         "_DETAIL_SOURCE_COOLDOWN_SOURCES",
-        {"dcard"},
+        {"52pojie"},
     ), patch.object(
         scheduler_module.asyncio,
         "sleep",
@@ -574,7 +581,7 @@ async def test_pipeline_can_apply_dcard_source_cooldown_between_serial_fetches()
     assert sleeps == [9.0]
 
 
-async def test_fetch_post_can_backoff_retry_cloudflare_challenge_for_dcard():
+async def test_fetch_post_can_backoff_retry_cloudflare_challenge_for_configured_source():
     pipeline, _, _ = _make_pipeline(crawl_result=_make_crawl_result(_KEYWORD_TEXT))
     mock_crawler = pipeline._crawler
     mock_crawler.fetch.side_effect = [
@@ -591,13 +598,13 @@ async def test_fetch_post_can_backoff_retry_cloudflare_challenge_for_dcard():
     ), patch.object(
         scheduler_module,
         "_DETAIL_CLOUDFLARE_BACKOFF_SOURCES",
-        {"dcard", "dcard_online"},
+        {"52pojie"},
     ):
         outcome = await pipeline._fetch_post(
-            "dcard",
-            "https://www.dcard.tw/f/game/p/1",
-            "cid-dcard",
-            CrawlOptions.from_site(SITES["dcard"]),
+            "52pojie",
+            "https://www.52pojie.cn/thread-1-1-1.html",
+            "cid-52pojie",
+            CrawlOptions.from_site(SITES["52pojie"]),
         )
 
     assert outcome.error is None
@@ -692,7 +699,7 @@ def test_listing_keywords_prioritize_without_filtering_candidates():
 
 def test_priority_budget_selects_high_priority_and_caps_p3_for_mixed_source():
     """운영 budget은 P0/P1/P2를 우선 선택하고 P3는 혼합 보드 cap만큼만 샘플링한다."""
-    site = replace(SITES["dcard"], title_keywords=["Lineage"])
+    site = replace(SITES["ptt_mobile_game"], title_keywords=["Lineage"])
     listing = ListingResult(
         urls=[],
         discovered_total=8,
@@ -700,7 +707,7 @@ def test_priority_budget_selects_high_priority_and_caps_p3_for_mixed_source():
         keyword_unmatched=8,
         candidates=[
             PostUrlCandidate(
-                url=f"https://www.dcard.tw/f/game/p/{idx}",
+                url=f"https://www.ptt.cc/bbs/Mobile-game/M.{idx}.A.html",
                 title=title,
                 keyword_matched=False,
             )
@@ -718,8 +725,8 @@ def test_priority_budget_selects_high_priority_and_caps_p3_for_mixed_source():
     )
 
     selected = _select_detail_candidates(
-        site_id="dcard",
-        board_url="https://www.dcard.tw/f/game",
+        site_id="ptt_mobile_game",
+        board_url="https://www.ptt.cc/bbs/Mobile-game/index.html",
         listing=listing,
         site=site,
         limit=30,
@@ -838,6 +845,52 @@ async def test_pipeline_passes_site_options_to_crawler_fetch():
     assert kwargs["proxy"] == {"server": "http://p.example:8080"}
     assert kwargs["max_retries"] == 2
     assert kwargs["override_navigator"] is True
+
+
+async def test_pipeline_reuses_flaresolverr_cookies_and_user_agent_for_detail_fetch():
+    """FlareSolverr listing 통과 후 clearance cookie/UA 를 상세 fetch 에 이어준다."""
+    custom_site = _single_page_site(replace(
+        SITES["inven_maple"],
+        headers={"Accept-Language": "ko"},
+        cookies=[{"name": "existing", "value": "old"}],
+        use_flaresolverr=True,
+    ))
+    flaresolverr_cookies = [
+        {
+            "name": "cf_clearance",
+            "value": "clearance-token",
+            "domain": ".example.test",
+            "path": "/",
+        }
+    ]
+    flaresolverr_user_agent = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    )
+
+    pipeline, _, _ = _make_pipeline(crawl_result=_make_crawl_result(_KEYWORD_TEXT))
+    mock_crawler = pipeline._crawler
+
+    with patch(
+        "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
+        return_value={"inven_maple": custom_site},
+    ), patch(
+        "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
+        return_value=ListingResult(
+            urls=[_TEST_URL],
+            discovered_total=1,
+            keyword_matched=0,
+            keyword_unmatched=1,
+            flaresolverr_cookies=flaresolverr_cookies,
+            flaresolverr_user_agent=flaresolverr_user_agent,
+        ),
+    ):
+        await pipeline.run()
+
+    kwargs = mock_crawler.fetch.call_args.kwargs
+    assert kwargs["cookies"] == flaresolverr_cookies
+    assert kwargs["headers"] == {"Accept-Language": "ko"}
+    assert kwargs["user_agent"] == flaresolverr_user_agent
 
 
 async def test_pipeline_dedup_mark_seen_called_after_enqueue():

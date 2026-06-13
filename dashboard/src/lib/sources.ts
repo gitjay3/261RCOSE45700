@@ -12,7 +12,6 @@ export interface SourceMeta {
 export const SOURCE_META: SourceMeta[] = [
   { name: 'tailstar.net', lang: 'ko' },
   { name: 'ptt.cc', lang: 'zh-TW' },
-  { name: 'dcard.tw', lang: 'zh-TW' },
   { name: 'tieba.baidu.com', lang: 'zh-CN' },
   { name: '52pojie.cn', lang: 'zh-CN' },
   { name: 'bbs.nga.cn', lang: 'zh-CN' },

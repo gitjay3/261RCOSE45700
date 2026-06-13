@@ -26,6 +26,8 @@ _DEFAULT_TRIAGE_MODEL = "gpt-4o-mini"
 _TRIAGE_INSTRUCTION = (
     "\n\n[트리아지 단계 지침]\n"
     "당신은 저비용 1차 분류기입니다. 위 기준으로 type/confidence/reason_ko/translated_text_ko를 산출하고,\n"
+    "입력에 원문 언어 힌트가 있으면 이를 우선 참고하세요. 원문 언어가 ko가 아니면 translated_text_ko에 "
+    "본문의 자연스러운 한국어 번역을 반드시 포함하고, ko이면 null로 두세요.\n"
     "추가로 다음을 판단하세요:\n"
     "- game_context: 게시글이 어느 게임/생태계에 관한 것인지 본문에서 자가 추론해 짧게 적으세요 "
     "(예: '리니지M(TW)', '블레이드앤소울', '게임 무관 크랙 포럼', '불명'). 사이트 정보는 주어지지 않습니다.\n"
@@ -64,12 +66,15 @@ class TriageAgent:
     def model(self) -> str:
         return self._model
 
-    def run(self, text: str) -> TriageResult:
+    def run(self, text: str, language: str | None = None) -> TriageResult:
         """정규화 텍스트로 트리아지 수행. type/confidence 방어적 재검증."""
         system_prompt = build_system_prompt() + _TRIAGE_INSTRUCTION
+        user_text = text
+        if language:
+            user_text = f"원문 언어 힌트: {language}\n\n본문:\n{text}"
         parsed, in_tok, out_tok, cost = self._llm.run_structured(
             system_prompt=system_prompt,
-            user_text=text,
+            user_text=user_text,
             schema=TRIAGE_SCHEMA,
             schema_name="tracker_triage",
             model=self._model,

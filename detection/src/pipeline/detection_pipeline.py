@@ -136,7 +136,11 @@ class DetectionPipeline:
     ) -> tuple[LLMResponse, list[AgentRunTrace], str, str]:
         assert self._orchestrator is not None
         verdict, traces = self._retry_handler.execute_with_retry(
-            lambda: self._orchestrator.run(event.raw_text, correlation_id=event.correlation_id),
+            lambda: self._orchestrator.run(
+                event.raw_text,
+                correlation_id=event.correlation_id,
+                language=event.language,
+            ),
             message=message,
             post_id=event.post_id,
             correlation_id=event.correlation_id,

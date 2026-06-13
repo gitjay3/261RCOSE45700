@@ -70,6 +70,15 @@ def test_run_uses_triage_model_and_schema() -> None:
     assert "트리아지 단계 지침" in stub.last_call["system_prompt"]
 
 
+def test_run_includes_language_hint_when_provided() -> None:
+    stub = _StubLLM(_triage_payload())
+    agent = TriageAgent(stub, model="gpt-4o-mini")
+    agent.run("月外掛最新版本上傳。免費", language="zh-TW")
+
+    assert "원문 언어 힌트: zh-TW" in stub.last_call["user_text"]
+    assert "본문:\n月外掛最新版本上傳。免費" in stub.last_call["user_text"]
+
+
 def test_model_from_env_when_not_passed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TRIAGE_MODEL", "gpt-4o-mini-custom")
     agent = TriageAgent(_StubLLM(_triage_payload()))

@@ -68,11 +68,11 @@ class TestSetupScheduleJobsRegistered:
 
 class TestOperationalDefaults:
     def test_crawler_operational_defaults_match_ec2_profile(self):
-        assert scheduler_module._MAX_POSTS_PER_BOARD == 30
+        assert scheduler_module._MAX_POSTS_PER_BOARD == 50
         assert scheduler_module._PRIORITY_BUDGET_ENABLED is True
-        assert scheduler_module._P3_DEFAULT_CAP_PER_BOARD == 1
-        assert scheduler_module._P3_MIXED_CAP_PER_BOARD == 5
-        assert scheduler_module._P3_52POJIE_CAP_PER_BOARD == 1
+        assert scheduler_module._P3_DEFAULT_CAP_PER_BOARD == 2
+        assert scheduler_module._P3_MIXED_CAP_PER_BOARD == 10
+        assert scheduler_module._P3_52POJIE_CAP_PER_BOARD == 3
         assert scheduler_module._DETAIL_FETCH_CONCURRENCY == 3
         assert scheduler_module._DETAIL_FETCH_SOURCE_CONCURRENCY == {
             "52pojie": 1,

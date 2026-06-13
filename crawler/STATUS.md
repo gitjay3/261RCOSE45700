@@ -10,9 +10,9 @@
 ## 1. 한눈에
 
 - **안정 보드**: 11곳 (인벤 2 + PTT Lineage + Bahamut NC 8)
-- **운영 수집 profile**: `MAX_POSTS_PER_BOARD=30`, priority budget, detail concurrency 3, 52pojie serial
+- **운영 수집 profile**: `MAX_POSTS_PER_BOARD=50`, priority budget, detail concurrency 3, 52pojie serial
 - **인프라**: URL 중복 차단, 본문 SHA256 dedup, 공지·인증벽·캡차 자동 분류, inter-site delay
-- **테스트**: 183 unit/integration passed, ruff clean
+- **테스트**: 191 unit/integration passed, flake8 clean
 - **detection(LLM)**: 별도 서비스에서 OpenAI 멀티모달 LLM 분류와 RDS 저장 처리
 
 ---
@@ -175,11 +175,11 @@ Redis ZSET 기반 cross-run URL 중복 차단. **fetch 자체를 막아** 대역
 |---|---|---|
 | `SERVICE_NAME` | `crawler` | 로그용 |
 | `LOG_LEVEL` | `DEBUG` | INFO/WARNING 등 |
-| `MAX_POSTS_PER_BOARD` | `30` | 보드 listing 당 최대 raw 후보 수 |
+| `MAX_POSTS_PER_BOARD` | `50` | 보드 listing 당 최대 raw 후보 수 |
 | `CRAWL_PRIORITY_BUDGET_ENABLED` | `true` | 제목 hard filter 대신 priority budget 적용 |
-| `CRAWL_P3_DEFAULT_CAP_PER_BOARD` | `1` | 일반 source P3 샘플 cap |
-| `CRAWL_P3_MIXED_CAP_PER_BOARD` | `5` | PTT mixed source P3 샘플 cap |
-| `CRAWL_P3_52POJIE_CAP_PER_BOARD` | `1` | 52pojie P3 샘플 cap |
+| `CRAWL_P3_DEFAULT_CAP_PER_BOARD` | `2` | 일반 source P3 샘플 cap |
+| `CRAWL_P3_MIXED_CAP_PER_BOARD` | `10` | PTT mixed source P3 샘플 cap |
+| `CRAWL_P3_52POJIE_CAP_PER_BOARD` | `3` | 52pojie P3 샘플 cap |
 | `CRAWL_DETAIL_FETCH_CONCURRENCY` | `3` | 운영 detail fetch 기본 병렬성 |
 | `CRAWL_DETAIL_SOURCE_CONCURRENCY` | `52pojie=1` | 민감 source serial 처리 |
 | `CRAWL_DETAIL_FETCH_STAGGER_SECONDS` | `0.25` | detail batch 시작 stagger |
@@ -274,11 +274,11 @@ python scripts/smoke_each_site.py bahamut_tl
 
 # 운영 (Redis 필요)
 REDIS_URL=redis://localhost:6379 \
-MAX_POSTS_PER_BOARD=30 \
+MAX_POSTS_PER_BOARD=50 \
 CRAWL_PRIORITY_BUDGET_ENABLED=true \
-CRAWL_P3_DEFAULT_CAP_PER_BOARD=1 \
-CRAWL_P3_MIXED_CAP_PER_BOARD=5 \
-CRAWL_P3_52POJIE_CAP_PER_BOARD=1 \
+CRAWL_P3_DEFAULT_CAP_PER_BOARD=2 \
+CRAWL_P3_MIXED_CAP_PER_BOARD=10 \
+CRAWL_P3_52POJIE_CAP_PER_BOARD=3 \
 CRAWL_DETAIL_FETCH_CONCURRENCY=3 \
 CRAWL_DETAIL_SOURCE_CONCURRENCY=52pojie=1 \
 CRAWL_DETAIL_FETCH_STAGGER_SECONDS=0.25 \

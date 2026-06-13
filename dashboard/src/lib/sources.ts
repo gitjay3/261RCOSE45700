@@ -10,6 +10,7 @@ export interface SourceMeta {
  * MSW mock data, RightRail health 표시, FilterBar 옵션이 모두 이 목록 참조.
  */
 export const SOURCE_META: SourceMeta[] = [
+  { name: 'GitHub', lang: 'en' },
   { name: 'tailstar.net', lang: 'ko' },
   { name: 'ptt.cc', lang: 'zh-TW' },
   { name: 'tieba.baidu.com', lang: 'zh-CN' },

@@ -6,7 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
-import { apiClient } from './client';
+import { apiClient, ProblemDetailError } from './client';
 import { POLLING_QUERY_OPTIONS } from './queryDefaults';
 import { statsQueries } from './stats';
 import { detectionFilterToParams } from '@/lib/detectionFilter';
@@ -116,6 +116,10 @@ export function useCrawlJobStatusQuery(jobId: string | null) {
     enabled: Boolean(jobId),
     refetchInterval: 2_000,
     staleTime: 1_000,
+    retry: (failureCount, error) => {
+      if (error instanceof ProblemDetailError && error.status === 404) return false;
+      return failureCount < 3;
+    },
   });
 }
 

@@ -14,6 +14,7 @@ const TYPE_LABEL: Record<DetectionType, string> = {
 
 const LANG_LABEL: Record<Language, string> = {
   ko: '한국어',
+  en: '영어',
   'zh-CN': '중국어 (간체)',
   'zh-TW': '중국어 (번체)',
 };

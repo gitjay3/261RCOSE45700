@@ -46,16 +46,16 @@ from shared.structured_logger import get_logger
 
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "crawler")
 _logger = get_logger(__name__)
-_MAX_POSTS_PER_BOARD = int(os.environ.get("MAX_POSTS_PER_BOARD", "30"))
+_MAX_POSTS_PER_BOARD = int(os.environ.get("MAX_POSTS_PER_BOARD", "50"))
 _DRY_RUN = os.environ.get("CRAWL_DRY_RUN", "").lower() in ("1", "true", "yes")
 _DRY_RUN_OUTPUT_DIR = Path(os.environ.get("CRAWL_DRY_RUN_OUTPUT_DIR", "output"))
 _DRY_RUN_SESSION_TS = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 _PRIORITY_BUDGET_ENABLED = os.environ.get(
     "CRAWL_PRIORITY_BUDGET_ENABLED", "true"
 ).lower() not in ("0", "false", "no")
-_P3_DEFAULT_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_DEFAULT_CAP_PER_BOARD", "1"))
-_P3_MIXED_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_MIXED_CAP_PER_BOARD", "5"))
-_P3_52POJIE_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_52POJIE_CAP_PER_BOARD", "1"))
+_P3_DEFAULT_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_DEFAULT_CAP_PER_BOARD", "2"))
+_P3_MIXED_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_MIXED_CAP_PER_BOARD", "10"))
+_P3_52POJIE_CAP_PER_BOARD = int(os.environ.get("CRAWL_P3_52POJIE_CAP_PER_BOARD", "3"))
 _MIXED_PRIORITY_SOURCES = frozenset({"ptt_mobile_game"})
 _DETAIL_FETCH_CONCURRENCY = max(1, int(os.environ.get("CRAWL_DETAIL_FETCH_CONCURRENCY", "3")))
 _DETAIL_FETCH_SOURCE_CONCURRENCY_DEFAULT = (
@@ -206,6 +206,7 @@ class CrawlOptions:
     title_keywords: list[str] | None = None
     css_selector: str | None = None
     image_filter: Callable[[dict], bool] | None = None
+    post_id_extractor: Callable[[str], str] | None = None
     use_flaresolverr: bool = False
 
     def with_flaresolverr_solution(
@@ -246,6 +247,7 @@ class CrawlOptions:
             title_keywords=self.title_keywords,
             css_selector=self.css_selector,
             image_filter=self.image_filter,
+            post_id_extractor=self.post_id_extractor,
             use_flaresolverr=self.use_flaresolverr,
         )
 
@@ -274,6 +276,7 @@ class CrawlOptions:
             title_keywords=site.title_keywords,
             css_selector=site.css_selector,
             image_filter=site.image_filter,
+            post_id_extractor=site.post_id_extractor,
             use_flaresolverr=site.use_flaresolverr,
         )
 
@@ -359,6 +362,7 @@ class PostUrlCandidate:
     url: str
     title: str
     keyword_matched: bool
+    sort_key: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -381,6 +385,7 @@ class ScoredPostCandidate:
     priority_bucket: str
     score_reasons: list[str]
     keyword_matched: bool
+    sort_key: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -391,11 +396,30 @@ class PostFetchOutcome:
     error: Exception | None = None
 
 
-def _post_url_sort_key(candidate: PostUrlCandidate) -> tuple[int, int]:
+def _numeric_sort_key(value: str) -> tuple[int, ...]:
+    parts = [int(part) for part in re.findall(r"\d+", value)]
+    return tuple(parts) if parts else (0,)
+
+
+def _candidate_sort_key(
+    url: str,
+    post_id_extractor: Callable[[str], str] | None,
+) -> tuple[int, ...]:
+    if post_id_extractor is None:
+        return _numeric_sort_key(url)
+    try:
+        return _numeric_sort_key(post_id_extractor(url))
+    except Exception:
+        return _numeric_sort_key(url)
+
+
+def _post_url_sort_key(candidate: PostUrlCandidate) -> tuple[int, tuple[int, ...]]:
     """키워드 매칭 후보를 먼저, 같은 그룹 안에서는 최신 post id 우선."""
-    matches = re.findall(r"/(\d+)", candidate.url)
-    post_id = int(matches[-1]) if matches else 0
-    return (1 if candidate.keyword_matched else 0, post_id)
+    return (1 if candidate.keyword_matched else 0, candidate.sort_key)
+
+
+def _sort_key_desc(value: tuple[int, ...]) -> tuple[int, ...]:
+    return tuple(-part for part in value)
 
 
 def _extract_post_url_candidates(
@@ -403,6 +427,7 @@ def _extract_post_url_candidates(
     pattern: str,
     *,
     title_keywords: list[str] | None = None,
+    post_id_extractor: Callable[[str], str] | None = None,
 ) -> list[PostUrlCandidate]:
     """listing 링크에서 게시글 후보를 추출한다.
 
@@ -434,6 +459,7 @@ def _extract_post_url_candidates(
                 url=candidate_url,
                 title=link_title,
                 keyword_matched=keyword_matched,
+                sort_key=_candidate_sort_key(candidate_url, post_id_extractor),
             )
         )
 
@@ -478,6 +504,7 @@ def _score_post_candidates(
                 priority_bucket=priority.priority_bucket,
                 score_reasons=priority.reasons,
                 keyword_matched=cand.keyword_matched,
+                sort_key=cand.sort_key,
             )
         )
     return scored
@@ -509,8 +536,8 @@ def _select_detail_candidates(
     high_priority = [c for c in scored if c.priority_bucket != "P3"]
     p3 = [c for c in scored if c.priority_bucket == "P3"]
 
-    high_priority.sort(key=lambda c: (-c.score, c.url))
-    p3.sort(key=lambda c: (not c.keyword_matched, -c.score, c.url))
+    high_priority.sort(key=lambda c: (-c.score, _sort_key_desc(c.sort_key), c.url))
+    p3.sort(key=lambda c: (not c.keyword_matched, -c.score, _sort_key_desc(c.sort_key), c.url))
 
     selected = high_priority + p3[:_p3_cap_for_site(site_id)]
     return selected[:limit]
@@ -591,7 +618,12 @@ async def _fetch_post_urls_via_flaresolverr(
     solution = data.get("solution") or {}
     html = solution.get("response") or ""
     links = _parse_links_from_flaresolverr_html(html)
-    candidates = _extract_post_url_candidates(links, pattern, title_keywords=options.title_keywords)
+    candidates = _extract_post_url_candidates(
+        links,
+        pattern,
+        title_keywords=options.title_keywords,
+        post_id_extractor=options.post_id_extractor,
+    )
     selected = candidates[:limit]
     matched = sum(1 for c in candidates if c.keyword_matched)
     unmatched = len(candidates) - matched
@@ -658,6 +690,7 @@ async def _fetch_post_urls(
         all_links,
         pattern,
         title_keywords=options.title_keywords,
+        post_id_extractor=options.post_id_extractor,
     )
     selected = candidates[:limit]
     matched = sum(1 for c in candidates if c.keyword_matched)
@@ -724,6 +757,72 @@ class PipelineStats:
         if self.attempted == 0:
             return 1.0
         return (self.attempted - self.failed) / self.attempted
+
+
+def _snapshot_pipeline_stats(stats: PipelineStats) -> dict[str, int]:
+    return {
+        "boards": stats.listing_boards,
+        "discovered": stats.listing_discovered_total,
+        "selected": stats.listing_urls_selected,
+        "p0": stats.selected_p0,
+        "p1": stats.selected_p1,
+        "p2": stats.selected_p2,
+        "p3": stats.selected_p3,
+        "kw_matched": stats.listing_keyword_matched,
+        "kw_unmatched": stats.listing_keyword_unmatched,
+        "attempted": stats.attempted,
+        "enqueued": stats.enqueued,
+        "url_dup": stats.skipped_seen_url,
+        "body_dup": stats.skipped_dedup,
+        "empty": stats.skipped_empty,
+        "sticky": stats.skipped_sticky,
+        "blocked": stats.skipped_blocked,
+        "unknown": stats.skipped_unknown,
+        "failed": stats.failed,
+    }
+
+
+def _delta(current: int, before: dict[str, int], key: str) -> int:
+    return current - before[key]
+
+
+def _log_site_yield_summary(
+    site_id: str,
+    stats: PipelineStats,
+    before: dict[str, int],
+) -> None:
+    selected = _delta(stats.listing_urls_selected, before, "selected")
+    attempted = _delta(stats.attempted, before, "attempted")
+    enqueued = _delta(stats.enqueued, before, "enqueued")
+    url_dup = _delta(stats.skipped_seen_url, before, "url_dup")
+    validator_skipped = (
+        _delta(stats.skipped_empty, before, "empty")
+        + _delta(stats.skipped_sticky, before, "sticky")
+        + _delta(stats.skipped_blocked, before, "blocked")
+        + _delta(stats.skipped_unknown, before, "unknown")
+    )
+    _logger.info(
+        "source yield: site=%s boards=%d discovered=%d selected=%d"
+        " P0=%d P1=%d P2=%d P3=%d kw_matched=%d kw_unmatched=%d"
+        " fetched=%d queued=%d url중복=%d 본문중복=%d validator스킵=%d 실패=%d",
+        site_id,
+        _delta(stats.listing_boards, before, "boards"),
+        _delta(stats.listing_discovered_total, before, "discovered"),
+        selected,
+        _delta(stats.selected_p0, before, "p0"),
+        _delta(stats.selected_p1, before, "p1"),
+        _delta(stats.selected_p2, before, "p2"),
+        _delta(stats.selected_p3, before, "p3"),
+        _delta(stats.listing_keyword_matched, before, "kw_matched"),
+        _delta(stats.listing_keyword_unmatched, before, "kw_unmatched"),
+        attempted,
+        enqueued,
+        url_dup,
+        _delta(stats.skipped_dedup, before, "body_dup"),
+        validator_skipped,
+        _delta(stats.failed, before, "failed"),
+        extra={"correlation_id": "", "service": _SERVICE_NAME},
+    )
 
 
 def _expand_page_urls(board_url: str, site: SiteConfig) -> list[str]:
@@ -891,6 +990,7 @@ class CrawlPipeline:
             )
             await asyncio.sleep(delay)
 
+        before = _snapshot_pipeline_stats(stats)
         options = CrawlOptions.from_site(site)
         board_idx = 0
         for board_url in site.board_urls:
@@ -922,6 +1022,7 @@ class CrawlPipeline:
                     )
                     board_idx += 1
 
+        _log_site_yield_summary(site_id, stats, before)
         if self._progress_store is not None and job_id:
             self._progress_store.mark_site_complete(
                 job_id,

@@ -697,6 +697,28 @@ def test_listing_keywords_prioritize_without_filtering_candidates():
     assert [c.keyword_matched for c in candidates] == [True, False, False]
 
 
+def test_listing_candidates_use_site_post_id_extractor_for_latest_ordering():
+    """thread-A-B-C.html 같은 URL은 사이트별 post_id 기준으로 최신 후보를 고른다."""
+    links = [
+        {"href": "https://www.52pojie.cn/thread-143136-1-1.html", "text": "old"},
+        {"href": "https://www.52pojie.cn/thread-200001-1-1.html", "text": "new"},
+        {"href": "https://www.52pojie.cn/thread-199999-1-1.html", "text": "mid"},
+    ]
+
+    candidates = _extract_post_url_candidates(
+        links,
+        r"https://www\.52pojie\.cn/thread-\d+-\d+-\d+\.html",
+        post_id_extractor=SITES["52pojie"].post_id_extractor,
+    )
+
+    assert [c.url for c in candidates] == [
+        "https://www.52pojie.cn/thread-200001-1-1.html",
+        "https://www.52pojie.cn/thread-199999-1-1.html",
+        "https://www.52pojie.cn/thread-143136-1-1.html",
+    ]
+    assert candidates[0].sort_key == (200001, 1, 1)
+
+
 def test_priority_budget_selects_high_priority_and_caps_p3_for_mixed_source():
     """운영 budget은 P0/P1/P2를 우선 선택하고 P3는 혼합 보드 cap만큼만 샘플링한다."""
     site = replace(SITES["ptt_mobile_game"], title_keywords=["Lineage"])
@@ -720,6 +742,12 @@ def test_priority_budget_selects_high_priority_and_caps_p3_for_mixed_source():
                 "잡담 4",
                 "잡담 5",
                 "잡담 6",
+                "잡담 7",
+                "잡담 8",
+                "잡담 9",
+                "잡담 10",
+                "잡담 11",
+                "잡담 12",
             ], start=1)
         ],
     )
@@ -733,8 +761,8 @@ def test_priority_budget_selects_high_priority_and_caps_p3_for_mixed_source():
     )
 
     assert sum(1 for c in selected if c.priority_bucket != "P3") == 2
-    assert [c.priority_bucket for c in selected].count("P3") == 5
-    assert len(selected) == 7
+    assert [c.priority_bucket for c in selected].count("P3") == 10
+    assert len(selected) == 12
 
 
 def test_priority_budget_keeps_52pojie_p3_cap_low():
@@ -763,7 +791,7 @@ def test_priority_budget_keeps_52pojie_p3_cap_low():
         limit=30,
     )
 
-    assert len(selected) == 1
+    assert len(selected) == 3
     assert {c.priority_bucket for c in selected} == {"P3"}
 
 

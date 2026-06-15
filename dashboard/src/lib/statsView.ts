@@ -1,5 +1,6 @@
 import { colorForType } from '@/components/charts/colors';
 import { getLangLabel, getTypeLabel } from '@/components/tracker/labels';
+import { getSiteLabel } from '@/lib/sources';
 import type {
   LangDistributionEntry,
   SiteDistributionEntry,
@@ -15,7 +16,7 @@ export const typeDistributionToColors = (entries: readonly TypeDistributionEntry
   entries.map((e) => colorForType(e.type));
 
 export const siteDistributionToSeries = (entries: readonly SiteDistributionEntry[]) =>
-  entries.map((e) => ({ name: e.site, value: e.count, site: e.site }));
+  entries.map((e) => ({ name: getSiteLabel(e.site), value: e.count, site: e.site }));
 
 export const langDistributionToSeries = (entries: readonly LangDistributionEntry[]) =>
   entries.map((e) => ({ name: getLangLabel(e.lang), value: e.count, lang: e.lang }));

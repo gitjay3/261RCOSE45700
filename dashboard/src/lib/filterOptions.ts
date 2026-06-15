@@ -1,5 +1,5 @@
 import { LANG_OPTIONS, TYPE_OPTIONS } from '@/components/tracker/labels';
-import { KNOWN_SOURCES } from './sources';
+import { SOURCE_META } from './sources';
 import type { Tier } from '@/types/api';
 
 export interface FilterSelectOption {
@@ -17,9 +17,9 @@ export function detectionFilterOptions() {
   ];
 
   return {
-    siteOptions: KNOWN_SOURCES.map((source) => ({
-      value: source,
-      label: source,
+    siteOptions: SOURCE_META.map((source) => ({
+      value: source.id,
+      label: source.name,
       className: 'font-mono text-xs',
     })),
     typeOptions: TYPE_OPTIONS.map((type) => ({

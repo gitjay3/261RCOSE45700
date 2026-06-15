@@ -147,8 +147,8 @@ function generateMockDetections(trend: { date: string; count: number }[]): Detec
         reason: sample.reason,
         rawText,
         translatedText,
-        postUrl: `https://${site.name}/post/${globalIdx + 100000}`,
-        siteName: site.name,
+        postUrl: `https://${site.id}/post/${globalIdx + 100000}`,
+        siteName: site.id,
         language: site.lang,
         detectedAt: detectedAt.toISOString(),
       });
@@ -200,7 +200,7 @@ function buildStatsBase(detections: readonly Detection[]): Omit<StatsResponse, '
     const offset = offsets[i % offsets.length];
     const lastCrawledAt = new Date(now - [10, 40, 120, 360, 720][i % 5] * 60_000).toISOString();
     return {
-      siteName: s.name,
+      siteName: s.id,
       lastCrawledAt,
       lastIngestedAt: offset !== null
         ? new Date(now - offset * 60_000).toISOString()

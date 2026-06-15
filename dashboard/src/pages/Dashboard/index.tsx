@@ -414,7 +414,7 @@ function HotspotCard({
             />
             <FilterChipGroup
               label="언어"
-              data={langData}
+              data={langData.slice(0, 3)}
               onSelect={(entry) => entry.lang && onFilter({ lang: entry.lang })}
             />
           </div>

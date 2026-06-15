@@ -17,6 +17,7 @@ const LANG_LABEL: Record<Language, string> = {
   en: '영어',
   'zh-CN': '중국어 (간체)',
   'zh-TW': '중국어 (번체)',
+  vi: '베트남어',
 };
 
 export function getTypeLabel(type: DetectionType): string {

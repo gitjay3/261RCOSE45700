@@ -9,7 +9,7 @@ export type DetectionType =
   | '광고_도배'
   | '기타';
 
-export type Language = 'ko' | 'en' | 'zh-CN' | 'zh-TW';
+export type Language = 'ko' | 'en' | 'zh-CN' | 'zh-TW' | 'vi';
 export type Tier = 'T1' | 'T2' | 'T3' | 'T4';
 export type DetectionDateRange = `${number}d`;
 

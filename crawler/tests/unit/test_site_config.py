@@ -57,7 +57,6 @@ class TestSiteRegistryWiring:
 
     # ── 인벤 (회귀 방지) ──
     def test_inven_sites_unchanged(self):
-        assert SITES["inven_maple"].css_selector == ".articleMain"
         assert SITES["inven_lineage_classic"].css_selector == ".articleMain"
 
     # ── PTT ──
@@ -193,7 +192,7 @@ class TestSiteRegistryWiring:
     def test_get_enabled_sites_contains_all_targets(self):
         enabled = get_enabled_sites()
         expected = {
-            "inven_maple", "inven_lineage_classic",
+            "inven_lineage_classic",
             "ptt", "ptt_mobile_game",
             "bahamut_lineage", "bahamut_lineage_m", "bahamut_lineage_w",
             "bahamut_lineage_classic", "bahamut_aion", "bahamut_aion2",

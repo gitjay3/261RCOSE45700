@@ -231,7 +231,6 @@ def validate_tieba(markdown: str, url: str) -> PostValidation:
 # ──────────────────────────────────────────────
 
 SITE_VALIDATORS: dict[str, ContentValidator] = {
-    "inven_maple": validate_inven,
     "inven_lineage_classic": validate_inven,
     "52pojie": validate_pojie,
     "nga": validate_nga,

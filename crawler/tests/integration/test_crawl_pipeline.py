@@ -52,11 +52,11 @@ def _make_crawl_result(text: str = _KEYWORD_TEXT) -> CrawlResult:
 
 @contextlib.contextmanager
 def _isolated_sites():
-    """단일 사이트(inven_maple)만 활성화한 상태로 패치 — site fanout 으로 인한 lpush 다중 호출 방지."""
-    inven = _single_page_site(SITES["inven_maple"])
+    """단일 사이트(inven_lineage_classic)만 활성화한 상태로 패치 — site fanout 으로 인한 lpush 다중 호출 방지."""
+    inven = _single_page_site(SITES["inven_lineage_classic"])
     with patch(
         "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
-        return_value={"inven_maple": inven},
+        return_value={"inven_lineage_classic": inven},
     ):
         yield
 
@@ -448,7 +448,7 @@ def test_detail_fetch_concurrency_defaults_keep_sensitive_sources_serial():
     """52pojie/Bahamut은 concurrency=3 실측에서 차단 위험이 커 기본 순차 처리한다."""
     assert detail_fetch_concurrency_for_site("52pojie") == 1
     assert detail_fetch_concurrency_for_site("bahamut_lineage") == 1
-    assert detail_fetch_concurrency_for_site("inven_maple") >= 2
+    assert detail_fetch_concurrency_for_site("inven_lineage_classic") >= 2
 
 
 async def test_pipeline_keeps_52pojie_serial_even_when_fetch_many_available():
@@ -646,8 +646,8 @@ async def test_pipeline_event_json_roundtrip():
     event_json = mock_mq.lpush.call_args[0][1]
 
     event = CrawlEvent.from_json(event_json)
-    assert event.site_name == "인벤 (메이플스토리)"
-    assert event.source_id == "inven_maple"
+    assert event.site_name == "인벤 (리니지 클래식)"
+    assert event.source_id == "inven_lineage_classic"
     assert event.language in {"ko", "zh-CN", "zh-TW"}
     assert isinstance(event.image_urls, list)
     assert event.s3_text_path == ""
@@ -656,7 +656,7 @@ async def test_pipeline_event_json_roundtrip():
 async def test_pipeline_passes_title_keywords_to_url_extractor():
     """site.title_keywords 가 listing options 로 전달되는지."""
     custom_site = _single_page_site(replace(
-        SITES["inven_maple"],
+        SITES["inven_lineage_classic"],
         title_keywords=["天堂", "Lineage", "리니지"],
     ))
 
@@ -664,7 +664,7 @@ async def test_pipeline_passes_title_keywords_to_url_extractor():
 
     with patch(
         "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
-        return_value={"inven_maple": custom_site},
+        return_value={"inven_lineage_classic": custom_site},
     ), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=ListingResult(urls=[_TEST_URL], discovered_total=1, keyword_matched=0, keyword_unmatched=1),
@@ -840,7 +840,7 @@ async def test_pipeline_marks_seen_url_after_successful_enqueue():
 
 async def test_pipeline_passes_site_options_to_crawler_fetch():
     """site.cookies / wait_for / headers / page_timeout / proxy 가 crawler.fetch 로 전달되는지."""
-    custom_site = SITES["inven_maple"]
+    custom_site = SITES["inven_lineage_classic"]
     custom_site = _single_page_site(replace(
         custom_site,
         cookies=[{"name": "session", "value": "abc"}],
@@ -857,7 +857,7 @@ async def test_pipeline_passes_site_options_to_crawler_fetch():
 
     with patch(
         "crawler.src.scheduler.crawl_scheduler.get_enabled_sites",
-        return_value={"inven_maple": custom_site},
+        return_value={"inven_lineage_classic": custom_site},
     ), patch(
         "crawler.src.scheduler.crawl_scheduler._fetch_post_urls",
         return_value=ListingResult(urls=[_TEST_URL], discovered_total=1, keyword_matched=0, keyword_unmatched=1),

@@ -7,7 +7,7 @@
   3. 필요 시 image_filter 함수 작성
 
 타겟 (FR1):
-  inven_maple, inven_lineage_classic (KR) — 인벤 자유게시판 두 곳
+  inven_lineage_classic (KR)             — 인벤 자유게시판
   ptt, bahamut (TW)                      — 대만 BBS / 巴哈姆特
   52pojie, nga, tieba (CN)                — 중국 크랙·게임·百度貼吧
 
@@ -255,22 +255,7 @@ def _make_bahamut_nc_site(name_zh: str, bsn: int) -> SiteConfig:
 
 SITES: dict[str, SiteConfig] = {
 
-    # ── 한국 (비교/보존용 — 인벤 두 곳) ──────────────────────────────────
-    "inven_maple": SiteConfig(
-        name="인벤 (메이플스토리)",
-        description="인벤 메이플스토리 자유게시판 — 비교군(NEXON, NC 아님)",
-        board_urls=[
-            "https://www.inven.co.kr/board/maple/2298",
-        ],
-        post_url_pattern=r"https://www\.inven\.co\.kr/board/maple/2298/\d+$",
-        css_selector=".articleMain",
-        image_filter=_inven_image_filter,
-        max_pages=5,
-        page_url_template="{base}?p={page}",
-        enabled=True,
-        note="NEXON. 비교 데이터로 유지.",
-    ),
-
+    # ── 한국 (비교/보존용 — 인벤) ──────────────────────────────────
     "inven_lineage_classic": SiteConfig(
         name="인벤 (리니지 클래식)",
         description="인벤 리니지 클래식 — NC 게임",

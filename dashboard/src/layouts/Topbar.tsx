@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Menu, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CrawlRunningBadge } from '@/components/tracker/CrawlRunningBadge';
 import { ManualCrawlButton } from '@/components/tracker/ManualCrawlButton';
 
 type Theme = 'light' | 'dark';
@@ -66,6 +67,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
         <Menu />
       </Button>
       <div className="ml-auto flex items-center gap-2.5">
+        <CrawlRunningBadge />
         <ManualCrawlButton />
         <ThemeToggle theme={theme} onToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
       </div>

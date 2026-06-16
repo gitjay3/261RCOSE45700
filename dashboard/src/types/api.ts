@@ -101,6 +101,11 @@ export interface CrawlTriggerResponse {
   statusUrl: string;
 }
 
+export interface CrawlRunningStatusResponse {
+  running: boolean;
+  trigger: 'manual' | 'schedule' | null;
+}
+
 export type CrawlJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped';
 
 export interface CrawlJobStatusResponse {

@@ -237,6 +237,11 @@ export const handlers = [
     return HttpResponse.json(response, { status: 202 });
   }),
 
+  // GET /crawl/running
+  http.get(`${baseUrl}/crawl/running`, () => {
+    return HttpResponse.json({ running: true, trigger: 'schedule' });
+  }),
+
   // GET /crawl/stats
   http.get(`${baseUrl}/crawl/stats`, () => {
     const response: CrawlPipelineStatsResponse = {

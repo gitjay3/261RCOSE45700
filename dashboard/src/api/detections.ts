@@ -13,6 +13,7 @@ import { detectionFilterToParams } from '@/lib/detectionFilter';
 import type {
   AgentRun,
   CrawlJobStatusResponse,
+  CrawlRunningStatusResponse,
   CrawlTriggerResponse,
   Detection,
   DetectionFilter,
@@ -144,4 +145,18 @@ export function useCrawlJobStatusQuery(jobId: string | null) {
 
 export function useAgentRunsQuery(detectionId: number | undefined) {
   return useQuery(detectionQueries.agentRuns(detectionId));
+}
+
+async function fetchCrawlRunningStatus(): Promise<CrawlRunningStatusResponse> {
+  const response = await apiClient.get<CrawlRunningStatusResponse>('/crawl/running');
+  return response.data;
+}
+
+export function useCrawlRunningQuery() {
+  return useQuery({
+    queryKey: ['crawl', 'running'],
+    queryFn: fetchCrawlRunningStatus,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
 }

@@ -457,10 +457,8 @@ identity-based policy: ControlOnlyOwnResources`). IP /32 우회도 동일 패턴
 ## 8. 참고
 
 - [Source: `.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) — 운영 자동 배포
-- [Source: `.github/workflows/deploy-demo.yml`](../.github/workflows/deploy-demo.yml) — frontend-only 데모 배포(PR #42). OpenAI/RDS 셋업 전 화면만 시연할 때 `workflow_dispatch`로 수동 트리거. `infra/compose.demo.yml` + `infra/Caddyfile`(Let's Encrypt ACME)로 dashboard + Caddy 2컨테이너 토폴로지. 운영 `deploy.yml`과 EC2 호스트를 공유하지만 GHCR 태그(`:demo-*` 분리)와 compose 파일이 분리돼 충돌하지 않음 — 동시 운영은 피하고 배포 전환 시 `docker compose -f compose.demo.yml down` 선행.
 - [Source: `.github/workflows/ci.yml`](../.github/workflows/ci.yml)
 - [Source: `infra/compose.prod.yml`](../infra/compose.prod.yml)
-- [Source: `infra/compose.demo.yml`](../infra/compose.demo.yml)
 - [Source: `infra/Caddyfile`](../infra/Caddyfile)
 - [Source: `infra/docker-secret-shim.sh`](../infra/docker-secret-shim.sh)
 - [`docs/ci-setup.md`](./ci-setup.md) — Story 1.5 deferred 항목이 본 스토리에서 어떻게 해결됐는지

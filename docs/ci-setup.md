@@ -3,8 +3,7 @@
 Story 1.5의 GitHub Actions 워크플로우 4종이 서브시스템별 lint/test/build를
 자동 실행합니다. Story 5.2가 strict required check를 `ci.yml` aggregator
 워크플로로 추가했고, 자동 배포 통로(`deploy.yml`)도 같은 reusable workflow를
-재사용합니다. PR #42(2026-05-14)에서 frontend-only 데모용 `deploy-demo.yml`이
-추가됐고, 커밋 `515c72e`에서 crawler/detection의 중복 lint-test 로직이
+재사용합니다. 커밋 `515c72e`에서 crawler/detection의 중복 lint-test 로직이
 `_python-service.yml` reusable 템플릿으로 추출됐습니다.
 
 > **Story 5.2 시점 갱신**: 본 문서가 정의했던 "Story 5.2 Strict" 단계가
@@ -59,7 +58,6 @@ Story 1.5의 GitHub Actions 워크플로우 4종이 서브시스템별 lint/test
 | `crawler.yml` / `detection.yml` / `api.yml` / `dashboard.yml` | path filter (PR/push:main) **+** `workflow_call` | 서브시스템별 빠른 lint/test (path 변경 시) |
 | `ci.yml` | PR + push:main, **no path filter** | 4개 reusable 호출 + `aggregator` strict gate |
 | `deploy.yml` | push:main + `workflow_dispatch` | 같은 reusable 4종 호출 후 GHCR 빌드 + EC2 배포 |
-| `deploy-demo.yml` | `workflow_dispatch` only | dashboard만 `VITE_USE_MOCK=true`로 빌드 → GHCR `:demo-*` → EC2 Caddy + dashboard 2컨테이너 (`tracker.o-r.kr`, Let's Encrypt 자동 발급) |
 
 main 머지 1회당 reusable workflow 4종이 두 번 실행되는 비용이 있지만(`ci.yml`
 + `deploy.yml`), 배포 안전성 우선으로 수용합니다.

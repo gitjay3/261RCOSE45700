@@ -138,8 +138,6 @@ pnpm e2e
 
 `main` 브랜치 push가 GitHub Actions `deploy.yml`을 트리거합니다. 워크플로는 각 서브시스템 테스트, GHCR 이미지 빌드, EC2 SSH 배포, healthcheck, 자동 롤백을 순서대로 수행합니다.
 
-OpenAI/RDS 셋업 전 화면만 시연할 때는 `deploy-demo.yml`을 `workflow_dispatch`로 실행해 dashboard mock 빌드만 배포할 수 있습니다.
-
 자세한 사양은 [CI/CD Pipeline](https://github.com/byungju0/261RCOSE45700/wiki/CI-CD-Pipeline), 운영 절차는 [docs/deployment.md](docs/deployment.md), 시크릿 결정은 [ADR 0001](docs/adr/0001-secret-management-strategy.md)에 있습니다.
 
 ## 문서

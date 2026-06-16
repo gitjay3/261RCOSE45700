@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, CalendarDays } from 'lucide-react';
 import { LineChart } from '@/components/charts/LineChart';
@@ -6,6 +6,14 @@ import { ChartCard } from '@/components/tracker/ChartCard';
 import { RangeDaysInput } from '@/components/tracker/RangeDaysInput';
 import { RecentAlertList } from '@/components/tracker/RecentAlertList';
 import { getTypeLabel } from '@/components/tracker/labels';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useDetectionsSuspenseQuery } from '@/api/detections';
 import { useStatsSuspenseQuery } from '@/api/stats';
 import { PageContainer } from '@/layouts/PageContainer';
@@ -16,12 +24,17 @@ import {
 } from '@/lib/statsView';
 import { detectionFilterToParams } from '@/lib/detectionFilter';
 import { daysToRange } from '@/lib/rangeDays';
+import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/time';
 import type { Detection, DetectionFilter, StatsPeriod, Tier } from '@/types/api';
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<StatsPeriod>(7);
+  const [isPending, startTransition] = useTransition();
+  const handlePeriodChange = (next: StatsPeriod) => {
+    startTransition(() => setPeriod(next));
+  };
   const selectedRange = daysToRange(period);
   // dataUpdatedAt이 60s polling마다 갱신 → TanStack Query subscription이 자동 re-render
   // 유발. ticker 불필요. 자정 롤오버도 다음 polling tick(<60s)에 자연 반영.
@@ -120,10 +133,13 @@ export function DashboardPage() {
               선택한 기간 기준으로 필터와 추이를 함께 표시
             </span>
           </div>
-          <PeriodControl value={period} onChange={setPeriod} />
+          <PeriodControl value={period} onChange={handlePeriodChange} />
         </div>
 
-        <section style={{ marginBottom: 'var(--pad-section)' }}>
+        <section
+          className={cn('transition-opacity', isPending && 'opacity-60')}
+          style={{ marginBottom: 'var(--pad-section)' }}
+        >
           <HotspotCard
             data={hotspots}
             typeData={typeData}
@@ -136,7 +152,10 @@ export function DashboardPage() {
           />
         </section>
 
-        <section style={{ marginBottom: 'var(--pad-section)' }}>
+        <section
+          className={cn('transition-opacity', isPending && 'opacity-60')}
+          style={{ marginBottom: 'var(--pad-section)' }}
+        >
           <ChartCard
                 title={`최근 ${period}일 탐지 추이`}
                 subtitle="포인트 클릭 시 해당 날짜 탐지 목록으로 이동"
@@ -154,6 +173,9 @@ export function DashboardPage() {
   );
 }
 
+const PERIOD_PRESETS = [7, 14, 30, 90];
+const CUSTOM_PERIOD = '__custom__';
+
 function PeriodControl({
   value,
   onChange,
@@ -161,32 +183,50 @@ function PeriodControl({
   value: StatsPeriod;
   onChange: (value: StatsPeriod) => void;
 }) {
-  return (
-    <div
-      className="inline-flex h-9 items-center rounded-md border"
-      style={{
-        background: 'var(--bg-elev)',
-        borderColor: 'var(--border-1)',
-        boxShadow: '0 1px 2px oklch(0 0 0 / 0.04)',
-      }}
-      aria-label="대시보드 기간 기준"
-    >
-      <span
-        className="flex h-7 items-center gap-1.5 border-r px-2 text-xs font-medium"
-        style={{ color: 'var(--fg-2)', borderColor: 'var(--border-1)' }}
-      >
-        <CalendarDays className="size-3.5" aria-hidden="true" />
-        기간
-      </span>
-      <div className="flex h-full items-center gap-1 px-2 text-xs font-semibold" style={{ color: 'var(--fg-2)' }}>
+  const [customMode, setCustomMode] = useState(false);
+  const isPreset = PERIOD_PRESETS.includes(value);
+
+  if (customMode) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <CalendarDays className="size-3.5 shrink-0" style={{ color: 'var(--fg-3)' }} aria-hidden="true" />
         <RangeDaysInput
           value={value}
-          onCommit={onChange}
+          onCommit={(next) => {
+            onChange(next);
+            setCustomMode(false);
+          }}
           ariaLabel="대시보드 기간 일수"
-          className="h-full border-0 px-0"
         />
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <Select
+      value={isPreset ? String(value) : CUSTOM_PERIOD}
+      onValueChange={(next) => {
+        if (next === CUSTOM_PERIOD) {
+          setCustomMode(true);
+          return;
+        }
+        onChange(Number(next));
+      }}
+    >
+      <SelectTrigger aria-label="대시보드 기간 기준" className="gap-1.5">
+        <CalendarDays className="size-3.5" aria-hidden="true" />
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="end">
+        {PERIOD_PRESETS.map((days) => (
+          <SelectItem key={days} value={String(days)}>{`최근 ${days}일`}</SelectItem>
+        ))}
+        <SelectSeparator />
+        <SelectItem value={CUSTOM_PERIOD}>
+          {isPreset ? '직접 입력…' : `직접 입력 (${value}일)`}
+        </SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
 

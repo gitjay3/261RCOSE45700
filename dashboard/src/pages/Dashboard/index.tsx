@@ -186,10 +186,34 @@ function PeriodControl({
   const [customMode, setCustomMode] = useState(false);
   const isPreset = PERIOD_PRESETS.includes(value);
 
-  if (customMode) {
-    return (
-      <div className="flex items-center gap-1.5">
-        <CalendarDays className="size-3.5 shrink-0" style={{ color: 'var(--fg-3)' }} aria-hidden="true" />
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Select
+        value={customMode || !isPreset ? CUSTOM_PERIOD : String(value)}
+        onValueChange={(next) => {
+          if (next === CUSTOM_PERIOD) {
+            setCustomMode(true);
+            return;
+          }
+          setCustomMode(false);
+          onChange(Number(next));
+        }}
+      >
+        <SelectTrigger aria-label="대시보드 기간 기준" className="gap-1.5">
+          <CalendarDays className="size-3.5" aria-hidden="true" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          {PERIOD_PRESETS.map((days) => (
+            <SelectItem key={days} value={String(days)}>{`최근 ${days}일`}</SelectItem>
+          ))}
+          <SelectSeparator />
+          <SelectItem value={CUSTOM_PERIOD}>
+            {customMode || !isPreset ? `최근 ${value}일` : '직접 입력…'}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      {customMode && (
         <RangeDaysInput
           value={value}
           onCommit={(next) => {
@@ -198,35 +222,8 @@ function PeriodControl({
           ariaLabel="대시보드 기간 일수"
           commitOnChange
         />
-      </div>
-    );
-  }
-
-  return (
-    <Select
-      value={isPreset ? String(value) : CUSTOM_PERIOD}
-      onValueChange={(next) => {
-        if (next === CUSTOM_PERIOD) {
-          setCustomMode(true);
-          return;
-        }
-        onChange(Number(next));
-      }}
-    >
-      <SelectTrigger aria-label="대시보드 기간 기준" className="gap-1.5">
-        <CalendarDays className="size-3.5" aria-hidden="true" />
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent align="end">
-        {PERIOD_PRESETS.map((days) => (
-          <SelectItem key={days} value={String(days)}>{`최근 ${days}일`}</SelectItem>
-        ))}
-        <SelectSeparator />
-        <SelectItem value={CUSTOM_PERIOD}>
-          {isPreset ? '직접 입력…' : `직접 입력 (${value}일)`}
-        </SelectItem>
-      </SelectContent>
-    </Select>
+      )}
+    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Activity as ActivityIcon, Database, RadioTower } from 'lucide-react';
 import { statsQueries } from '@/api/stats';
 import { useActivityQuery } from '@/api/activity';
 import { formatRelativeTime } from '@/lib/time';
@@ -25,7 +26,12 @@ export function RightRail() {
       }}
     >
       {/* 1. Activity */}
-      <RailSection title="Activity">
+      <RailSection
+        title="활동"
+        subtitle="최근 시스템 이벤트"
+        icon={<ActivityIcon className="size-3.5" aria-hidden="true" />}
+        accent="var(--accent)"
+      >
         {activities.length === 0 ? (
           <EmptyRow label={activityQuery.isLoading ? '불러오는 중…' : '활동 없음'} />
         ) : (
@@ -45,7 +51,12 @@ export function RightRail() {
       </RailSection>
 
       {/* 2. Source health */}
-      <RailSection title="Source health">
+      <RailSection
+        title="크롤 상태"
+        subtitle="소스별 마지막 확인"
+        icon={<RadioTower className="size-3.5" aria-hidden="true" />}
+        accent="var(--safe)"
+      >
         <div className="flex flex-col">
           {sourceHealth.length === 0 ? (
             <EmptyRow label={statsQuery.isLoading ? '불러오는 중…' : '소스 없음'} />
@@ -58,7 +69,12 @@ export function RightRail() {
       </RailSection>
 
       {/* 3. Data freshness */}
-      <RailSection title="Data freshness">
+      <RailSection
+        title="데이터 신선도"
+        subtitle="마지막 저장 데이터"
+        icon={<Database className="size-3.5" aria-hidden="true" />}
+        accent="var(--warn, #f59e0b)"
+      >
         <div className="flex flex-col">
           {sourceHealth.length === 0 ? (
             <EmptyRow label={statsQuery.isLoading ? '불러오는 중…' : '데이터 없음'} />
@@ -101,14 +117,51 @@ const ACTIVITY_META: Record<string, { variant: ActivityVariant; tag?: string }> 
   MANUAL_CRAWL_SKIPPED:   { variant: 'self', tag: '나' },
 };
 
-function RailSection({ title, children }: { title: string; children: React.ReactNode }) {
+function RailSection({
+  title,
+  subtitle,
+  icon,
+  accent,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  accent: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="flex flex-col gap-2.5">
-      <div
-        className="mb-2 text-xs font-semibold uppercase"
-        style={{ color: 'var(--fg-3)', letterSpacing: '0.1em' }}
-      >
-        {title}
+    <section
+      className="flex flex-col gap-2.5 border-t"
+      style={{
+        borderColor: 'color-mix(in oklch, var(--border-1) 85%, transparent)',
+        paddingTop: '14px',
+      }}
+    >
+      <div className="mb-1.5 flex items-start gap-2">
+        <span
+          className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-[4px]"
+          style={{
+            color: accent,
+            background: `color-mix(in oklch, ${accent} 12%, transparent)`,
+          }}
+        >
+          {icon}
+        </span>
+        <span className="min-w-0">
+          <span
+            className="block text-xs font-semibold"
+            style={{ color: 'var(--fg)', lineHeight: 1.25 }}
+          >
+            {title}
+          </span>
+          <span
+            className="block truncate text-[0.68rem]"
+            style={{ color: 'var(--fg-3)', lineHeight: 1.35 }}
+          >
+            {subtitle}
+          </span>
+        </span>
       </div>
       {children}
     </section>

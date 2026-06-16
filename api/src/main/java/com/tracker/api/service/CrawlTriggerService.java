@@ -23,6 +23,9 @@ public class CrawlTriggerService {
     private static final String CRAWL_TRIGGER_CHANNEL = "crawl:trigger";
     private static final String CRAWL_JOB_KEY_PREFIX = "crawl:jobs:";
     private static final String CRAWL_STATS_LATEST_KEY = "crawl:stats:latest";
+    // crawler/src/scheduler/crawl_job_progress.py의 set_running/clear_running이 쓰는 키 —
+    // 수동/스케줄 트리거 구분 없이 크롤링 진행 중에는 항상 "1".
+    private static final String CRAWLER_RUNNING_KEY = "crawler:running";
     private static final Duration CRAWL_JOB_TTL = Duration.ofHours(6);
 
     private final StringRedisTemplate stringRedisTemplate;
@@ -87,6 +90,10 @@ public class CrawlTriggerService {
                 RedisFieldExtractor.str(raw, "updatedAt"),
                 RedisFieldExtractor.str(raw, "finishedAt")
         );
+    }
+
+    public String runningTrigger() {
+        return stringRedisTemplate.opsForValue().get(CRAWLER_RUNNING_KEY);
     }
 
     public CrawlPipelineStatsResponse getLatestPipelineStats() {

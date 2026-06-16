@@ -3,6 +3,7 @@ package com.tracker.api.controller;
 import com.tracker.api.dto.CrawlTriggerResponse;
 import com.tracker.api.dto.CrawlJobStatusResponse;
 import com.tracker.api.dto.CrawlPipelineStatsResponse;
+import com.tracker.api.dto.CrawlRunningStatusResponse;
 import com.tracker.api.service.CrawlTriggerService;
 import com.tracker.api.util.CorrelationIdUtil;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,5 +48,14 @@ public class CrawlController {
     @Operation(summary = "최근 파이프라인 funnel 통계 조회", description = "마지막 크롤링 run 의 listing/validator/dedup 단계별 통계를 반환.")
     public ResponseEntity<CrawlPipelineStatsResponse> getPipelineStats() {
         return ResponseEntity.ok(crawlTriggerService.getLatestPipelineStats());
+    }
+
+    @GetMapping("/crawl/running")
+    @Operation(summary = "크롤링 실행 여부 조회", description = "크롤러가 지금 사이클을 도는 중인지와 수동/스케줄 여부를 반환.")
+    public ResponseEntity<CrawlRunningStatusResponse> getRunningStatus() {
+        String trigger = crawlTriggerService.runningTrigger();
+        boolean running = trigger != null;
+        String normalizedTrigger = ("manual".equals(trigger) || "schedule".equals(trigger)) ? trigger : null;
+        return ResponseEntity.ok(new CrawlRunningStatusResponse(running, normalizedTrigger));
     }
 }

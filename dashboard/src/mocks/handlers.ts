@@ -16,7 +16,40 @@ const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const mockNotificationChannels: NotificationChannel[] = [];
 const mockNotificationRules: NotificationRule[] = [];
 const mockNotificationDeliveries: NotificationDelivery[] = [];
-const mockActivityLog: { id: number; eventType: string; message: string; occurredAt: string }[] = [];
+const mockActivityLog: { id: number; eventType: string; message: string; occurredAt: string }[] = [
+  {
+    id: 4,
+    eventType: 'MANUAL_CRAWL_TRIGGERED',
+    message: '수동 크롤링 트리거됨',
+    occurredAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 3,
+    eventType: 'CRAWL_COMPLETED',
+    message:
+      '수동 크롤링 완료\n' +
+      '게시판 60개 + GitHub 검색에서 총 3170건 발견 → 239건 선택\n' +
+      '본문 확인 51건 시도 → 총 16건 AI 분석 대기열에 추가 (사이트 12건, GitHub 4건)\n' +
+      '중복 제외 205건, 기타 제외 18건, 실패 4건',
+    occurredAt: new Date(Date.now() - 39 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 2,
+    eventType: 'CRAWL_FAILED',
+    message: '크롤링 실패: Redis connection timeout',
+    occurredAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 1,
+    eventType: 'CRAWL_COMPLETED',
+    message:
+      '스케줄 크롤링 완료\n' +
+      '게시판 60개 + GitHub 검색에서 총 2986건 발견 → 211건 선택\n' +
+      '본문 확인 44건 시도 → 총 9건 AI 분석 대기열에 추가 (사이트 7건, GitHub 2건)\n' +
+      '중복 제외 180건, 기타 제외 21건, 실패 1건',
+    occurredAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+  },
+];
 
 function maskWebhookUrl(value: string) {
   return `••••${value.slice(-6)}`;

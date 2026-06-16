@@ -3,6 +3,7 @@ package com.tracker.api.notification.adapter;
 import com.tracker.api.domain.Detection;
 import com.tracker.api.notification.domain.NotificationChannelType;
 import com.tracker.api.notification.service.NotificationTemplateRenderer;
+import com.tracker.api.notification.service.WebhookUrlGuard;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -12,8 +13,9 @@ import java.util.Map;
 @Component
 public class GenericWebhookAdapter extends AbstractWebhookAdapter {
 
-    public GenericWebhookAdapter(RestClient.Builder builder, NotificationTemplateRenderer renderer) {
-        super(builder, renderer);
+    public GenericWebhookAdapter(
+            RestClient.Builder builder, NotificationTemplateRenderer renderer, WebhookUrlGuard webhookUrlGuard) {
+        super(builder, renderer, webhookUrlGuard);
     }
 
     @Override

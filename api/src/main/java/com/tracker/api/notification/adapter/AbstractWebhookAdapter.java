@@ -4,6 +4,7 @@ import com.tracker.api.domain.Detection;
 import com.tracker.api.notification.service.NotificationSendResult;
 import com.tracker.api.notification.service.NotificationTemplateRenderer;
 import com.tracker.api.notification.service.WebhookConfig;
+import com.tracker.api.notification.service.WebhookUrlGuard;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -15,10 +16,13 @@ abstract class AbstractWebhookAdapter implements NotificationChannelAdapter {
 
     private final RestClient restClient;
     private final NotificationTemplateRenderer renderer;
+    private final WebhookUrlGuard webhookUrlGuard;
 
-    protected AbstractWebhookAdapter(RestClient.Builder builder, NotificationTemplateRenderer renderer) {
+    protected AbstractWebhookAdapter(
+            RestClient.Builder builder, NotificationTemplateRenderer renderer, WebhookUrlGuard webhookUrlGuard) {
         this.restClient = builder.build();
         this.renderer = renderer;
+        this.webhookUrlGuard = webhookUrlGuard;
     }
 
     @Override
@@ -38,6 +42,7 @@ abstract class AbstractWebhookAdapter implements NotificationChannelAdapter {
     }
 
     protected NotificationSendResult post(String webhookUrl, Map<String, Object> body) {
+        webhookUrlGuard.validate(webhookUrl); // 등록 시점 검증과 별개로 DNS rebinding 대비 전송 직전 재검증
         try {
             var response = restClient.post()
                     .uri(webhookUrl)

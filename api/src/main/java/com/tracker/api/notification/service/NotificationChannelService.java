@@ -5,14 +5,12 @@ import com.tracker.api.exception.NotificationResourceNotFoundException;
 import com.tracker.api.notification.adapter.NotificationChannelAdapter;
 import com.tracker.api.notification.domain.NotificationChannel;
 import com.tracker.api.notification.domain.NotificationChannelType;
-import com.tracker.api.notification.domain.NotificationDeliveryStatus;
 import com.tracker.api.notification.dto.NotificationChannelRequest;
 import com.tracker.api.notification.dto.NotificationChannelResponse;
 import com.tracker.api.notification.dto.NotificationDeliveryResponse;
 import com.tracker.api.notification.dto.NotificationTestResponse;
 import com.tracker.api.notification.repository.NotificationChannelRepository;
 import com.tracker.api.notification.repository.NotificationDeliveryRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +26,7 @@ public class NotificationChannelService {
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationSecretCrypto crypto;
     private final ObjectMapper objectMapper;
+    private final WebhookUrlGuard webhookUrlGuard;
     private final Map<NotificationChannelType, NotificationChannelAdapter> adapters;
 
     public NotificationChannelService(
@@ -35,11 +34,13 @@ public class NotificationChannelService {
             NotificationDeliveryRepository deliveryRepository,
             NotificationSecretCrypto crypto,
             ObjectMapper objectMapper,
+            WebhookUrlGuard webhookUrlGuard,
             List<NotificationChannelAdapter> adapterList) {
         this.channelRepository = channelRepository;
         this.deliveryRepository = deliveryRepository;
         this.crypto = crypto;
         this.objectMapper = objectMapper;
+        this.webhookUrlGuard = webhookUrlGuard;
         this.adapters = new EnumMap<>(NotificationChannelType.class);
         for (NotificationChannelAdapter adapter : adapterList) {
             adapters.put(adapter.type(), adapter);
@@ -55,6 +56,7 @@ public class NotificationChannelService {
 
     @Transactional
     public NotificationChannelResponse createChannel(NotificationChannelRequest request) {
+        webhookUrlGuard.validate(request.webhookUrl());
         WebhookConfig config = new WebhookConfig(request.webhookUrl());
         NotificationChannel channel = new NotificationChannel();
         channel.setName(request.name());

@@ -59,6 +59,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return withCorrelationId(pd, request);
     }
 
+    @ExceptionHandler(UnsafeWebhookUrlException.class)
+    public ResponseEntity<ProblemDetail> handleUnsafeWebhookUrl(
+            UnsafeWebhookUrlException ex,
+            HttpServletRequest request) {
+        var pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Unsafe Webhook URL");
+        pd.setProperty("errorCode", "UNSAFE_WEBHOOK_URL");
+        return withCorrelationId(pd, request);
+    }
+
     @ExceptionHandler(InvalidFilterParamException.class)
     public ResponseEntity<ProblemDetail> handleInvalidFilterParam(
             InvalidFilterParamException ex,

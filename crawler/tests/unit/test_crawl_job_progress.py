@@ -83,3 +83,12 @@ def test_progress_store_stores_source_run_summary():
     assert data["validatorSkipped"] == 5
     assert data["failed"] == 0
     assert redis.set.call_args.kwargs["ex"] == 7 * 6 * 60 * 60
+
+
+def test_progress_store_reports_quiet_mode():
+    redis = MagicMock()
+    redis.get.return_value = "deploy:abc1234"
+    store = CrawlJobProgressStore(redis)
+
+    assert store.is_quiet() is True
+    redis.get.assert_called_once_with("crawler:quiet")

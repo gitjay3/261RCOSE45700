@@ -10,6 +10,7 @@ from shared.config.redis_config import (
     REDIS_KEY_CRAWL_JOB_PREFIX,
     REDIS_KEY_CRAWL_SOURCE_RUN_PREFIX,
     REDIS_KEY_CRAWL_STATS_LATEST,
+    REDIS_KEY_CRAWLER_QUIET,
     REDIS_KEY_CRAWLER_RUNNING,
 )
 
@@ -149,6 +150,10 @@ class CrawlJobProgressStore:
 
     def clear_running(self) -> None:
         self._redis.delete(REDIS_KEY_CRAWLER_RUNNING)
+
+    def is_quiet(self) -> bool:
+        """배포 drain 중 새 크롤 사이클 시작을 막기 위한 gate."""
+        return bool(self._redis.get(REDIS_KEY_CRAWLER_QUIET))
 
     def cleanup_orphaned_jobs(self) -> int:
         """컨테이너 재시작 전에 running/queued 상태로 남은 job을 failed로 마킹.

@@ -1354,6 +1354,18 @@ class CrawlScheduler:
     async def _run_locked(self, command: CrawlTriggerCommand | None = None) -> None:
         # APScheduler 잡 + 수동 trigger 양쪽에서 호출되는 단일 진입점.
         job_id = command.job_id if command is not None else ""
+        if await asyncio.to_thread(self._progress_store.is_quiet):
+            message = "배포 진행 중이라 새 크롤링 시작을 보류했습니다."
+            if job_id:
+                self._progress_store.mark_skipped(job_id, message=message)
+            _logger.info(
+                "crawler quiet — 이번 호출 스킵",
+                extra={
+                    "correlation_id": command.correlation_id if command is not None else "",
+                    "service": _SERVICE_NAME,
+                },
+            )
+            return
         if self._run_lock.locked():
             if job_id:
                 self._progress_store.mark_skipped(

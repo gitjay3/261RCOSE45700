@@ -198,8 +198,18 @@ jobs:
             CAT="$(command -v cat)"
             ECHO="$(command -v echo)"
 
+            redis_cmd() {
+              "$DOCKER" exec tracker-redis \
+                sh -c 'redis-cli --no-auth-warning -a "$(cat /run/secrets/redis_password)" "$@"' \
+                sh "$@" 2>/dev/null
+            }
+
             # GHCR 자격증명이 ~/.docker/config.json에 영속되지 않도록 종료 시 logout.
-            cleanup() { "$DOCKER" logout ghcr.io >/dev/null 2>&1 || true; }
+            # 배포 quiet 키도 성공/실패/롤백 모든 경로에서 정리한다.
+            cleanup() {
+              redis_cmd DEL crawler:quiet >/dev/null 2>&1 || true
+              "$DOCKER" logout ghcr.io >/dev/null 2>&1 || true
+            }
             trap cleanup EXIT
 
             # 두 번째 방어선 — input 검증을 한 번 더 (GHA env가 검증을 우회한 경로 대비).
@@ -252,6 +262,14 @@ jobs:
 
             export IMAGE_TAG REGISTRY_PATH
 
+            # 배포 중 새 크롤 사이클이 시작되지 않도록 quiet gate를 먼저 세팅한다.
+            # 진행 중인 사이클은 아래 crawler:running drain 루프에서 완료를 기다린다.
+            if redis_cmd SET crawler:quiet "deploy:${IMAGE_TAG}" EX 3600 >/dev/null; then
+              $ECHO "crawler quiet enabled — 새 크롤 시작을 잠시 보류합니다."
+            else
+              $ECHO "::warning::crawler quiet 설정 실패 — running drain만 확인하고 배포를 진행합니다."
+            fi
+
             # pull 전 오래된 이미지 정리 — 디스크 부족으로 pull 실패하는 경우 방지.
             "$DOCKER" image prune -a -f --filter "until=48h" || true
 
@@ -274,18 +292,39 @@ jobs:
             # crawler:running key(TTL 3600s)가 있으면 현재 크롤 사이클이 진행 중.
             # tracker-redis 컨테이너의 redis-cli로 확인 (redis password는 /run/secrets/ 마운트).
             # 최대 30분 대기 후 타임아웃 — 이후엔 강제 교체 (다음 시작 시 orphan cleanup).
+            DRAIN_STARTED_AT=$($DATE +%s)
             DRAIN_DEADLINE=$(( $($DATE +%s) + 1800 ))
+            DRAIN_NOTIFIED=0
+            DRAIN_LAST_LOG_AT=0
+            DRAIN_TIMED_OUT=1
             while [ $($DATE +%s) -lt $DRAIN_DEADLINE ]; do
-              IS_RUNNING=$("$DOCKER" exec tracker-redis \
-                sh -c 'redis-cli --no-auth-warning -a "$(cat /run/secrets/redis_password)" \
-                  GET crawler:running 2>/dev/null || true' 2>/dev/null || true)
+              NOW=$($DATE +%s)
+              IS_RUNNING=$(redis_cmd GET crawler:running || true)
               if [ -z "$IS_RUNNING" ] || [ "$IS_RUNNING" = "" ]; then
-                $ECHO "crawler idle — 배포 진행"
+                if [ "$DRAIN_NOTIFIED" = "1" ]; then
+                  ELAPSED=$(( NOW - DRAIN_STARTED_AT ))
+                  $ECHO "크롤 완료 감지 — ${ELAPSED}s 대기 후 배포 진행"
+                else
+                  $ECHO "crawler idle — 배포 진행"
+                fi
+                DRAIN_TIMED_OUT=0
                 break
               fi
-              $ECHO "crawler:running 감지 — 크롤 완료 대기 중..."
+              if [ "$DRAIN_NOTIFIED" = "0" ]; then
+                $ECHO "크롤링 진행 중 — 최대 30분까지 배포를 대기합니다."
+                DRAIN_NOTIFIED=1
+                DRAIN_LAST_LOG_AT=$NOW
+              elif [ $(( NOW - DRAIN_LAST_LOG_AT )) -ge 60 ]; then
+                ELAPSED=$(( NOW - DRAIN_STARTED_AT ))
+                REMAINING=$(( DRAIN_DEADLINE - NOW ))
+                $ECHO "크롤 완료 대기 중 — 경과 ${ELAPSED}s, 최대 ${REMAINING}s 남음"
+                DRAIN_LAST_LOG_AT=$NOW
+              fi
               $SLEEP 10
             done
+            if [ "$DRAIN_TIMED_OUT" = "1" ]; then
+              $ECHO "::warning::크롤 완료 대기 30분 초과 — 배포를 계속 진행합니다."
+            fi
 
             $DCOMPOSE -f /opt/app/compose.prod.yml up -d --remove-orphans
 

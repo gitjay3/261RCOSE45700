@@ -12,6 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from crawler.src.scheduler import crawl_scheduler as scheduler_module
 from crawler.src.scheduler.crawl_scheduler import CrawlScheduler
+from crawler.src.scheduler.crawl_job_progress import CrawlTriggerCommand
 
 
 @pytest.fixture
@@ -109,6 +110,29 @@ class TestCleanupHandler:
         await scheduler._cleanup_url_dedup_job()
 
         scheduler._url_dedup.cleanup_older_than.assert_called_once_with()
+
+
+class TestCrawlerQuietMode:
+    async def test_quiet_mode_skips_manual_trigger_without_starting_pipeline(self):
+        with patch("crawler.src.scheduler.crawl_scheduler.redis") as mock_redis, \
+             patch("crawler.src.scheduler.crawl_scheduler.Crawl4AICrawler"), \
+             patch("crawler.src.scheduler.crawl_scheduler.PostStorage"):
+            mock_redis.from_url.return_value = MagicMock()
+            scheduler = CrawlScheduler()
+
+        scheduler._progress_store = MagicMock()
+        scheduler._progress_store.is_quiet.return_value = True
+        scheduler._pipeline = MagicMock()
+        command = CrawlTriggerCommand(job_id="job-quiet", correlation_id="cid-quiet")
+
+        await scheduler._run_locked(command)
+
+        scheduler._progress_store.mark_skipped.assert_called_once_with(
+            "job-quiet",
+            message="배포 진행 중이라 새 크롤링 시작을 보류했습니다.",
+        )
+        scheduler._progress_store.set_running.assert_not_called()
+        scheduler._pipeline.run.assert_not_called()
 
 
 class TestUrlDedupSharedInstance:

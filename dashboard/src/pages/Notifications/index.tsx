@@ -7,7 +7,6 @@ import { RulePanel } from './RulePanel';
 export function NotificationsPage() {
   return (
     <PageContainer className="gap-5">
-      <title>알림 연동 · Tracker</title>
       <header className="flex flex-col gap-1">
         <h1
           className="text-foreground font-semibold tracking-tight"

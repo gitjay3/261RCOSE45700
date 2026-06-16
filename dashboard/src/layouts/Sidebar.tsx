@@ -46,17 +46,24 @@ export function Sidebar({ drawerOpen, onClose }: SidebarProps) {
       >
         {/* 헤더 — 로고 + 닫기 (모바일만) */}
         <div className="mb-4 flex items-center justify-between px-2">
-          <div
-            className="flex items-center gap-2.5 text-base font-semibold"
-            style={{ letterSpacing: 'var(--tracking-tight)' }}
-          >
+          <div className="flex items-center gap-2.5">
             <span
-              className="font-mono inline-flex size-6 items-center justify-center rounded-[5px] text-xs font-bold"
+              className="font-mono inline-flex size-6 shrink-0 items-center justify-center rounded-[5px] text-xs font-bold"
               style={{ background: 'var(--fg)', color: 'var(--bg)' }}
             >
               T
             </span>
-            <span>Tracker</span>
+            <div className="flex flex-col leading-tight">
+              <span
+                className="text-base font-semibold"
+                style={{ letterSpacing: 'var(--tracking-tight)' }}
+              >
+                Tracker
+              </span>
+              <span className="text-[0.65rem]" style={{ color: 'var(--fg-3)' }}>
+                게임 불법 게시물 탐지
+              </span>
+            </div>
           </div>
           <Button
             type="button"

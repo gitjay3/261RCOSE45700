@@ -76,7 +76,6 @@ export function DashboardPage() {
 
   return (
     <PageContainer>
-      <title>대시보드 · Tracker</title>
       <div style={{ marginBottom: 'var(--pad-page-head)' }}>
         <h1
           className="m-0 mb-1 font-semibold"
@@ -86,7 +85,7 @@ export function DashboardPage() {
             letterSpacing: 'var(--tracking-tight)',
           }}
         >
-          오늘의 탐지 현황
+          오늘의 불법 프로그램 탐지 현황
         </h1>
         <span
           className="font-mono text-xs tabular-nums"

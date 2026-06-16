@@ -84,7 +84,6 @@ export function DetectionListPage() {
 
   return (
     <PageContainer className="gap-4">
-      <title>탐지 목록 · Tracker</title>
       <header className="flex items-baseline justify-between">
         <h1
           className="text-foreground font-semibold tracking-tight"

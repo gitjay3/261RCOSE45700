@@ -594,12 +594,6 @@ class PipelineStats:
     github_skipped_dedup: int = 0
     github_failed: int = 0
 
-    @property
-    def success_rate(self) -> float:
-        if self.attempted == 0:
-            return 1.0
-        return (self.attempted - self.failed) / self.attempted
-
 
 def _snapshot_pipeline_stats(stats: PipelineStats) -> dict[str, int]:
     return {
@@ -1268,23 +1262,6 @@ class CrawlPipeline:
                 extra={"correlation_id": cid, "service": _SERVICE_NAME},
                 exc_info=True,
             )
-
-    async def _process_post(
-        self,
-        stats: PipelineStats,
-        *,
-        site_id: str,
-        site: SiteConfig,
-        post_url: str,
-        options: CrawlOptions,
-    ) -> None:
-        cid = generate()
-        if self._url_dedup is not None and self._url_dedup.has_seen(post_url, correlation_id=cid):
-            stats.skipped_seen_url += 1
-            return
-        stats.attempted += 1
-        outcome = await self._fetch_post(site_id, post_url, cid, options)
-        self._process_fetched_post(stats, site_id, site, outcome)
 
     def _should_skip_post(
         self,

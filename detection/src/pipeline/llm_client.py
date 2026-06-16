@@ -164,10 +164,6 @@ class LLMClient:
     def model(self) -> str:
         return self._model
 
-    def classify_text_only(self, text: str, source_id: str | None = None) -> LLMResponse:
-        """이미지 없이 텍스트만 분류 (fallback 진입점)."""
-        return self._call(text, images_payload=[], source_id=source_id)
-
     def classify(
         self, text: str, images: list[str] | None = None, source_id: str | None = None
     ) -> LLMResponse:

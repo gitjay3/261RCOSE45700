@@ -21,11 +21,3 @@ class CrawlerException(TrackerBaseException):
     ) -> None:
         super().__init__(message, correlation_id)
         self.crawl_stats = crawl_stats or {}
-
-
-class DetectionException(TrackerBaseException):
-    pass
-
-
-class ApiException(TrackerBaseException):
-    pass

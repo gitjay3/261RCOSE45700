@@ -22,8 +22,6 @@ export const SOURCE_META: SourceMeta[] = [
   { id: 'github', name: 'GitHub', lang: 'en' },
 ];
 
-export const KNOWN_SOURCES = SOURCE_META.map((source) => source.id);
-
 export function getSiteLabel(siteId: string): string {
   return SOURCE_META.find((s) => s.id === siteId)?.name ?? siteId;
 }

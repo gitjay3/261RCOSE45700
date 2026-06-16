@@ -33,9 +33,6 @@ class LLMMock:
         with path.open(encoding="utf-8") as f:
             return json.load(f)
 
-    def simulate_latency(self, ms: int) -> None:
-        self._latency_ms = ms
-
     def _sleep(self) -> None:
         if self._latency_ms > 0:
             time.sleep(self._latency_ms / 1000)

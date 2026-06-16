@@ -1,4 +1,4 @@
-"""TierRouter — type → Tier 매핑 + multi-label 최상위 Tier (Story 3-3)."""
+"""TierRouter — type → Tier 매핑 (Story 3-3)."""
 
 from __future__ import annotations
 
@@ -18,13 +18,3 @@ def test_unknown_type_falls_back_to_t4() -> None:
     router = TierRouter()
     assert router.route("아직_존재하지_않는_라벨") == "T4"
     assert router.route("") == "T4"
-
-
-def test_route_multi_picks_highest_priority() -> None:
-    router = TierRouter()
-    # T3, T1, T2 후보 — T1 선택
-    assert router.route_multi(["리세마라", "핵_치트", "계정_거래"]) == "T1"
-    # T4만 — T4
-    assert router.route_multi(["기타"]) == "T4"
-    # 빈 후보 — T4 fallback
-    assert router.route_multi([]) == "T4"

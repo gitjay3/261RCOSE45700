@@ -9,7 +9,7 @@ import {
 } from '@/api/notifications';
 import { Button } from '@/components/ui/button';
 import { TYPE_OPTIONS } from '@/components/tracker/labels';
-import { KNOWN_SOURCES } from '@/lib/sources';
+import { SOURCE_META } from '@/lib/sources';
 import type { DetectionType, Tier } from '@/types/api';
 import { TIERS } from './channelMeta';
 import { LabeledInput } from './FormControls';
@@ -85,7 +85,7 @@ export function RulePanel() {
           <span className="text-muted-foreground text-xs">사이트</span>
           <select value={sourceSiteName} onChange={(e) => setSourceSiteName(e.target.value)} className="bg-background h-10 rounded-md border px-3">
             <option value="">전체</option>
-            {KNOWN_SOURCES.map((source) => <option key={source} value={source}>{source}</option>)}
+            {SOURCE_META.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </label>
         <Button type="submit" disabled={!name || !channelId || createRule.isPending}>

@@ -183,6 +183,7 @@ function ActivityItem({
 }) {
   const dotBg =
     variant === 'ok' ? 'var(--safe)' : variant === 'self' ? 'var(--accent)' : 'var(--fg-3)';
+  const [headline, ...details] = text.split('\n');
   return (
     <div
       className="grid border-b text-sm last:border-b-0"
@@ -200,7 +201,7 @@ function ActivityItem({
         className="mt-1.5 size-2.5 shrink-0 rounded-full"
         style={{ background: dotBg }}
       />
-      <div>
+      <div className="min-w-0">
         <div style={{ color: 'var(--fg-2)', lineHeight: 1.5 }}>
           {tag && (
             <span
@@ -214,8 +215,15 @@ function ActivityItem({
               {tag}
             </span>
           )}
-          {text}
+          {headline}
         </div>
+        {details.length > 0 && (
+          <div className="mt-0.5 space-y-0.5" style={{ color: 'var(--fg-3)', lineHeight: 1.45 }}>
+            {details.map((line) => (
+              <div key={line} className="text-xs">{line}</div>
+            ))}
+          </div>
+        )}
         <div
           className="font-mono mt-1 text-xs tabular-nums"
           style={{ color: 'var(--fg-3)' }}

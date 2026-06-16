@@ -1396,11 +1396,11 @@ class CrawlScheduler:
                 total_enqueued = stats.enqueued + stats.github_enqueued
                 activity = (
                     "CRAWL_COMPLETED",
-                    f"{trigger} 크롤링 완료: 게시판 {stats.listing_boards}개 + GitHub 검색에서 총 {total_discovered}건 발견"
-                    f" → {total_selected}건 선택"
-                    f" → 본문 확인 {stats.attempted}건 시도 → 총 {total_enqueued}건 AI 분석 대기열에 추가"
-                    f" (사이트 {stats.enqueued}건, GitHub {stats.github_enqueued}건)"
-                    f" (중복 제외 {duplicate}건, 기타 제외 {skipped}건, 실패 {stats.failed}건)",
+                    f"{trigger} 크롤링 완료\n"
+                    f"게시판 {stats.listing_boards}개 + GitHub 검색에서 총 {total_discovered}건 발견 → {total_selected}건 선택\n"
+                    f"본문 확인 {stats.attempted}건 시도 → 총 {total_enqueued}건 AI 분석 대기열에 추가"
+                    f" (사이트 {stats.enqueued}건, GitHub {stats.github_enqueued}건)\n"
+                    f"중복 제외 {duplicate}건, 기타 제외 {skipped}건, 실패 {stats.failed}건",
                 )
             except Exception as exc:
                 if job_id:

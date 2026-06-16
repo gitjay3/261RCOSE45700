@@ -3,7 +3,7 @@
 > NC 게임(리니지/아이온/BNS/TL 등) 사설서버·매크로·핵 탐지를 위한 한·중·대만권 게시판 크롤링 인프라.
 > 이 문서는 현재 코드의 **상태·기능·운영 다이얼·남은 작업** 을 한 페이지로 정리합니다.
 
-마지막 갱신: 2026-06-08
+마지막 갱신: 2026-06-16
 
 ---
 
@@ -12,7 +12,7 @@
 - **안정 보드**: 11곳 (인벤 2 + PTT Lineage + Bahamut NC 8)
 - **운영 수집 profile**: `MAX_POSTS_PER_BOARD=50`, priority budget, detail concurrency 3, 52pojie serial
 - **인프라**: URL 중복 차단, 본문 SHA256 dedup, 공지·인증벽·캡차 자동 분류, inter-site delay
-- **테스트**: 183 unit/integration passed, flake8 clean
+- **테스트**: 195 unit/integration passed, flake8 clean
 - **detection(LLM)**: 별도 서비스에서 OpenAI 멀티모달 LLM 분류와 RDS 저장 처리
 
 ---
@@ -42,15 +42,20 @@
                                     │
                                     ▼
    ┌─────────────────────────────────────────────────────────────┐
-   │ ② Cross-run URL 중복 확인 — UrlDedupChecker.has_seen(url)    │
-   │    Redis ZSET "posts:seen_urls", TTL 7일                     │
-   │    이미 본 URL → skipped_seen_url (fetch 안 함)              │
+   │ ② URL 중복 확인 (두 단계)                                    │
+   │    a) in-run: post_url ∈ _run_seen_urls (이번 사이클 메모리) │
+   │       같은 사이클에서 다른 게시판 페이지가 이미 시도한 URL  │
+   │       (sticky 글이 페이지마다 동일 노출되는 경우 등)         │
+   │    b) cross-run: UrlDedupChecker.has_seen(url)               │
+   │       Redis ZSET "posts:seen_urls", TTL 7일                  │
+   │    둘 중 하나라도 True → skipped_seen_url (fetch 안 함)      │
    └────────────────────────────────┬────────────────────────────┘
                                     │
                                     ▼
    ┌─────────────────────────────────────────────────────────────┐
    │ ③ Crawl4AICrawler.fetch(url, site_options)                  │
    │    crawl4ai (Playwright + stealth) → CrawlResult             │
+   │    결과(성공/스킵/실패) 불문 _run_seen_urls 에 즉시 추가     │
    └────────────────────────────────┬────────────────────────────┘
                                     │
                                     ▼
@@ -58,6 +63,10 @@
    │ ④ content_validator.validate(site_id, markdown, url)         │
    │    kind ∈ {real, sticky, auth_wall, captcha, empty,          │
    │             short, error, unknown}                           │
+   │    sticky → UrlDedupChecker.mark_seen 즉시 호출(영구 차단 — │
+   │             공지글은 다음 스케줄에도 다시 안 봄).            │
+   │    auth_wall/captcha/empty/short/error/unknown 은 in-run만   │
+   │    적용 — 일시적일 수 있어 다음 스케줄에는 재시도 가능.      │
    │    real 만 ⑤로 진행                                          │
    └────────────────────────────────┬────────────────────────────┘
                                     │
@@ -68,7 +77,8 @@
    │ ⑦ PostStorage (disk + 옵션 S3)                               │
    │ ⑧ to_crawl_event → CrawlEvent JSON                          │
    │ ⑨ RedisPublisher.enqueue("posts:queue")                      │
-   │ ⑩ DedupChecker.mark_seen + UrlDedupChecker.mark_seen         │
+   │ ⑩ enqueue 성공 시: DedupChecker.mark_seen + UrlDedupChecker. │
+   │    mark_seen (sticky 는 ④에서 이미 영구 마킹됨)              │
    └────────────────────────────────┬────────────────────────────┘
                                     │
                                     ▼
@@ -161,6 +171,9 @@ Redis ZSET 기반 cross-run URL 중복 차단. **fetch 자체를 막아** 대역
 - `has_seen(url)` / `mark_seen(url)`
 - `cleanup_older_than(age_seconds)` — 주기적 청소
 - 기본 TTL: 7일
+- enqueue 성공 또는 sticky 판정 시에만 `mark_seen` 호출 (영구). 그 외 스킵/실패는
+  영구 마킹하지 않고 `CrawlPipeline._run_seen_urls`(이번 사이클 메모리, in-run)
+  로만 같은 사이클 내 재시도를 막음 — 다음 스케줄에는 재시도 가능.
 
 ### DedupChecker (`crawler/src/preprocessor/dedup_checker.py`)
 

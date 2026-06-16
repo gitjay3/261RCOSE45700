@@ -22,7 +22,7 @@ pip install -r requirements.txt
 playwright install chromium
 
 # 4) 단위/통합 테스트 (mock, 인터넷 불필요)
-pytest -q                                          # 183 passed 예상
+pytest -q                                          # 195 passed 예상
 
 # 5) ruff 린트
 ruff check src/ scripts/ ../shared/
@@ -52,7 +52,7 @@ crawler/                         # 이 디렉터리 (monorepo 루트의 crawler/
 │   │                            # trigger_listener, candidate_scoring, crawl_job_progress, healthcheck
 │   ├── sites/                   # registry — SiteConfig + SITES dict (13 enabled)
 │   └── sources/                 # GitHubSource — GitHub REST API 검색 통합
-└── tests/                       # unit + integration (183건)
+└── tests/                       # unit + integration (195건)
 
 # shared/  ← monorepo 루트에 위치 (../shared/)
 #   crawl_event, redis_config, logger, interfaces/llm 등 공용

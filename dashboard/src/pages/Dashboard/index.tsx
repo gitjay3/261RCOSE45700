@@ -426,6 +426,7 @@ function HotspotCard({
   onSelect: (entry: HotspotEntry) => void;
   onFilter: (filter: DetectionFilter) => void;
 }) {
+  const TOP_N = 3;
   return (
     <ChartCard
       empty={data.length === 0}
@@ -441,20 +442,20 @@ function HotspotCard({
           >
             Quick filters
           </span>
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="flex flex-col gap-3">
             <FilterChipGroup
               label="유형"
-              data={typeData.slice(0, 3)}
+              data={typeData.slice(0, TOP_N)}
               onSelect={(entry) => entry.type && onFilter({ type: entry.type })}
             />
             <FilterChipGroup
               label="사이트"
-              data={siteData.slice(0, 3)}
+              data={siteData.slice(0, TOP_N)}
               onSelect={(entry) => entry.site && onFilter({ site: entry.site })}
             />
             <FilterChipGroup
               label="언어"
-              data={langData.slice(0, 3)}
+              data={langData.slice(0, TOP_N)}
               onSelect={(entry) => entry.lang && onFilter({ lang: entry.lang })}
             />
           </div>
@@ -498,7 +499,7 @@ function FilterChipGroup({
             key={`${entry.name}-${entry.value}`}
             type="button"
             onClick={() => onSelect(entry)}
-            className="text-fg-2 hover:text-fg rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-bg-overlay"
+            className="text-fg-2 hover:text-fg whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-bg-overlay"
             style={{ borderColor: 'var(--border-1)' }}
           >
             {entry.name} {entry.value.toLocaleString('ko-KR')}

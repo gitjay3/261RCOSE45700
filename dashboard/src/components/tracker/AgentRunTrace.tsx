@@ -12,7 +12,29 @@ import {
 } from 'lucide-react';
 import { useAgentRunsQuery } from '@/api/detections';
 import { getTypeLabel } from '@/components/tracker/labels';
-import type { AgentRun, DetectionType, LinkEvidence } from '@/types/api';
+import type {
+  AgentRun,
+  GenericStageOutput,
+  LinkEvidence,
+  LinkTraceAgentRun,
+  LinkTraceOutput,
+  NormalizeAgentRun,
+  NormalizeOutput,
+  TriageAgentRun,
+  TriageOutput,
+} from '@/types/api';
+
+function isNormalizeRun(run: AgentRun | undefined): run is NormalizeAgentRun {
+  return run?.stage === 'normalize';
+}
+
+function isTriageRun(run: AgentRun | undefined): run is TriageAgentRun {
+  return run?.stage === 'triage';
+}
+
+function isLinkTraceRun(run: AgentRun | undefined): run is LinkTraceAgentRun {
+  return run?.stage === 'link_trace';
+}
 
 const STAGE_META: Record<AgentRun['stage'], {
   icon: typeof FileText;
@@ -51,22 +73,20 @@ function latencyText(ms: number | null) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
-function percent(value: unknown) {
+function percent(value: number | undefined) {
   return typeof value === 'number' ? `${Math.round(value * 100)}%` : '-';
 }
 
-function detectionTypeLabel(value: unknown) {
-  return typeof value === 'string' ? getTypeLabel(value as DetectionType) : '-';
+function detectionTypeLabel(value: TriageOutput['type']) {
+  return value ? getTypeLabel(value) : '-';
 }
 
 function linksFromRun(run: AgentRun | undefined): LinkEvidence[] {
-  const links = run?.output?.links;
-  return Array.isArray(links) ? (links as LinkEvidence[]) : [];
+  return isLinkTraceRun(run) ? run.output?.links ?? [] : [];
 }
 
 function extractedLinksFromRun(run: AgentRun | undefined): string[] {
-  const links = run?.output?.links;
-  return Array.isArray(links) ? (links as string[]) : [];
+  return isNormalizeRun(run) ? run.output?.links ?? [] : [];
 }
 
 function fetchStatusLabel(status: string) {
@@ -140,9 +160,9 @@ function SummaryItem({
 }
 
 function StageSummary({ data }: { data: AgentRun[] }) {
-  const normalizeRun = data.find((run) => run.stage === 'normalize');
-  const triageRun = data.find((run) => run.stage === 'triage');
-  const linkRun = data.find((run) => run.stage === 'link_trace');
+  const normalizeRun = data.find(isNormalizeRun);
+  const triageRun = data.find(isTriageRun);
+  const linkRun = data.find(isLinkTraceRun);
   const extractedLinks = extractedLinksFromRun(normalizeRun);
   const checkedLinks = linksFromRun(linkRun);
   const riskyLinks = checkedLinks.filter((link) => link.is_distribution_site);
@@ -243,9 +263,9 @@ function LinkEvidenceCard({ ev }: { ev: LinkEvidence }) {
   );
 }
 
-function NormalizeDetail({ output }: { output: Record<string, unknown> }) {
-  const links = output.links as string[] | undefined;
-  const removedChars = output.removed_char_count as number | undefined;
+function NormalizeDetail({ output }: { output: NormalizeOutput }) {
+  const links = output.links;
+  const removedChars = output.removed_char_count;
   return (
     <div className="text-muted-foreground mt-3 space-y-2 text-xs">
       {removedChars !== undefined && removedChars > 0 && (
@@ -272,7 +292,7 @@ function NormalizeDetail({ output }: { output: Record<string, unknown> }) {
   );
 }
 
-function TriageDetail({ output }: { output: Record<string, unknown> }) {
+function TriageDetail({ output }: { output: TriageOutput }) {
   return (
     <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
       <span>
@@ -281,16 +301,16 @@ function TriageDetail({ output }: { output: Record<string, unknown> }) {
         로 판단했습니다.
       </span>
       <span>신뢰도 <span className="text-foreground font-mono">{percent(output.confidence)}</span></span>
-      {Boolean(output.needs_link_trace) && <span className="font-medium text-amber-600">외부 링크 확인 필요</span>}
-      {Boolean(output.needs_image) && <span className="font-medium text-amber-600">이미지 확인 필요</span>}
-      {Boolean(output.game_context) && (
-        <span className="w-full">게임 컨텍스트: <span className="text-foreground">{String(output.game_context)}</span></span>
+      {output.needs_link_trace && <span className="font-medium text-amber-600">외부 링크 확인 필요</span>}
+      {output.needs_image && <span className="font-medium text-amber-600">이미지 확인 필요</span>}
+      {output.game_context && (
+        <span className="w-full">게임 컨텍스트: <span className="text-foreground">{output.game_context}</span></span>
       )}
     </div>
   );
 }
 
-function GenericDetail({ output }: { output: Record<string, unknown> }) {
+function GenericDetail({ output }: { output: GenericStageOutput }) {
   const summary = output.summary ?? output.reason ?? output.result ?? output.decision;
   if (typeof summary === 'string' && summary.trim().length > 0) {
     return <p className="text-muted-foreground mt-3 text-xs leading-relaxed">{summary}</p>;
@@ -317,8 +337,8 @@ function GenericDetail({ output }: { output: Record<string, unknown> }) {
   );
 }
 
-function LinkTraceDetail({ output }: { output: Record<string, unknown> }) {
-  const links = output.links as LinkEvidence[] | undefined;
+function LinkTraceDetail({ output }: { output: LinkTraceOutput }) {
+  const links = output.links;
   if (!links || links.length === 0) return <p className="text-muted-foreground mt-3 text-xs">확인할 외부 링크가 없습니다.</p>;
   const risky = links.filter((ev) => ev.is_distribution_site).length;
   return (
@@ -341,15 +361,15 @@ function LinkTraceDetail({ output }: { output: Record<string, unknown> }) {
 function stageResult(run: AgentRun) {
   if (!run.output) return '처리 결과가 없습니다.';
   if (run.stage === 'normalize') {
-    const links = Array.isArray(run.output.links) ? run.output.links.length : 0;
-    const removed = typeof run.output.removed_char_count === 'number' ? run.output.removed_char_count : 0;
+    const links = run.output.links?.length ?? 0;
+    const removed = run.output.removed_char_count ?? 0;
     return `외부 링크 ${links}개 추출 · 방해 문자 ${removed}자 정리`;
   }
   if (run.stage === 'triage') {
     return `${detectionTypeLabel(run.output.type)} · 신뢰도 ${percent(run.output.confidence)}`;
   }
   if (run.stage === 'link_trace') {
-    const links = Array.isArray(run.output.links) ? (run.output.links as LinkEvidence[]) : [];
+    const links = run.output.links ?? [];
     const risky = links.filter((ev) => ev.is_distribution_site).length;
     return risky > 0
       ? `위험 링크 ${risky}개 확인`
@@ -362,9 +382,7 @@ function stageResult(run: AgentRun) {
 }
 
 function StageRow({ run, index, total }: { run: AgentRun; index: number; total: number }) {
-  const links = run.stage === 'link_trace' && run.output?.links
-    ? (run.output.links as LinkEvidence[])
-    : [];
+  const links = isLinkTraceRun(run) ? run.output?.links ?? [] : [];
   const hasRisk = links.some((link) => link.is_distribution_site);
   const [open, setOpen] = useState(run.stage === 'link_trace' && hasRisk);
   const meta = STAGE_META[run.stage];

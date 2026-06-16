@@ -204,13 +204,68 @@ export interface LinkEvidence {
   indicators: string[];
 }
 
-export interface AgentRun {
+export interface NormalizeOutput {
+  links?: string[];
+  removed_char_count?: number;
+}
+
+export interface TriageOutput {
+  type?: DetectionType;
+  confidence?: number;
+  needs_link_trace?: boolean;
+  needs_image?: boolean;
+  game_context?: string;
+}
+
+export interface LinkTraceOutput {
+  links?: LinkEvidence[];
+}
+
+export interface GenericStageOutput {
+  summary?: string;
+  reason?: string;
+  result?: string;
+  decision?: string;
+  [key: string]: unknown;
+}
+
+interface AgentRunBase {
   id: number;
-  stage: 'normalize' | 'triage' | 'image' | 'link_trace' | 'synthesize';
   model: string | null;
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
   latencyMs: number | null;
-  output: Record<string, unknown> | null;
 }
+
+export interface NormalizeAgentRun extends AgentRunBase {
+  stage: 'normalize';
+  output: NormalizeOutput | null;
+}
+
+export interface TriageAgentRun extends AgentRunBase {
+  stage: 'triage';
+  output: TriageOutput | null;
+}
+
+export interface ImageAgentRun extends AgentRunBase {
+  stage: 'image';
+  output: GenericStageOutput | null;
+}
+
+export interface LinkTraceAgentRun extends AgentRunBase {
+  stage: 'link_trace';
+  output: LinkTraceOutput | null;
+}
+
+export interface SynthesizeAgentRun extends AgentRunBase {
+  stage: 'synthesize';
+  output: GenericStageOutput | null;
+}
+
+export type AgentRun =
+  | NormalizeAgentRun
+  | TriageAgentRun
+  | ImageAgentRun
+  | LinkTraceAgentRun
+  | SynthesizeAgentRun;

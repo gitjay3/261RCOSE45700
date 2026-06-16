@@ -8,8 +8,11 @@
 #        (16GB)** 상향으로 메모리 여유 확보 (월 ~$124, budget $215 안에서 OK).
 #
 # 컨테이너: redis + crawler + detection + api + dashboard + caddy (6개)
-# 노출 포트: 22 (SSH) + 80/443 (Caddy TLS) + 8080 (api). redis 6379는 호스트 노출 X
+# 노출 포트: 22 (SSH) + 80/443 (Caddy TLS). redis 6379, api 8080은 호스트 노출 X
 # (cross-SG ingress 차단 우회는 docker network 내부 통신으로 자연스럽게 해소).
+# api는 dashboard nginx의 /api → http://api:8080 proxy_pass를 거쳐서만 접근 가능
+# (legitimate 외부 접근 경로는 https://tracker.o-r.kr/api/* 뿐). 8080을 호스트에
+# 직접 publish하면 /actuator/prometheus 등이 인증 없이 인터넷에 노출되므로 제거.
 #
 # 사전 요구사항:
 #   1. /opt/app/                          (chmod 755, owner ubuntu)
@@ -23,6 +26,11 @@
 # 16GB 환경이라 mem_limit는 hard cap이 아니라 가벼운 격리 hint 수준으로 둠 —
 # 실제로 16GB의 21%(~3.3GB)도 안 쓰지만 한 컨테이너 폭주가 다른 컨테이너 굶기지
 # 않도록 reserve. swap 셋업 불필요.
+#
+# t3.xlarge = vCPU 4개. cpus: 미설정 시 한 컨테이너(특히 crawler의 Playwright Chromium
+# 렌더링 burst)가 전체 vCPU를 독점해 나머지 컨테이너를 starve시킬 수 있음(noisy neighbor).
+# 합이 4를 넘는 건 의도적 오버서브스크립션 — mem_limit 합(~7.5g/16g)과 동일한 전략으로,
+# 모든 서비스가 동시에 피크를 치지 않는다는 가정 하에 여유를 둔다.
 #
 # AC #12: 시크릿은 secrets: 마운트 → secret-shim이 env로 변환.
 
@@ -42,13 +50,17 @@ services:
     # CVE-2025-49844 (CVSS 10.0): requirepass 없으면 NOAUTH Lua RCE 가능.
     # 호스트 6379 미노출(docker network 내부)이라도 requirepass 필수 (컨테이너 탈출 시 대비).
     # 리스트 형식 필수 — 문자열 형식은 word-split으로 sh -c 구조가 깨짐.
-    command: ["sh", "-c", "redis-server --appendonly yes --requirepass $(cat /run/secrets/redis_password) --maxmemory 1gb --maxmemory-policy allkeys-lru"]
+    # maxmemory-policy는 noeviction. allkeys-lru는 인스턴스 전체(모든 logical DB) 단위로 동작해서
+    # DB1(dedup) 키가 늘어나면 DB0(queue/DLQ)을 비롯한 다른 DB 키까지 evict될 수 있음 — DLQ 적재량 기반
+    # alerting을 무력화한다. noeviction이면 메모리 부족 시 쓰기가 즉시 에러로 실패해 운영자가 알 수 있다.
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass $(cat /run/secrets/redis_password) --maxmemory 1gb --maxmemory-policy noeviction"]
     secrets:
       - redis_password
     volumes:
       - redis_data:/data
     networks:
       - tracker-net
+    cpus: 1.0
     healthcheck:
       test: ["CMD", "sh", "-c", "redis-cli -a \"$(cat /run/secrets/redis_password)\" ping"]
       interval: 10s
@@ -74,6 +86,7 @@ services:
         max-size: "5m"
         max-file: "2"
     mem_limit: 128m
+    cpus: 0.25
     healthcheck:
       # 배포 게이트는 SOCKS 포트 readiness만 확인한다. 실제 Tor exit 품질은
       # 대상 사이트별 smoke에서 판단해야 하며, 외부 .onion 의존 healthcheck는
@@ -103,6 +116,7 @@ services:
     # Playwright Chromium이 메모리 hog. 16GB 환경이라 hard cap은 후하게 4GB.
     mem_limit: 4g
     mem_reservation: 1g
+    cpus: 2.0
     # SIGTERM 수신 후 진행 중인 크롤 사이클 완료까지 대기. 전체 사이클 최대 소요 ~20분
     # 기준으로 여유를 두되, 이 시간 안에 못 끝나면 SIGKILL.
     stop_grace_period: 30m
@@ -126,6 +140,7 @@ services:
         condition: service_healthy
     mem_limit: 1g
     mem_reservation: 256m
+    cpus: 1.0
 
   api:
     <<: *image-defaults
@@ -145,8 +160,6 @@ services:
     secrets:
       - db_password
       - redis_password
-    ports:
-      - "8080:8080"
     networks:
       - tracker-net
     depends_on:
@@ -154,6 +167,7 @@ services:
         condition: service_healthy
     mem_limit: 2g
     mem_reservation: 768m
+    cpus: 1.5
 
   dashboard:
     <<: *image-defaults
@@ -172,6 +186,7 @@ services:
         condition: service_healthy
     # nginx-alpine + Vite 번들 워커 burst 시 OOM-kill 방지를 위해 256m로 상향.
     mem_limit: 256m
+    cpus: 0.5
 
   caddy:
     image: caddy:2-alpine
@@ -206,6 +221,7 @@ services:
       retries: 3
       start_period: 30s
     mem_limit: 128m
+    cpus: 0.5
 
 secrets:
   openai_api_key:

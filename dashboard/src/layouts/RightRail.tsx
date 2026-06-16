@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { statsQueries } from '@/api/stats';
 import { useActivityQuery } from '@/api/activity';
-import { useCrawlerQueueQuery, useCorruptQueueQuery, useDlqDepthQuery, useProcessingQueueQuery } from '@/api/metrics';
 import { formatRelativeTime } from '@/lib/time';
 import type { SourceHealthItem } from '@/types/api';
 
@@ -10,10 +9,6 @@ const ACTIVITY_DISPLAY_LIMIT = 10;
 export function RightRail() {
   const statsQuery = useQuery(statsQueries.byPeriod());
   const activityQuery = useActivityQuery();
-  const crawlerQueueQuery = useCrawlerQueueQuery();
-  const processingQueueQuery = useProcessingQueueQuery();
-  const dlqQuery = useDlqDepthQuery();
-  const corruptQueueQuery = useCorruptQueueQuery();
 
   const sourceHealth = statsQuery.data?.sourceHealth ?? [];
   const activities = activityQuery.data ?? [];
@@ -74,24 +69,8 @@ export function RightRail() {
           )}
         </div>
       </RailSection>
-
-      {/* 4. Pipeline */}
-      <RailSection title="Pipeline">
-        <div className="flex flex-col">
-          <MetricRow name="Crawler queue" value={fmtQueue(crawlerQueueQuery.data)} />
-          <MetricRow name="Processing" value={fmtQueue(processingQueueQuery.data)} />
-          <MetricRow name="DLQ" value={fmtQueue(dlqQuery.data)} warn={Boolean(dlqQuery.data && dlqQuery.data > 0)} />
-          <MetricRow name="Corrupt" value={fmtQueue(corruptQueueQuery.data)} warn={Boolean(corruptQueueQuery.data && corruptQueueQuery.data > 0)} />
-          <MetricRow name="오늘 탐지" value={statsQuery.data ? String(statsQuery.data.todayCount) : '—'} />
-          <MetricRow name="전일 대비" value={statsQuery.data ? formatDelta(statsQuery.data.deltaFromYesterday) : '—'} />
-        </div>
-      </RailSection>
     </aside>
   );
-}
-
-function fmtQueue(val: number | undefined): string {
-  return val !== undefined ? String(val) : '—';
 }
 
 function sourceStatus(lastCrawledAt: string | null): { label: string; color: string } {
@@ -116,11 +95,6 @@ const ACTIVITY_META: Record<string, { variant: ActivityVariant; tag?: string }> 
   MANUAL_CRAWL_FAILED:    { variant: 'default', tag: '나' },
   MANUAL_CRAWL_SKIPPED:   { variant: 'self', tag: '나' },
 };
-
-function formatDelta(delta: number): string {
-  if (delta === 0) return '±0';
-  return delta > 0 ? `+${delta}` : String(delta);
-}
 
 function RailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -252,28 +226,6 @@ function DataFreshnessRow({ source }: { source: SourceHealthItem }) {
       </span>
       <span className="font-mono text-right" style={{ color, fontSize: 'var(--text-base-mono)' }}>
         {label}
-      </span>
-    </div>
-  );
-}
-
-function MetricRow({ name, value, warn = false }: { name: string; value: string; warn?: boolean }) {
-  return (
-    <div
-      className="grid items-baseline border-b text-sm last:border-b-0"
-      style={{
-        gridTemplateColumns: '1fr auto',
-        gap: '8px',
-        padding: '10px 0',
-        borderColor: 'var(--border-1)',
-      }}
-    >
-      <span style={{ color: 'var(--fg-2)' }}>{name}</span>
-      <span
-        className="font-mono font-medium tabular-nums"
-        style={{ color: warn ? 'var(--warn, #f59e0b)' : 'var(--fg)', fontSize: 'var(--text-base-mono)' }}
-      >
-        {value}
       </span>
     </div>
   );

@@ -3,7 +3,7 @@
 > NC 게임(리니지/아이온/BNS/TL 등) 사설서버·매크로·핵 탐지를 위한 한·중·대만권 게시판 크롤링 인프라.
 > 이 문서는 현재 코드의 **상태·기능·운영 다이얼·남은 작업** 을 한 페이지로 정리합니다.
 
-마지막 갱신: 2026-06-16
+마지막 갱신: 2026-06-17
 
 ---
 
@@ -12,7 +12,7 @@
 - **안정 보드**: 11곳 (인벤 2 + PTT Lineage + Bahamut NC 8)
 - **운영 수집 profile**: `MAX_POSTS_PER_BOARD=50`, priority budget, detail concurrency 3, 52pojie serial
 - **인프라**: URL 중복 차단, 본문 SHA256 dedup, 공지·인증벽·캡차 자동 분류, inter-site delay
-- **테스트**: 195 unit/integration passed, flake8 clean
+- **테스트**: 186 unit/integration passed, flake8 clean
 - **detection(LLM)**: 별도 서비스에서 OpenAI 멀티모달 LLM 분류와 RDS 저장 처리
 
 ---
@@ -251,8 +251,8 @@ crawler/                              # monorepo 루트의 crawler/ 디렉터리
 │       └── registry.py               # SITES dict + SiteConfig + 헬퍼
 └── tests/
     ├── conftest.py
-    ├── unit/                         # 11개 모듈, 161건
-    └── integration/                  # 파이프라인 E2E, 22건
+    ├── unit/                         # 12개 모듈, 160건
+    └── integration/                  # 파이프라인 E2E, 26건
 
 # shared/  ← monorepo 루트 (../shared/)에 위치, pip install -e ../shared 로 링크됨
 #   ├── correlation_id.py
@@ -274,7 +274,7 @@ cd crawler
 source .venv/bin/activate     # .venv 없으면: python3 -m venv .venv && pip install -r requirements.txt
 
 # 전체 테스트 (mock 기반, 인터넷 불필요)
-pytest -q                           # 183 passed (unit 161건 + integration 22건)
+pytest -q                           # 186 passed (unit 160건 + integration 26건)
 
 # ruff 린트
 ruff check crawler/ shared/ scripts/

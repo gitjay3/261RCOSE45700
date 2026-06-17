@@ -68,6 +68,8 @@ def test_run_uses_triage_model_and_schema() -> None:
     # 공용 도메인 가이드 + 트리아지 지침이 system prompt에 포함됐는지.
     assert "공용 도메인 가이드" in stub.last_call["system_prompt"]
     assert "트리아지 단계 지침" in stub.last_call["system_prompt"]
+    assert "공식 퍼블리셔의 지역/글로벌/아시아 서버" in stub.last_call["system_prompt"]
+    assert "공식 런처(PURPLE 등)" in stub.last_call["system_prompt"]
 
 
 def test_run_includes_language_hint_when_provided() -> None:

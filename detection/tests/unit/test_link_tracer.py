@@ -64,6 +64,21 @@ def test_web_fetch_detects_distribution(redis_client, allow_public_dns) -> None:
     assert ev.indicators
 
 
+def test_official_plaync_download_page_is_not_distribution_evidence(redis_client, allow_public_dns) -> None:
+    html = (
+        "<html><head><title>다운로드 : 쓰론 앤 리버티-NC</title></head>"
+        "<body>THRONE AND LIBERTY는 퍼플 PC 에서 설치하실 수 있습니다. 다운로드 버튼을 누르세요.</body></html>"
+    ).encode()
+    tracer = _tracer(redis_client, _html_handler(html))
+    [ev] = tracer.trace(["https://tl.plaync.com/ko-kr/download/index"])
+
+    assert ev.kind == "web"
+    assert ev.fetch_status == "ok"
+    assert ev.page_title == "다운로드 : 쓰론 앤 리버티-NC"
+    assert ev.is_distribution_site is False
+    assert ev.indicators == []
+
+
 def test_korean_won_character_alone_is_not_trade_signal(redis_client, allow_public_dns) -> None:
     html = (
         b"<html><head><title>Normal Post</title></head>"
@@ -116,6 +131,21 @@ def test_image_content_type_aborts_but_not_distribution_site(redis_client, allow
     assert ev.is_distribution_site is False
     assert ev.indicators == []
     assert "abort:content_type:image/svg+xml" in ev.fetch_status
+
+
+def test_official_ncupdate_binary_is_not_distribution_evidence(redis_client, allow_public_dns) -> None:
+    def _binary(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, content=b"MZ\x90\x00installer",
+            headers={"content-type": "application/octet-stream"},
+        )
+
+    tracer = _tracer(redis_client, _binary)
+    [ev] = tracer.trace(["https://gs-purple-inst.download.ncupdate.com/PurpleInstaller.exe"])
+    assert ev.kind == "file_direct_link"
+    assert ev.is_distribution_site is False
+    assert ev.indicators == []
+    assert "abort:content_type:application/octet-stream" in ev.fetch_status
 
 
 def test_ssrf_blocked_private_ip(redis_client, monkeypatch: pytest.MonkeyPatch) -> None:

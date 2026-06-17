@@ -380,3 +380,26 @@ def test_normalize_caps_stored_candidates_but_keeps_total_stats() -> None:
     assert result.link_stats["stored_candidate_count"] == 50
     assert len(result.link_candidates) == 50
     assert len(result.links) == 60
+
+
+def test_bahamut_redirect_wrapper_unwrapped_to_official_destination() -> None:
+    text = (
+        "[下載NC的PURPLE主程式]"
+        "(https://ref.gamer.com.tw/redir.php?url=https%3A%2F%2Ftl.plaync.com%2Fko-kr%2Fdownload%2Findex)"
+    )
+    [candidate] = extract_link_candidates(text)
+
+    assert candidate.url == "https://tl.plaync.com/ko-kr/download/index"
+    assert candidate.priority == 40
+    assert "official_service_install_link" in candidate.reasons
+    assert candidate.aliases == (
+        "https://ref.gamer.com.tw/redir.php?url=https%3A%2F%2Ftl.plaync.com%2Fko-kr%2Fdownload%2Findex",
+    )
+
+
+def test_official_store_domain_with_install_context_is_deprioritized() -> None:
+    [candidate] = extract_link_candidates("[Steam 다운로드](https://store.steampowered.com/app/123456)")
+
+    assert candidate.url == "https://store.steampowered.com/app/123456"
+    assert candidate.priority == 40
+    assert "official_service_install_link" in candidate.reasons

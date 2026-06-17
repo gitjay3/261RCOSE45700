@@ -22,6 +22,7 @@ import regex as _regex
 from bs4 import BeautifulSoup
 
 from detection.src.agents.contracts import NormalizedPost
+from detection.src.agents.url_policy import is_http_url, official_service_reason, unwrap_redirect_url
 
 try:
     from w3lib.html import get_meta_refresh as _w3_get_meta_refresh
@@ -241,10 +242,6 @@ def _clean_url(url: str) -> str:
     return (url or "").strip().rstrip(_TRAILING_PUNCT)
 
 
-def _is_http_url(url: str) -> bool:
-    return url.lower().startswith(("http://", "https://"))
-
-
 def _url_text_for_scoring(url: str) -> str:
     try:
         parsed = urlsplit(url)
@@ -287,6 +284,11 @@ def _score_candidate(source_kind: str, url: str, text: str = "") -> tuple[int, t
         reasons.extend(static_reasons)
         return 10, tuple(reasons)
 
+    official_reason = official_service_reason(url, text)
+    if official_reason:
+        reasons.append(official_reason)
+        return 40, tuple(reasons)
+
     distribution_reasons = _distribution_reasons(url, text)
     if distribution_reasons:
         reasons.extend(distribution_reasons)
@@ -323,8 +325,9 @@ def extract_link_candidates(
 
     def _add(raw_url: str, source_kind: str, context_text: str = "") -> None:
         nonlocal order
-        url = _clean_url(raw_url)
-        if not url or not _is_http_url(url):
+        original_url = _clean_url(raw_url)
+        url = unwrap_redirect_url(original_url)
+        if not url or not is_http_url(url):
             return
         canonical = _canonical_url(url, keep_query=True)
         exclusion_canonical = _canonical_url(url)
@@ -343,6 +346,8 @@ def extract_link_candidates(
         order += 1
 
         aliases = aliases_by_canonical.setdefault(canonical, [])
+        if original_url != url and original_url not in aliases:
+            aliases.append(original_url)
         if url not in aliases:
             aliases.append(url)
 

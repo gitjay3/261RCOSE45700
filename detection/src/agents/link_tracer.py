@@ -24,6 +24,7 @@ from detection.src.agents.link_fetch_guard import (
     is_disallowed_content_type,
     validate_url,
 )
+from detection.src.agents.url_policy import official_service_reason
 from shared.config.redis_config import REDIS_KEY_LINKTRACE_PREFIX
 from shared.structured_logger import get_logger
 
@@ -59,7 +60,6 @@ _TRADE_PATTERNS = (
     re.compile(r"\b\d{1,3}(?:,\d{3})+\s*원\b"),
     re.compile(r"\b\d+\s*(?:원|만원|천원)\b"),
 )
-
 
 def _cache_key(url: str) -> str:
     return REDIS_KEY_LINKTRACE_PREFIX + hashlib.sha256(url.encode("utf-8")).hexdigest()
@@ -167,11 +167,14 @@ class LinkTracer:
                     if is_disallowed_content_type(content_type):
                         main_type = (content_type or "").split(";", 1)[0].strip().lower()
                         is_app = main_type.startswith("application/")
+                        is_official = official_service_reason(current) is not None
                         return LinkEvidence(
                             url=url, kind="file_direct_link",
                             fetch_status=f"abort:content_type:{content_type}",
-                            is_distribution_site=is_app,
-                            indicators=[f"배포 파일 직링크({main_type} 응답)"] if is_app else [],
+                            is_distribution_site=is_app and not is_official,
+                            indicators=[
+                                f"배포 파일 직링크({main_type} 응답)"
+                            ] if is_app and not is_official else [],
                         )
 
                     # 에러 응답은 본문 소비 전에 종결 (바이트 낭비 방지).
@@ -198,6 +201,11 @@ class LinkTracer:
         converter.ignore_links = False
         converter.ignore_images = True
         body = converter.handle(html)[:4000]
+        if official_service_reason(url, title or "", body):
+            return LinkEvidence(
+                url=url, kind="web", fetch_status="ok",
+                page_title=title, is_distribution_site=False, indicators=[],
+            )
         is_dist, indicators = _detect_indicators(title or "", body)
         return LinkEvidence(
             url=url, kind="web", fetch_status="ok",

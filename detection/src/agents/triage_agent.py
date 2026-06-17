@@ -33,7 +33,10 @@ _TRIAGE_INSTRUCTION = (
     "(예: '리니지M(TW)', '블레이드앤소울', '게임 무관 크랙 포럼', '불명'). 사이트 정보는 주어지지 않습니다.\n"
     "- needs_image: 첨부 이미지를 함께 봐야 정확히 판단할 수 있으면 true (핵 UI 스크린샷·배너 등 암시).\n"
     "- needs_link_trace: 본문의 외부 링크가 배포/거래 경로일 가능성이 있어 추적이 필요하면 true.\n"
-    "명백히 무관한 정상 게시글(type=기타, 높은 확신)이면 needs_image/needs_link_trace는 false로 두세요."
+    "명백히 무관한 정상 게시글(type=기타, 높은 확신)이면 needs_image/needs_link_trace는 false로 두세요.\n"
+    "- 사설서버는 비공식 서버 운영·접속기·서버팩·私服/私人服/自架服 등 명시 근거가 있을 때만 선택하세요. "
+    "공식 퍼블리셔의 지역/글로벌/아시아 서버, 공식 런처(PURPLE 등), 공식 다운로드 안내(plaync/ncsoft/nc.com)는 "
+    "그 자체만으로 사설서버나 불법 배포 근거가 아닙니다."
 )
 
 TRIAGE_SCHEMA: dict = {

@@ -102,6 +102,22 @@ def test_application_content_type_aborts_as_file_link(redis_client, allow_public
     assert "abort:content_type" in ev.fetch_status
 
 
+def test_image_content_type_aborts_but_not_distribution_site(redis_client, allow_public_dns) -> None:
+    # image/* 응답은 abort하되 is_distribution_site=False — 이미지 서버를 배포 사이트로 오분류 방지.
+    def _svg(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, content=b"<svg/>",
+            headers={"content-type": "image/svg+xml;charset=utf-8"},
+        )
+
+    tracer = _tracer(redis_client, _svg)
+    [ev] = tracer.trace(["https://img.shields.io/badge/Download-blueviolet"])
+    assert ev.kind == "file_direct_link"
+    assert ev.is_distribution_site is False
+    assert ev.indicators == []
+    assert "abort:content_type:image/svg+xml" in ev.fetch_status
+
+
 def test_ssrf_blocked_private_ip(redis_client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(guard_mod, "_resolve_all_ips", lambda host: ["10.0.0.1"])
     tracer = _tracer(redis_client, lambda r: httpx.Response(200))

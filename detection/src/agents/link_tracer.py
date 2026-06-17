@@ -162,14 +162,16 @@ class LinkTracer:
                         current = nxt
                         continue
 
-                    # application/* — 바이트 폐기, 배포 직링크 증거만.
+                    # 허용 목록 외 content-type — 바이트 폐기. application/* 계열만 배포 직링크.
                     content_type = resp.headers.get("content-type")
                     if is_disallowed_content_type(content_type):
+                        main_type = (content_type or "").split(";", 1)[0].strip().lower()
+                        is_app = main_type.startswith("application/")
                         return LinkEvidence(
                             url=url, kind="file_direct_link",
                             fetch_status=f"abort:content_type:{content_type}",
-                            is_distribution_site=True,
-                            indicators=["배포 파일 직링크(application/* 응답)"],
+                            is_distribution_site=is_app,
+                            indicators=[f"배포 파일 직링크({main_type} 응답)"] if is_app else [],
                         )
 
                     # 에러 응답은 본문 소비 전에 종결 (바이트 낭비 방지).

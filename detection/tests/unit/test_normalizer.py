@@ -2,13 +2,33 @@
 
 from __future__ import annotations
 
-from detection.src.agents.normalizer import extract_links, normalize
+from pathlib import Path
+
+from detection.src.agents.normalizer import extract_link_candidates, extract_links, normalize
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+
+
+def _read_fixture(name: str) -> str:
+    return (_FIXTURES / name).read_text(encoding="utf-8")
 
 
 def test_empty_input_returns_empty_result() -> None:
     result = normalize("")
     assert result.text == ""
     assert result.links == []
+    assert result.link_candidates == []
+    assert result.link_stats == {
+        "raw_link_count": 0,
+        "raw_unique_link_count": 0,
+        "trace_candidate_count": 0,
+        "deduped_alias_count": 0,
+        "selected_link_count": 0,
+        "ranked_link_count": 0,
+        "stored_candidate_count": 0,
+        "stored_candidate_limit": 50,
+        "stored_alias_limit_per_candidate": 50,
+    }
 
 
 def test_zero_width_chars_removed() -> None:
@@ -122,3 +142,241 @@ def test_extract_links_excludes_query_fragment_and_default_port_variants() -> No
         exclude_urls=["https://example.com/post/1"],
     )
     assert links == ["https://evil.example/x"]
+
+
+def test_html_anchor_href_extracted_before_img_src() -> None:
+    # <a href="download_url"><img src="image_url"></a> 패턴에서
+    # href(실제 다운로드 링크)가 src(이미지)보다 먼저 추출돼야 함.
+    html = (
+        '<a href="https://github.com/user/repo/releases/download/v1/hack.rar">'
+        '<img src="https://github.com/user-attachments/assets/abc123.png">'
+        '</a>'
+    )
+    links = extract_links(html)
+    assert links[0] == "https://github.com/user/repo/releases/download/v1/hack.rar"
+    assert "user-attachments" in links[1]
+
+
+def test_html_anchor_href_only_not_img_src_when_same_slot() -> None:
+    # img src는 href가 이미 슬롯을 차지하면 뒤로 밀려야 함.
+    html = (
+        '<a href="https://evil.example/cheat.zip">'
+        '<img src="https://cdn.example/button.png">'
+        '</a>'
+        '<a href="https://evil.example/readme">'
+        '<img src="https://cdn.example/badge.svg">'
+        '</a>'
+    )
+    links = extract_links(html)
+    # href 2개가 앞에, img src 2개가 뒤에
+    assert links[:2] == [
+        "https://evil.example/cheat.zip",
+        "https://evil.example/readme",
+    ]
+
+
+def test_extract_links_dedup_by_fragment() -> None:
+    # fragment만 다른 URL은 HTTP fetch 시 동일 페이지 → 중복으로 처리해야 함.
+    text = (
+        "[홈](https://hencheats.vercel.app/) "
+        "[게임A](https://hencheats.vercel.app/#PPSA01467-01.008.001) "
+        "[게임B](https://hencheats.vercel.app/#PPSA17905-01.030.000)"
+    )
+    links = extract_links(text)
+    assert links == ["https://hencheats.vercel.app/"]
+
+
+def test_extract_linked_image_captures_href_not_img_src() -> None:
+    # [![alt](img_url)](href_url) 패턴에서 img_url(배지/이미지)이 아닌 href_url을 추출해야 함.
+    text = "[![Download](https://img.shields.io/badge/Download-blueviolet)](https://evil.example/download)"
+    links = extract_links(text)
+    assert links == ["https://evil.example/download"]
+    assert "img.shields.io" not in str(links)
+
+
+def test_extract_multiple_linked_images_and_plain_links() -> None:
+    # README 실제 패턴: 링크드 이미지 2개 + 일반 링크 1개 혼합.
+    text = (
+        "[![Badge](https://img.shields.io/badge/x)](https://evil.example/dupe)\n"
+        "[Visit Site](https://wecheaters.com)\n"
+        "[![Img](https://i.ibb.co/img.png)](https://wecheaters.com)"
+    )
+    links = extract_links(text)
+    # img src는 없어야 하고, href들만 중복 제거된 채로.
+    assert "https://evil.example/dupe" in links
+    assert "https://wecheaters.com" in links
+    assert "img.shields.io" not in str(links)
+    assert "i.ibb.co" not in str(links)
+    # wecheaters.com은 중복 제거로 1번만.
+    assert links.count("https://wecheaters.com") == 1
+
+
+def test_distribution_url_ranked_before_static_images() -> None:
+    text = (
+        "![badge](https://img.shields.io/badge/download-blue.svg)\n"
+        "![shot](https://cdn.example/screenshot.png)\n"
+        "다운로드 https://evil.example/files/hack.zip"
+    )
+    links = extract_links(text)
+    assert links[0] == "https://evil.example/files/hack.zip"
+
+
+def test_meta_refresh_url_is_extracted_as_navigation_candidate() -> None:
+    html = '<meta http-equiv="refresh" content="0; url=https://evil.example/download">'
+    candidates = extract_link_candidates(html)
+    assert candidates[0].url == "https://evil.example/download"
+    assert candidates[0].source_kind == "meta_refresh"
+
+
+def test_iframe_src_is_extracted_as_embedded_destination_candidate() -> None:
+    html = '<iframe title="loader" src="https://evil.example/payload"></iframe>'
+    candidates = extract_link_candidates(html)
+    assert candidates[0].url == "https://evil.example/payload"
+    assert candidates[0].source_kind == "iframe_src"
+
+
+def test_messenger_invite_ranked_before_generic_homepage() -> None:
+    text = (
+        "[홈페이지](https://example-cheat-site.test)\n"
+        "[문의](https://discord.gg/abc123)"
+    )
+    assert extract_links(text)[0] == "https://discord.gg/abc123"
+
+
+def test_fragment_aliases_are_preserved_on_selected_candidate() -> None:
+    text = (
+        "[홈](https://hencheats.vercel.app/) "
+        "[게임A](https://hencheats.vercel.app/#PPSA01467-01.008.001) "
+        "[게임B](https://hencheats.vercel.app/#PPSA17905-01.030.000)"
+    )
+    [candidate] = extract_link_candidates(text)
+    assert candidate.url == "https://hencheats.vercel.app/"
+    assert candidate.aliases == (
+        "https://hencheats.vercel.app/#PPSA01467-01.008.001",
+        "https://hencheats.vercel.app/#PPSA17905-01.030.000",
+    )
+
+
+def test_query_variants_are_not_collapsed_for_trace_candidates() -> None:
+    links = extract_links(
+        "A https://files.example/download?id=1 "
+        "B https://files.example/download?id=2"
+    )
+    assert links == [
+        "https://files.example/download?id=1",
+        "https://files.example/download?id=2",
+    ]
+
+
+def test_js_location_redirect_is_extracted_with_reason() -> None:
+    text = "<script>window.location.href = 'https://evil.example/landing';</script>"
+    candidates = extract_link_candidates(text)
+    assert candidates[0].url == "https://evil.example/landing"
+    assert candidates[0].source_kind == "js_location"
+    assert "redirect_or_embedded_destination:js_location" in candidates[0].reasons
+
+
+def test_static_html_resources_are_explicit_low_priority_candidates() -> None:
+    html = (
+        '<link rel="stylesheet" href="https://cdn.example/app.css">'
+        '<script src="https://cdn.example/app.js"></script>'
+        '<img alt="badge" src="https://img.shields.io/badge/x.svg">'
+        '<a href="https://evil.example/download/hack.rar">Download</a>'
+    )
+    candidates = extract_link_candidates(html)
+    assert candidates[0].url == "https://evil.example/download/hack.rar"
+    by_kind = {candidate.source_kind: candidate for candidate in candidates}
+    assert by_kind["image_src"].priority == 10
+    assert by_kind["script_src"].priority == 10
+    assert by_kind["link_href"].priority == 10
+    assert "low_value_image_src" in by_kind["image_src"].reasons
+
+
+def test_distribution_candidate_records_selection_reasons() -> None:
+    [candidate] = extract_link_candidates("[무료 핵 다운로드](https://evil.example/files/tool.dll)")
+    assert candidate.priority == 100
+    assert "download_file_extension" in candidate.reasons
+    assert "distribution_path_hint" in candidate.reasons
+    assert "distribution_text_hint" in candidate.reasons
+
+
+def test_regression_1807_fragment_links_collapse_to_real_destination() -> None:
+    text = _read_fixture("link_ranker_1807.md")
+    candidates = extract_link_candidates(
+        text,
+        exclude_urls=["https://github.com/TeeKay87/HEN-Cheats-Collection"],
+    )
+    links = [candidate.url for candidate in candidates]
+
+    assert links[0] == "https://hencheats.vercel.app/"
+    assert "https://github.com/TeeKay87/HEN-Cheats-Collection" not in links
+    assert len([url for url in links if url.startswith("https://hencheats.vercel.app/")]) == 1
+    assert len(candidates[0].aliases) >= 5
+    assert "distribution_text_hint" in candidates[0].reasons
+
+
+def test_regression_1928_linked_images_select_href_not_badge_or_screenshot() -> None:
+    text = _read_fixture("link_ranker_1928.md")
+    links = extract_links(
+        text,
+        exclude_urls=["https://github.com/yh88-Lineage-2-Item-Dupe/.github"],
+    )
+
+    assert links[:2] == [
+        "https://yh88-Lineage-2-Item-Dupe.github.io/.github",
+        "https://wecheaters.com",
+    ]
+    assert all("img.shields.io" not in url for url in links[:3])
+    assert all("i.ibb.co" not in url for url in links[:3])
+
+
+def test_regression_1928_records_duplicate_site_alias() -> None:
+    text = _read_fixture("link_ranker_1928.md")
+    candidates = extract_link_candidates(
+        text,
+        exclude_urls=["https://github.com/yh88-Lineage-2-Item-Dupe/.github"],
+    )
+    wecheaters = next(candidate for candidate in candidates if candidate.url == "https://wecheaters.com")
+
+    assert wecheaters.source_kind == "markdown_href"
+    assert wecheaters.aliases == ()
+    assert wecheaters.priority == 100
+    assert "distribution_text_hint" in wecheaters.reasons
+
+
+def test_normalize_stores_link_ranker_metadata() -> None:
+    result = normalize(
+        "[홈](https://hencheats.vercel.app/) "
+        "[게임](https://hencheats.vercel.app/#GAME-1) "
+        "다운로드 https://evil.example/files/tool.zip"
+    )
+
+    assert result.links[:2] == [
+        "https://evil.example/files/tool.zip",
+        "https://hencheats.vercel.app/",
+    ]
+    assert result.link_stats == {
+        "raw_link_count": 3,
+        "raw_unique_link_count": 3,
+        "trace_candidate_count": 2,
+        "deduped_alias_count": 1,
+        "selected_link_count": 2,
+        "ranked_link_count": 2,
+        "stored_candidate_count": 2,
+        "stored_candidate_limit": 50,
+        "stored_alias_limit_per_candidate": 50,
+    }
+    assert result.link_candidates[0]["url"] == "https://evil.example/files/tool.zip"
+    assert "download_file_extension" in result.link_candidates[0]["reasons"]
+    assert result.link_candidates[1]["aliases"] == ["https://hencheats.vercel.app/#GAME-1"]
+    assert result.link_candidates[1]["aliases_truncated_count"] == 0
+
+
+def test_normalize_caps_stored_candidates_but_keeps_total_stats() -> None:
+    text = " ".join(f"https://example{i}.test/download/tool.zip" for i in range(60))
+    result = normalize(text)
+
+    assert result.link_stats["trace_candidate_count"] == 60
+    assert result.link_stats["stored_candidate_count"] == 50
+    assert len(result.link_candidates) == 50
+    assert len(result.links) == 60

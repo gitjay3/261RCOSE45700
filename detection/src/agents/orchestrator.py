@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from dataclasses import asdict
 
 from detection.src.agents.contracts import AgentRunTrace
-from detection.src.agents.link_tracer import LinkTracer
+from detection.src.agents.link_tracer import MAX_LINKS_PER_POST, LinkTracer
 from detection.src.agents.normalizer import normalize
 from detection.src.agents.triage_agent import TriageAgent
 from shared.interfaces.llm import LLMResponse
@@ -70,7 +70,12 @@ class AgentOrchestrator:
         normalized = normalize(raw_text, exclude_links=[post_url] if post_url else None)
         traces.append(AgentRunTrace(
             stage="normalize", model=None, latency_ms=_now_ms(t0),
-            output={"links": normalized.links, "removed_char_count": normalized.removed_char_count},
+            output={
+                "links": normalized.links,
+                "removed_char_count": normalized.removed_char_count,
+                "link_stats": normalized.link_stats,
+                "link_candidates": normalized.link_candidates,
+            },
         ))
 
         # S1 triage (gpt-4o-mini, 전 게시글).
@@ -101,7 +106,18 @@ class AgentOrchestrator:
             evidence = self._link_tracer.trace(normalized.links, correlation_id=correlation_id)
             traces.append(AgentRunTrace(
                 stage="link_trace", model=None, latency_ms=_now_ms(t2),
-                output={"links": [asdict(e) for e in evidence]},
+                output={
+                    "links": [asdict(e) for e in evidence],
+                    "selection": {
+                        "selected_links": normalized.links[:MAX_LINKS_PER_POST],
+                        "max_links_per_post": MAX_LINKS_PER_POST,
+                        "candidate_count": normalized.link_stats.get(
+                            "trace_candidate_count", len(normalized.link_candidates)
+                        ),
+                        "deduped_alias_count": normalized.link_stats.get("deduped_alias_count", 0),
+                        "selected_candidates": normalized.link_candidates[:MAX_LINKS_PER_POST],
+                    },
+                },
             ))
 
         path = "fast_path" if is_fast_path else "escalate_degrade"

@@ -34,6 +34,8 @@ class NormalizedPost:
     text: str
     links: list[str] = field(default_factory=list)
     removed_char_count: int = 0  # 정규화로 줄어든 길이(근사 — 1:1 변형문자 치환은 미집계, 디버깅용)
+    link_candidates: list[dict] = field(default_factory=list)  # URL 랭커 후보/alias/reason 디버깅 메타
+    link_stats: dict = field(default_factory=dict)  # raw 후보 수, dedup 후보 수 등 집계
 
 
 @dataclass

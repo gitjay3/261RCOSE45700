@@ -70,6 +70,11 @@ def test_escalate_traces_links_and_degrades_to_triage() -> None:
     assert len(calls) == 1
     link_trace = next(t for t in traces if t.stage == "link_trace")
     assert link_trace.output["links"][0]["kind"] == "web"
+    assert link_trace.output["selection"]["selected_links"] == ["https://evil.example/macro"]
+    assert link_trace.output["selection"]["selected_candidates"][0]["url"] == "https://evil.example/macro"
+    assert link_trace.output["selection"]["selected_candidates"][0]["reasons"]
+    assert link_trace.output["selection"]["candidate_count"] == 1
+    assert link_trace.output["selection"]["max_links_per_post"] == 3
 
 
 def test_high_conf_기타_with_link_escalates() -> None:
@@ -89,6 +94,8 @@ def test_traces_carry_triage_cost_and_model() -> None:
     assert triage_trace.cost_usd > 0
     normalize_trace = next(t for t in traces if t.stage == "normalize")
     assert normalize_trace.model is None  # LLM 미사용
+    assert normalize_trace.output["link_stats"]["trace_candidate_count"] == 1
+    assert normalize_trace.output["link_candidates"][0]["url"] == "https://evil.example/m"
 
 
 def test_model_version_is_agentic_namespaced(monkeypatch: pytest.MonkeyPatch) -> None:

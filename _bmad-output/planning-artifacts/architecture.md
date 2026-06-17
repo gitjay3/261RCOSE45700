@@ -861,11 +861,11 @@ dashboard/src/api/detections.ts (TanStack Query 60초 폴링)
 1. `shared/pyproject.toml` — 임포트 방식 확정
 2. `shared/correlation_id.py` — 3개 서브시스템 공통 UUID
 3. `shared/models/crawl_event.py` — Redis MQ 메시지 스키마
-4. `shared/interfaces/varco.py` — VARCO Protocol 계약
+4. ~~`shared/interfaces/varco.py`~~ → `shared/interfaces/llm.py` — (2026-05-27 PIVOT) LLM Protocol 계약
 5. `shared/config/redis_config.py` — DB 번호 상수
-6. `detection/src/mocks/varco_mock.py` — 통합 테스트 선행 조건
+6. ~~`detection/src/mocks/varco_mock.py`~~ → `detection/src/mocks/llm_mock.py` — (2026-05-27 PIVOT) OpenAI 멀티모달 응답 + 이미지 토큰 단가 시뮬레이션
 7. `infra/docker-compose.yml` — Redis DB0~3 (`appendonly yes`) + PostgreSQL 로컬 환경
-8. `tests/fixtures/` — HTML 샘플 + VARCO mock 응답 JSON
+8. `tests/fixtures/` — HTML 샘플 + ~~VARCO mock 응답 JSON~~ → `tests/fixtures/llm/` LLM mock 응답 (2026-05-27 PIVOT)
 
 ## Architecture Validation Results
 
@@ -879,7 +879,7 @@ dashboard/src/api/detections.ts (TanStack Query 60초 폴링)
 |---------|------|
 | FR1~FR32 전체 32개 → 아키텍처 컴포넌트 매핑 | ✅ 전체 커버 |
 | NFR1~NFR17 전체 → 구현 위치 확인 | ✅ 전체 커버 |
-| Precision ≥ 0.85 측정 기반 | ✅ `tests/quality/test_varco_precision_recall.py` |
+| Precision ≥ 0.85 측정 기반 | ✅ `detection/tests/unit/test_labelset_snapshot.py` (2026-05-27 PIVOT — test_varco_precision_recall.py 대체) |
 | API p95 ≤ 500ms 검증 기반 | ✅ `tests/performance/k6/api_detections_load.js` |
 | 데모 10개 불법 탐지 자동화 | ✅ `tests/e2e/test_detection_10_posts.py` |
 

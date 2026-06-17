@@ -14,8 +14,8 @@
 
 Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 종속성 4종이 손에 들어오기 전까지 Task 5 / 7 / 8 진행 불가. 첫 배포 자체가 시크릿 + 백엔드 컨테이너 startup 모두 의존:
 
-1. **VARCO API key** (`/opt/app/secrets/varco_api_key`) — Naver Cloud VARCO Translation/LLM API key 발급 필요. detection 컨테이너 사용. 누락 시 detection startup 실패 → healthcheck fail → 자동 롤백.
-2. **VARCO API base URL** (`VARCO_API_BASE_URL` in `/opt/app/.env`) — 팀에서 확정된 base URL 미수령. 누락 시 `https://varco.placeholder/v1` 같은 placeholder → DNS NXDOMAIN → translate/classify 100% fail → DLQ 폭증.
+1. ~~**VARCO API key** (`/opt/app/secrets/varco_api_key`)~~ → **[2026-05-27 PIVOT 해소]** `openai_api_key` (`/opt/app/secrets/openai_api_key`) 로 대체. detection 컨테이너 startup은 OpenAI API 키에 의존.
+2. ~~**VARCO API base URL** (`VARCO_API_BASE_URL` in `/opt/app/.env`)~~ → **[2026-05-27 PIVOT 해소]** `OPENAI_API_BASE_URL` (기본값 `https://api.openai.com/v1`) 사용. DNS NXDOMAIN 블로커 해소됨.
 3. **RDS endpoint + master password** — tracker-prod-db는 Available + `psql SELECT version()`은 통과했으나 `DB_HOST` (정확한 endpoint hostname) + `/opt/app/secrets/db_password` (master password)가 .env/시크릿 파일에 아직 미작성.
 4. **백엔드 api/detection 서비스 첫 배포 검증** (다른 팀원 담당 영역) — Spring Boot api + detection 컨테이너 build/GHCR push 후 EC2에서 startup 동작 검증 필요. Flyway V1~V4 migration 첫 실행 모니터링도 본 deferred 항목과 결합 (아래 Story 5-2 dev 2026-05-07 섹션 Flyway 호환성 참조).
 
@@ -117,7 +117,7 @@ Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 
 ## Deferred from: code review of 1-3-로컬-개발-환경-구성 (2026-04-29)
 
 - **redis/postgres `healthcheck:` 블록 미정의** [infra/docker-compose.yml] — `up -d` 직후 컨테이너가 Listening 되기 전 의존 서비스 부팅 시 race. Story 1.4 Flyway 마이그레이션이 `service_healthy` condition을 요구하므로 그때 일괄 추가.
-- **VARCO_API_KEY required-var 가드 부재** [infra/.env.example, infra/docker-compose.yml] — placeholder `your-varco-api-key-here`가 그대로 사용되면 런타임 401로 fail. crawler/detection 컨테이너 추가 시 해당 서비스 environment에 `${VARCO_API_KEY:?}` 부착.
+- **~~VARCO_API_KEY~~ → OPENAI_API_KEY required-var 가드 부재** [infra/.env.example, infra/docker-compose.yml] — (2026-05-27 PIVOT) placeholder가 그대로 사용되면 런타임 401로 fail. detection 컨테이너 environment에 `${OPENAI_API_KEY:?}` 부착. compose.prod.yml은 Docker secrets(`openai_api_key`)로 이미 전환됨.
 - **postgres `/docker-entrypoint-initdb.d` 마운트 슬롯 미예약** [infra/docker-compose.yml] — Story 1.4에서 `pg_trgm`/`uuid-ossp` 등 extension 필요 시 Flyway baseline에 포함하거나 initdb 마운트 추가 결정 필요.
 
 ## Deferred from: code review of 3-1-redis-큐-소비자-및-watchdog-구현 (2026-04-29)
@@ -125,7 +125,7 @@ Task 5 [USER] `/opt/app/secrets/*` + `/opt/app/.env` 작성에 필요한 외부 
 - **Watchdog LREM/RPUSH 비원자성 (D1, decision-needed→defer)** [detection/src/consumer/watchdog.py:64-77] — race window는 ms 단위 + 단일 Watchdog MVP. Story 3.5 측정 후 발생률 기반 재결정.
 - **같은 `post_id` 중복 메시지 LREM 오제거 가능성 (D3, decision-needed→defer)** [detection/src/consumer/queue_consumer.py:45, watchdog.py:65,76] — DedupChecker(SHA-256) + Story 3.4 DB UniqueConstraint 이중 안전망 존재. 단일 post_id 충돌 빈도 사실상 0.
 - **`mark_processing` 침묵 실패** [detection/src/consumer/watchdog.py:35-45] — spec 명시 의도이나 정상 처리 중 메시지가 즉시 stale 판정되는 race window. spec 설계 유지.
-- **`processing_time` TTL = stale 임계치 동일(300s)** [detection/src/consumer/watchdog.py:17] — VARCO 5분 초과 처리 시 stale 오판. Story 3.2 VARCO SLA 측정 후 TTL 분리 검토.
+- **`processing_time` TTL = stale 임계치 동일(300s)** [detection/src/consumer/watchdog.py:17] — OpenAI gpt-4o 호출이 5분 초과 시 stale 오판. (2026-05-27 PIVOT: VARCO SLA → OpenAI p95 실측 후 TTL 분리 검토, Story 3.2 폐기로 측정 기준 미정)
 - **`run_forever` 예외 처리 부재** [detection/src/consumer/queue_consumer.py:64-65, watchdog.py:97-99] — Connection Error 시 프로세스 종료. Story 5.3 supervisor/restart 정책 확정 시 보완.
 - **`brpoplpush` Redis 6.2+ deprecated** [detection/src/consumer/queue_consumer.py:32-36] — spec 명시 사용. 후속 라이브러리 업그레이드 시 `BLMOVE` 마이그레이션.
 - **Watchdog 첫 스캔 60초 지연** [detection/src/consumer/watchdog.py:97-99] — 부팅 직후 잔존 stale 메시지 60초 방치. MVP 영향 미미.

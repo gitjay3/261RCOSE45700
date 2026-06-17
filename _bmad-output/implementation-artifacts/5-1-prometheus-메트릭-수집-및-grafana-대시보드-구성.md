@@ -39,7 +39,7 @@ API 응답 시간·에러율·Redis 큐 깊이가 Grafana에서 실시간으로 
 ```
 DB0 (REDIS_MQ_DB=0):     posts:queue, posts:processing, posts:dlq  ← 모니터링 대상
 DB1 (REDIS_DEDUP_DB=1):  posts:dedup
-DB2 (REDIS_RATELIMIT_DB=2): varco:rate_limit
+DB2 (REDIS_RATELIMIT_DB=2): llm:rate_limit:classify  ← (2026-05-27 PIVOT: varco:rate_limit → llm:rate_limit)
 DB3 (REDIS_CACHE_DB=3):  cache:detections  ← cacheRedisTemplate 빈 담당 (변경 금지)
 ```
 

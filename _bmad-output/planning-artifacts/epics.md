@@ -73,9 +73,9 @@ NFR17: 크롤링 스케줄 간격(`CRAWL_INTERVAL_MINUTES`)은 환경 변수 변
 ### Additional Requirements
 
 - **[ARCH-1] 모노레포 초기화:** 모노레포 디렉토리 구조(crawler/, detection/, api/, dashboard/, shared/, infra/, .github/workflows/) 초기화 및 서브시스템별 스캐폴딩 (Python pip, Spring Boot 3.5.0 Initializr, Vite 8 + React-TS)
-- **[ARCH-2] Day 1 공유 모듈 (shared/):** `shared/pyproject.toml`, `shared/correlation_id.py`, `shared/models/crawl_event.py`, `shared/interfaces/varco.py`, `shared/config/redis_config.py`, `shared/structured_logger.py` — 3개 서브시스템 구현 시작 전 반드시 완료
+- **[ARCH-2] Day 1 공유 모듈 (shared/):** `shared/pyproject.toml`, `shared/correlation_id.py`, `shared/models/crawl_event.py`, ~~`shared/interfaces/varco.py`~~ → `shared/interfaces/llm.py` (2026-05-27 PIVOT), `shared/config/redis_config.py`, `shared/structured_logger.py` — 3개 서브시스템 구현 시작 전 반드시 완료
 - **[ARCH-3] infra/docker-compose.yml:** Redis DB0~3(`appendonly yes`) + PostgreSQL 로컬 환경, dev/prod 오버라이드 분리
-- **[ARCH-4] VARCO Mock 서버:** `detection/src/mocks/varco_mock.py` — rate limit 시뮬레이션, 실패 주입, 재시도 검증 지원. 통합 테스트 선행 조건
+- **[ARCH-4] ~~VARCO Mock 서버~~** → **LLM Mock 서버 (2026-05-27 PIVOT):** `detection/src/mocks/llm_mock.py` — OpenAI 멀티모달 응답 시뮬레이션, rate limit 시뮬레이션, 실패 주입, 재시도 검증 지원. 통합 테스트 선행 조건
 - **[ARCH-5] Flyway DB 마이그레이션:** `V1__init_schema.sql`(sources/posts/post_images/detections 4개 테이블), `V2__add_indexes.sql`(복합 인덱스 `idx_detections_filter`), `V3__add_unique_detection.sql`(`(post_id, model_version)` unique constraint)
 - **[ARCH-6] 구조화 로깅 표준:** Python/Java 전체 서비스에 `{"timestamp","service","correlation_id","level","message"}` JSON 로그 스키마 적용, `SERVICE_NAME` 환경변수 주입
 - **[ARCH-7] GitHub Actions CI/CD:** crawler.yml, detection.yml, api.yml, dashboard.yml 4개 독립 워크플로우 — 코드 푸시 시 자동 빌드·배포

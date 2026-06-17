@@ -243,6 +243,8 @@ erDiagram
 
 > 📌 **MVP 운영 범위**: 위 8개 사이트를 최대 대상으로 하되, **MVP에서는 크롤러 연결 성공·기본 수집 안정성이 확인된 사이트만 운영**한다. 차단·구조 변경 등으로 수집이 불가한 사이트는 대안 사이트로 교체 또는 확장 단계로 이월한다. 중국 사이트는 프록시 품질과 GFW·Cloudflare 대응 결과에 따라 실제 가용 수가 달라질 수 있다.
 
+> 🛠 **2026-05-~06 PIVOT — 대만(TW) 사이트 추가, 한국 전문 핵 사이트 대체.** 실 연결 테스트 결과 초기 목록의 한국 전문 핵 사이트들(tailstar·cheatdot·mart-hack·enjoymacro·barotem)은 NC 게임 타겟 게시글 수가 미미하거나 구조 불일치로 제외됐다. 대신 **대만권 Bahamut NC 게임 보드 8종** (천당Lineage·천당M·천당W·천당經典版·永恒紀元·AION2·劍靈·TL), **PTT Lineage 보드**, **Inven 리니지 클래식 보드**가 안정적으로 NC 데이터를 수집 중이다. 중국 tieba·nga는 한국 IP 차단(HTTP 403)으로 비활성화됐다. 현재 활성 사이트 현황은 `crawler/STATUS.md §3` 참조.
+
 ### 3.2 크롤링 기술 스택
 
 > 📌 **팀 결정 필요**: 아래 카테고리별 옵션 중 최종 채택안을 확정한다. 프록시 프로바이더는 인터페이스 추상화(`ProxyProvider`)로 구현해 교체 비용을 최소화한다.
@@ -336,7 +338,11 @@ flowchart LR
 
 ## 4. AI 탐지 시스템 (VARCO 파이프라인)
 
+> 🛠 **2026-05-27 PIVOT — VARCO → OpenAI gpt-4o 전환.** 본래 VARCO LLM + Translation + Vision 조합을 채택했으나, Story 3.0 SPIKE에서 VARCO API 접근 불가 + OpenAI gpt-4o PoC 성능 검증(30건, Recall 100%, 게시글당 $0.0019, p95 latency 3.69s) 결과 **OpenAI gpt-4o 멀티모달 LLM으로 단일 API 전환**. BERT 2차 필터는 MVP 범위에서 제외(학생 계정 GPU 미가용). 번역도 gpt-4o 단일 호출(프롬프트 내 `translated_text_ko` 필드)로 처리 — VARCO Translation 별도 호출 불필요. 자세한 PoC 수치는 `docs/llm-spike-2026-05-27.md` 참조.
+
 ### 4.1 VARCO API 활용 구성
+
+> ⚠️ **[SUPERSEDED — 2026-05-27 PIVOT]** 아래 표는 초기 기획 내용입니다. 실제 구현은 OpenAI gpt-4o 단일 멀티모달 LLM으로 번역·분류·이미지 분석을 통합 처리합니다.
 
 | VARCO API | 역할 | 선택 근거 및 특징 |
 |-----------|------|-------------------|
@@ -348,31 +354,22 @@ flowchart LR
 
 > 📌 본 파이프라인은 **전처리(3.4)에서 키워드 필터를 통과하여 Redis 큐에 적재된 메시지**를 대상으로 한다. 전처리 단계는 본 파이프라인에서 제외되며, Detection EC2는 AI 호출 전담이다.
 
+> ⚠️ **[SUPERSEDED — 2026-05-27 PIVOT]** 아래 표는 초기 기획 내용입니다. 실제 구현은 OpenAI gpt-4o 단일 호출로 번역·분류·이미지 분석을 통합하고 BERT 2차 필터는 제외됩니다.
+
 | 단계 | 처리 | 상세 |
 |------|------|------|
 | 1 | **Redis 큐 dequeue** | `BRPOPLPUSH posts:queue → posts:processing`로 원자적 이동. Worker 크래시 시 Watchdog가 `posts:processing`의 오래된 메시지를 `posts:queue`로 재큐잉 |
-| 2 | **VARCO Translation** | 언어 감지 결과가 중국어인 메시지 대상. 한국어로 번역 후 다음 단계 투입. 게임 도메인 용어 일관성 보장. (한국어는 스킵) |
-| 3 | **BERT 2차 필터 [TBD]** | 번역된/원문 한국어 게시글로 불법 프로그램 판매·계정 거래·정상 등 범주별 위험도 점수 산정 → 임계값 통과 게시글만 VARCO LLM 호출 대상으로 선별. **BERT 도입 여부 및 모델은 팀 결정 필요 — 미도입 시 본 단계는 생략되고 키워드 필터(전처리)만으로 LLM 대상 선정** |
-| 4 | **VARCO LLM** | 불법 여부 판단 + 유형 분류 + 근거 생성. 출력 형식: `{ "is_illegal": true, "type": "매크로 판매", "confidence": 0.92, "reason": "판단근거" }` |
-| 5 | **VARCO Vision (조건부)** | 이미지 첨부 게시글 또는 BERT [TBD] 점수 기준 통과 게시글 대상. S3에서 이미지 읽어 Vision API에 전달. 이미지 속 텍스트 인식 + 불법 내용 판단 (텍스트 우회 대응) |
-| 6 | **VARCO Rate Limit 제어** | Worker별 호출 전 Redis 토큰 버킷(`varco:rate_limit`) 체크. 초과 시 대기 후 재시도 — 다중 Worker에서도 VARCO API 할당량 보호 |
-| 7 | **RDS 저장** | 탐지 결과 JSON → `detections` 테이블 저장. 대시보드 실시간 조회 가능 |
-| 8 | **메시지 제거 / DLQ** | 성공 시 `LREM posts:processing`. 실패 3회 반복 시 `posts:dlq`로 격리, CloudWatch/Grafana 알람 |
+| 2 | **OpenAI gpt-4o 분류** ~~VARCO Translation + BERT + VARCO LLM + VARCO Vision~~ | 단일 API 호출로 번역(`translated_text_ko`), 불법 여부, Tier 분류, 신뢰도, 근거 생성을 통합 처리. 이미지 첨부 게시글은 vision 입력으로 함께 처리. 출력 형식: `{ type, confidence, reason_ko, translated_text_ko, image_observed }` |
+| 3 | **토큰 버킷 Rate Limit** | Redis 토큰 버킷(`llm:rate_limit`) — 일일 비용 cap $5, TPM 제어. 초과 시 대기 후 재시도. |
+| 4 | **RDS 저장** | 탐지 결과 JSON → `detections` 테이블 저장. 대시보드 실시간 조회 가능 |
+| 5 | **메시지 제거 / DLQ** | 성공 시 `LREM posts:processing`. 실패 3회 반복 시 `posts:dlq`로 격리, Grafana 알람 |
 
 ```mermaid
 flowchart TD
-    A[Redis posts:queue<br/>BRPOPLPUSH] --> B{언어?}
-    B -->|중국어| C[VARCO Translation]
-    B -->|한국어| D[BERT 2차 필터 TBD]
-    C --> D
-    D -->|통과 or BERT 미도입| E[VARCO LLM 분석]
-    D -->|미통과| X[파이프라인 종료]
-    E --> F{이미지 첨부<br/>또는 플래그?}
-    F -->|Yes| G[VARCO Vision 분석]
-    F -->|No| H[(RDS 저장)]
-    G --> H
-    H --> I[대시보드 조회]
-    A -.실패 3회.-> Z[posts:dlq<br/>알람]
+    A[Redis posts:queue<br/>BRPOPLPUSH] --> B[OpenAI gpt-4o<br/>번역+분류+이미지 통합]
+    B -->|성공| C[(RDS 저장)]
+    C --> D[대시보드 조회]
+    B -.실패 3회.-> Z[posts:dlq<br/>알람]
 ```
 
 ---
@@ -432,8 +429,8 @@ flowchart TD
 | 프록시 **[옵션]** | ThorData / IPRoyal ISP / Smartproxy ISP / Oxylabs DC / 무료 풀 / 자체 VPS — 3.2.3 참조 (Tor 비권장) | IP 회전·지역 차단 우회 |
 | 스케줄링 | APScheduler | 주기(1.3 선택) 자동 크롤링 스케줄 관리 |
 | 전처리 | BeautifulSoup/lxml, langdetect, 정규식 키워드 사전 | HTML 파싱·언어 감지·키워드 필터 |
-| 메시지 큐 + 캐시 | **Redis** (API EC2 docker-compose 공존) | `posts:queue`/`processing`/`dlq`/`dedup`, VARCO rate limit, 세션/대시보드 캐시 |
-| AI (VARCO) | **BERT [TBD]**, VARCO LLM, Translation, Vision | 2차 필터(미정) + 다국어 번역 + 불법 분류 + 이미지 탐지 |
+| 메시지 큐 + 캐시 | **Redis** (단일 EC2 docker-compose 공존) | `posts:queue`/`processing`/`dlq`/`dedup`, LLM rate limit, 세션/대시보드 캐시 |
+| AI (PIVOT 후) | **OpenAI gpt-4o** 멀티모달 LLM | ~~VARCO LLM + Translation + Vision~~ → 2026-05-27 PIVOT. 단일 API 호출로 번역·불법 분류·이미지 분석 통합. 일일 비용 cap $5 (~2,600건/일 처리). BERT 2차 필터는 학생 계정 GPU 미가용으로 MVP 제외. |
 | 클라우드 | AWS **단일 EC2 t3.xlarge x86_64 16GB** (3차 PIVOT 회귀), S3 (VPC Gateway Endpoint 미생성 — IGW 경유), RDS **PostgreSQL 18.3 db.t4g.micro arm64 Single-AZ**, publicly_accessible=true + SG/force_ssl 보강 | 4개 서비스(crawler/detection/api/dashboard) + Redis 단일 호스트 docker compose 공존 + 데이터 저장. EC2 SCP는 Graviton 차단되나 RDS Graviton은 가용. 인스턴스 사이징 근거는 2.1.1.a 참조 |
 | 인프라 관리 | **콘솔 ClickOps** (2026-05-06 PIVOT) | 본래 Terraform IaC 채택. 학생 IAM 자격증명 통로 0개(IAM Access Key 차단 + CloudShell deny + IAM Role 생성 deny)로 apply 불가능 → ClickOps 전환. Terraform 코드는 git history(`b7e24d3`, `bd172d9`) 보존, 졸업 후 개인 계정에서 1회 apply 재현 가능. 자세한 사유는 본 문서 2.1 인프라 박스 + Story 5.3 PIVOT 참조 |
 | EC2 접근·운영 | **SSH `.pem` only** (Ubuntu 24.04) | 2026-05-06 Story 5-2 PIVOT — 학생 IAM이 SSM Session Manager / EC2 Instance Connect / IAM Role 생성 모두 차단으로 SSM 통로 봉인. 단일 `.pem` 키. 22번 인바운드 `0.0.0.0/0` + ed25519 + fail2ban 3 layer defense-in-depth. host fingerprint verification은 운영 단순화 trade-off로 미적용 (NFR9 세션 로그는 EC2 측 `/var/log/auth.log` + journalctl로 대체) |

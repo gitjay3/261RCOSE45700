@@ -16,6 +16,8 @@ filesIncluded:
 
 # Implementation Readiness Assessment Report
 
+> **[이력 문서]** 2026-04-25 기준 스냅샷. 2026-05-27 Epic 3 PIVOT(VARCO → OpenAI gpt-4o 멀티모달)으로 VARCO 관련 NFR/FR·파일 경로 다수가 변경됨. 현행 아키텍처는 `architecture.md` 참조.
+
 **Date:** 2026-04-25
 **Project:** 20261R0136COSE45700
 

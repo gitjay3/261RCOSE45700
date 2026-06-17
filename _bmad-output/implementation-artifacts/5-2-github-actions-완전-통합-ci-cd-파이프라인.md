@@ -100,7 +100,7 @@ main 브랜치 머지가 4개 서브시스템(crawler / detection / api / dashbo
   - [x] 각 서비스에 `healthcheck:` 블록 정의 — Dockerfile `HEALTHCHECK` (crawler/detection: pgrep 프로세스 검사, api: `/actuator/health` curl, dashboard: `/healthz` wget) + redis는 compose 레벨 `redis-cli ping`
   - [x] `secrets:` 키워드로 `/run/secrets/<name>` 마운트 정의 + `infra/docker-secret-shim.sh` 추가 (4개 Dockerfile ENTRYPOINT chain에 삽입 — `/run/secrets/*` → 대문자 env 변환 후 exec CMD). AC #12 "환경변수 직접 주입 금지" 준수
   - [ ] **[USER]** `/opt/app/secrets/` 디렉토리 생성 (chmod 700, owner root) — EC2 SSH ClickOps. 절차는 `docs/deployment.md` §2.4 참조
-  - [ ] **[USER]** 시크릿 파일들 (`varco_api_key`, `db_password` 등) 수동 등록 — 각 파일 chmod 600
+  - [ ] **[USER]** 시크릿 파일들 (`openai_api_key`, `db_password` 등) 수동 등록 — 각 파일 chmod 600 (2026-05-27 PIVOT: varco_api_key → openai_api_key)
   - [x] `.gitignore`에 `*.env`(line 67) + `secrets/` (신규 추가) + `*.pem`(line 72) + `*.key`(line 73) + `id_rsa*` (lines 76~79) 모두 등록 확인
 
 - [~] **Task 6. dependabot 제거 commit** (AC: #8 — auto-merge OFF + 의도치 않은 자동 배포 회피)
@@ -208,9 +208,9 @@ claude-opus-4-7 (BMad dev-story workflow, 2026-05-07 세션)
    - `dashboard/Dockerfile` — multi-stage `node:20.19-alpine` builder(`npm ci && npm run build`) → `nginx:1.27-alpine` runtime. nginx config에 SPA fallback + `/healthz` 200 응답. HEALTHCHECK = `/healthz` wget. EXPOSE 80.
    - 각 서비스 `.dockerignore`로 캐시·테스트·로컬 IDE 산출물 빌드 컨텍스트 제외.
 
-5. `infra/compose.prod.yml` (신규, 123 lines) — 단일 EC2 `docker compose` 사양. 5개 서비스(redis + crawler/detection/api/dashboard). `${REGISTRY_PATH}/<service>:${IMAGE_TAG:-latest}` 이미지 참조 → deploy.yml에서 env로 주입. AC #12 준수: `secrets:` 블록으로 `/opt/app/secrets/{varco_api_key,db_password}` → `/run/secrets/<name>` 마운트, env_file는 비-시크릿 설정만(`/opt/app/.env`). redis 헬스체크 + crawler/detection의 `depends_on: { redis: { condition: service_healthy } }` 의존성 명시.
+5. `infra/compose.prod.yml` (신규, 123 lines) — 단일 EC2 `docker compose` 사양. 5개 서비스(redis + crawler/detection/api/dashboard). `${REGISTRY_PATH}/<service>:${IMAGE_TAG:-latest}` 이미지 참조 → deploy.yml에서 env로 주입. AC #12 준수: `secrets:` 블록으로 `/opt/app/secrets/{openai_api_key,db_password}` → `/run/secrets/<name>` 마운트, env_file는 비-시크릿 설정만(`/opt/app/.env`). (2026-05-27 PIVOT: varco_api_key → openai_api_key) redis 헬스체크 + crawler/detection의 `depends_on: { redis: { condition: service_healthy } }` 의존성 명시.
 
-6. `infra/docker-secret-shim.sh` (신규, executable) — `/run/secrets/<name>` 파일을 대문자 env로 export 후 exec CMD. 4개 Dockerfile ENTRYPOINT chain의 두 번째 단계로 삽입(`tini → secret-shim → CMD`). AC #12 "환경변수 직접 주입 금지"를 코드 변경 0건으로 충족(앱 코드는 기존대로 `os.environ["VARCO_API_KEY"]`를 그대로 읽음).
+6. `infra/docker-secret-shim.sh` (신규, executable) — `/run/secrets/<name>` 파일을 대문자 env로 export 후 exec CMD. 4개 Dockerfile ENTRYPOINT chain의 두 번째 단계로 삽입(`tini → secret-shim → CMD`). AC #12 "환경변수 직접 주입 금지"를 코드 변경 0건으로 충족(앱 코드는 기존대로 `os.environ["OPENAI_API_KEY"]`를 그대로 읽음 (2026-05-27 PIVOT: VARCO_API_KEY → OPENAI_API_KEY)).
 
 7. `.gitignore` 갱신 — 기존 `*.env` / `*.pem` / `*.key` / `id_rsa*` / `id_ed25519*` / `*credentials*.json`이 이미 등록됨 확인. 신규로 `secrets/` 패턴 추가 (Task 5 AC #12 마지막 subtask).
 

@@ -28,7 +28,7 @@ Tracker는 게임 커뮤니티에 올라오는 핵·치트, 사설서버, 불법
 
 ## 아키텍처
 
-![아키텍처](docs/architecture.svg)
+<img src="docs/architecture.png" width="1000"/>
 
 운영 환경은 단일 EC2에서 Redis, Tor, crawler, detection, API, dashboard, Caddy 7개 컨테이너를 Docker Compose로 실행합니다. 자세한 구조와 운영 결정은 [Architecture](https://github.com/byungju0/261RCOSE45700/wiki/Architecture-Overview)와 [docs/deployment.md](docs/deployment.md)를 참고하세요.
 

@@ -1418,14 +1418,18 @@ class CrawlScheduler:
                 skipped = stats.skipped_empty + stats.skipped_sticky + stats.skipped_blocked + stats.skipped_unknown
                 total_discovered = stats.listing_discovered_total + stats.github_discovered
                 total_selected = stats.listing_urls_selected + stats.github_selected
-                total_enqueued = stats.enqueued + stats.github_enqueued
+                # stats.enqueued already includes GitHub after _merge_github_stats().
+                total_enqueued = stats.enqueued
+                site_enqueued = max(0, stats.enqueued - stats.github_enqueued)
+                github_duplicate = stats.github_skipped_seen_url + stats.github_skipped_dedup
                 activity = (
                     "CRAWL_COMPLETED",
                     f"{trigger} 크롤링 완료\n"
                     f"게시판 {stats.listing_boards}개 + GitHub 검색에서 총 {total_discovered}건 발견 → {total_selected}건 선택\n"
                     f"본문 확인 {stats.attempted}건 시도 → 총 {total_enqueued}건 AI 분석 대기열에 추가"
-                    f" (사이트 {stats.enqueued}건, GitHub {stats.github_enqueued}건)\n"
-                    f"중복 제외 {duplicate}건, 기타 제외 {skipped}건, 실패 {stats.failed}건",
+                    f" (사이트 {site_enqueued}건, GitHub {stats.github_enqueued}건)\n"
+                    f"중복 제외 {duplicate}건"
+                    f" (GitHub 중복 제외 {github_duplicate}건), 기타 제외 {skipped}건, 실패 {stats.failed}건",
                 )
             except Exception as exc:
                 self._progress_store.mark_failed(progress_job_id, message=str(exc))

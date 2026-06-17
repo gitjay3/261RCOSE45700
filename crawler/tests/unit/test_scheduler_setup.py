@@ -174,6 +174,34 @@ class TestScheduledRunProgressTracking:
             message="이미 다른 크롤링이 실행 중입니다.",
         )
 
+    async def test_activity_message_splits_site_and_github_queue_counts(self):
+        scheduler = await self._make_scheduler()
+        stats = scheduler_module.PipelineStats(
+            listing_boards=60,
+            listing_discovered_total=100,
+            listing_urls_selected=10,
+            attempted=5,
+            enqueued=7,
+            skipped_seen_url=4,
+            skipped_dedup=1,
+            github_discovered=20,
+            github_selected=3,
+            github_enqueued=2,
+            github_skipped_seen_url=3,
+            github_skipped_dedup=1,
+        )
+        scheduler._pipeline.run = AsyncMock(return_value=stats)
+        scheduler._post_activity = AsyncMock()
+
+        await scheduler._run_locked(None)
+
+        scheduler._post_activity.assert_awaited_once()
+        event_type, message = scheduler._post_activity.await_args.args
+        assert event_type == "CRAWL_COMPLETED"
+        assert "총 120건 발견 → 13건 선택" in message
+        assert "총 7건 AI 분석 대기열에 추가 (사이트 5건, GitHub 2건)" in message
+        assert "중복 제외 5건 (GitHub 중복 제외 4건)" in message
+
 
 class TestUrlDedupSharedInstance:
     def test_pipeline_and_scheduler_share_url_dedup(self):

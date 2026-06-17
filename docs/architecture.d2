@@ -1,0 +1,67 @@
+direction: right
+
+sites: "크롤링 대상" {
+  direction: down
+  kr: "인벤 (KR)" {
+    shape: rectangle
+    style.font-size: 14
+  }
+  tw: "PTT · 巴哈姆特 (TW)" {
+    shape: rectangle
+    style.font-size: 14
+  }
+  cn: "52pojie (CN)" {
+    shape: rectangle
+    style.font-size: 14
+  }
+  gh: "GitHub" {
+    shape: rectangle
+    style.font-size: 14
+  }
+}
+
+수집: {
+  direction: down
+  crawler: "Crawler\ncrawl4ai · Playwright · Tor" {
+    shape: rectangle
+    style.font-size: 14
+  }
+  redis: "Redis\nqueue · dedup" {
+    shape: queue
+    style.font-size: 14
+  }
+  crawler -> redis
+}
+
+분석: {
+  direction: down
+  detection: "Detection\nGPT-4o · single/agentic" {
+    shape: rectangle
+    style.font-size: 14
+  }
+  rds: "PostgreSQL" {
+    shape: cylinder
+    style.font-size: 14
+  }
+  detection -> rds
+}
+
+서비스: {
+  direction: down
+  api: "Spring Boot API" {
+    shape: rectangle
+    style.font-size: 14
+  }
+  dashboard: "React Dashboard" {
+    shape: rectangle
+    style.font-size: 14
+  }
+  api -> dashboard
+}
+
+sites.kr -> 수집.crawler: "크롤링" { style.font-size: 13 }
+sites.tw -> 수집.crawler
+sites.cn -> 수집.crawler
+sites.gh -> 수집.crawler
+수집.redis -> 분석.detection: "소비" { style.font-size: 13 }
+분석.rds -> 서비스.api: "조회" { style.font-size: 13 }

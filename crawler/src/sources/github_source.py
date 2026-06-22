@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -21,20 +22,76 @@ _SERVICE_NAME = os.environ.get("SERVICE_NAME", "crawler")
 _logger = get_logger(__name__)
 
 _API_BASE = "https://api.github.com"
-_DEFAULT_QUERIES = (
-    "lineage macro",
-    "lineage bot",
-    "lineage private server",
-    "aion macro",
-    "blade and soul cheat",
-    "throne liberty bot",
-    "ncsoft private server",
-    "天堂 外掛",
-    "天堂M 輔助",
-    "劍靈 外掛",
-)
+_SEARCH_SCOPE = "in:name,description,readme"
+_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_README_CHARS = 12_000
 _MAX_RELEASE_CHARS = 4_000
+
+
+@dataclass(frozen=True)
+class GitHubSearchQuery:
+    terms: tuple[str, ...]
+    exact_phrase: bool = False
+
+    def render(self, *, pushed_since: str = "") -> str:
+        parts = [_quote_query_term(" ".join(self.terms))] if self.exact_phrase else [
+            _quote_query_term(term) for term in self.terms
+        ]
+        parts.extend([_SEARCH_SCOPE, "archived:false"])
+        if pushed_since:
+            parts.append(f"pushed:>={pushed_since}")
+        return " ".join(parts)
+
+
+def _exact(phrase: str) -> GitHubSearchQuery:
+    return GitHubSearchQuery((phrase,), exact_phrase=True)
+
+
+def _and(*terms: str) -> GitHubSearchQuery:
+    return GitHubSearchQuery(tuple(terms))
+
+
+_DEFAULT_QUERIES = (
+    _exact("lineage macro"),
+    _exact("lineage bot"),
+    _exact("lineage private server"),
+    _and("lineage", "trainer"),
+    _and("lineage", "cheat engine"),
+    _and("lineage", "loader"),
+    _and("lineage", "injector"),
+    _exact("aion macro"),
+    _and("aion", "bot"),
+    _and("aion", "trainer"),
+    _and("aion", "loader"),
+    _exact("blade and soul cheat"),
+    _and("blade and soul", "macro"),
+    _and("blade and soul", "trainer"),
+    _exact("throne liberty bot"),
+    _and("throne liberty", "macro"),
+    _and("throne liberty", "trainer"),
+    _exact("ncsoft private server"),
+    _and("ncsoft", "loader"),
+    _and("ncsoft", "bypass"),
+    _exact("天堂 外掛"),
+    _and("天堂外掛"),
+    _and("天堂", "腳本"),
+    _and("天堂腳本"),
+    _and("天堂", "掛機"),
+    _and("天堂掛機"),
+    _and("天堂", "修改器"),
+    _and("天堂修改器"),
+    _exact("天堂M 輔助"),
+    _and("天堂M外掛"),
+    _and("天堂M", "腳本"),
+    _and("天堂M腳本"),
+    _and("天堂M", "掛機"),
+    _and("天堂M掛機"),
+    _and("天堂M", "修改器"),
+    _exact("劍靈 外掛"),
+    _and("劍靈", "腳本"),
+    _and("劍靈腳本"),
+    _and("劍靈", "修改器"),
+)
 
 
 @dataclass(frozen=True)
@@ -118,6 +175,7 @@ class GitHubSource:
             0.0,
             float(os.environ.get("GITHUB_REQUEST_DELAY_SECONDS", "1.0")),
         )
+        self._pushed_since = _load_pushed_since()
         self._queries = _load_queries()
 
     @property
@@ -213,14 +271,11 @@ class GitHubSource:
                 break
             stats.searches += 1
             try:
+                rendered_query = query.render(pushed_since=self._pushed_since)
                 resp = await client.get(
                     "/search/repositories",
                     params={
-                        # 따옴표로 정확한 문구 매칭 — 따옴표 없으면 GitHub가 단어를 독립적으로
-                        # AND 처리해 무관한 단어가 README 어디든 우연히 같이 있으면 매칭된다
-                        # (예: "lineage macro" → "Original plugin lineage"(계보) + "macros"(영양소)
-                        # 가 합쳐져 마인크래프트 플러그인이 후보로 잘못 들어온 사례).
-                        "q": f'"{query}" in:name,description,readme archived:false',
+                        "q": rendered_query,
                         "sort": "updated",
                         "order": "desc",
                         "per_page": self._per_query,
@@ -230,12 +285,24 @@ class GitHubSource:
                     _log_rate_limit(resp, "GitHub repository search")
                     break
                 resp.raise_for_status()
-                items = resp.json().get("items") or []
+                payload = resp.json()
+                items = payload.get("items") or []
+                _logger.info(
+                    "GitHub search query 완료: query=%s total=%s incomplete=%s items=%d"
+                    " remaining=%s reset=%s",
+                    rendered_query,
+                    payload.get("total_count", ""),
+                    payload.get("incomplete_results", ""),
+                    len(items),
+                    resp.headers.get("x-ratelimit-remaining", ""),
+                    resp.headers.get("x-ratelimit-reset", ""),
+                    extra={"correlation_id": "", "service": _SERVICE_NAME},
+                )
             except Exception as exc:
                 stats.failed += 1
                 _logger.warning(
                     "GitHub search 실패: query=%s — %s",
-                    query,
+                    query.render(pushed_since=self._pushed_since),
                     exc,
                     extra={"correlation_id": "", "service": _SERVICE_NAME},
                 )
@@ -319,11 +386,33 @@ class GitHubSource:
         return resp.json()
 
 
-def _load_queries() -> list[str]:
+def _load_queries() -> list[GitHubSearchQuery]:
     raw = os.environ.get("GITHUB_SEARCH_QUERIES", "")
     if not raw:
         return list(_DEFAULT_QUERIES)
-    return [item.strip() for item in raw.split(",") if item.strip()]
+    return [_exact(item.strip()) for item in raw.split(",") if item.strip()]
+
+
+def _load_pushed_since() -> str:
+    pushed_since = os.environ.get("GITHUB_SEARCH_PUSHED_SINCE", "").strip()
+    if not pushed_since:
+        return ""
+    if _DATE_PATTERN.match(pushed_since):
+        return pushed_since
+    _logger.warning(
+        "GITHUB_SEARCH_PUSHED_SINCE 값이 YYYY-MM-DD 형식이 아니어서 무시합니다: %s",
+        pushed_since,
+        extra={"correlation_id": "", "service": _SERVICE_NAME},
+    )
+    return ""
+
+
+def _quote_query_term(term: str) -> str:
+    cleaned = " ".join(term.strip().split())
+    if not cleaned:
+        return ""
+    escaped = cleaned.replace('"', r'\"')
+    return f'"{escaped}"' if any(ch.isspace() for ch in cleaned) else escaped
 
 
 def _env_bool(name: str, default: str = "false") -> bool:

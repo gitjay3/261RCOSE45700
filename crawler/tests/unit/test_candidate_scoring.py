@@ -98,3 +98,127 @@ def test_low_signal_dedicated_board_still_gets_source_score():
 
     assert result.score > 0
     assert result.priority_bucket == "P3"
+
+
+def test_zero_width_and_spaced_cjk_risk_terms_are_detected():
+    result = score_listing_candidate(
+        site_id="bahamut_lineage_m",
+        board_url="https://forum.gamer.com.tw/B.php?bsn=25908",
+        title="分享 外\u200b掛 / 腳 本 設定",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.priority_bucket == "P2"
+    assert "high_risk_term" in result.reasons
+    assert "dedicated_nc_context" in result.reasons
+
+
+def test_dedicated_nc_sales_contact_signal_promotes_to_p2():
+    result = score_listing_candidate(
+        site_id="bahamut_tl",
+        board_url="https://forum.gamer.com.tw/B.php?bsn=33317",
+        title="代儲 私訊 LINE",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.priority_bucket == "P2"
+    assert "contact_or_sales_term" in result.reasons
+    assert "dedicated_nc_context" in result.reasons
+
+
+def test_context_terms_alone_do_not_promote_candidate():
+    result = score_listing_candidate(
+        site_id="bahamut_lineage",
+        board_url="https://forum.gamer.com.tw/B.php?bsn=842",
+        title="設定分享工具整理",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.priority_bucket == "P3"
+    assert "context_term" not in result.reasons
+
+
+def test_context_terms_boost_existing_strong_signal_only():
+    result = score_listing_candidate(
+        site_id="bahamut_lineage_m",
+        board_url="https://forum.gamer.com.tw/B.php?bsn=25908",
+        title="腳本 工具 設定",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.priority_bucket == "P2"
+    assert "high_risk_term" in result.reasons
+    assert "context_term" in result.reasons
+
+
+def test_channel_context_term_alone_is_not_download_signal():
+    result = score_listing_candidate(
+        site_id="bahamut_aion",
+        board_url="https://forum.gamer.com.tw/B.php?bsn=9856",
+        title="頻道公告",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.download_signal == 0
+    assert result.priority_bucket == "P3"
+
+
+def test_ce_and_virtual_goods_context_alone_do_not_promote_candidate():
+    result = score_listing_candidate(
+        site_id="bahamut_lineage",
+        board_url="https://forum.gamer.com.tw/B.php?bsn=842",
+        title="CE 虛寶 計算機設定",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.priority_bucket == "P3"
+    assert "context_term" not in result.reasons
+
+
+def test_trainer_distribution_terms_promote_high_priority_candidate():
+    result = score_listing_candidate(
+        site_id="52pojie",
+        board_url="https://www.52pojie.cn/forum-16-2.html",
+        title="Trainer release download DC群",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.priority_bucket == "P0"
+    assert "high_risk_term" in result.reasons
+    assert "download_or_file_term" in result.reasons
+    assert "contact_or_sales_term" in result.reasons
+
+
+def test_farming_and_line_contact_terms_promote_dedicated_board_candidate():
+    result = score_listing_candidate(
+        site_id="bahamut_lineage_m",
+        board_url="https://forum.gamer.com.tw/B.php?bsn=25908",
+        title="搬磚 虛寶 賴群",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.priority_bucket == "P2"
+    assert "contact_or_sales_term" in result.reasons
+    assert "context_term" in result.reasons
+
+
+def test_korean_account_trade_contact_terms_promote_dedicated_board_candidate():
+    result = score_listing_candidate(
+        site_id="inven_lineage_classic",
+        board_url="https://www.inven.co.kr/board/lineage/5944",
+        title="계정거래 톡방 입장",
+        keyword_matched=False,
+        has_title_keywords=False,
+    )
+
+    assert result.priority_bucket == "P2"
+    assert "contact_or_sales_term" in result.reasons
+    assert "context_term" in result.reasons
